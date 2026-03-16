@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --ink: #1a1410;
+  --cream: #f5f0e8;
+  --parchment: #ede6d6;
+  --wine: #6b1e2e;
+  --wine-light: #9b3a4a;
+  --gold: #b8942a;
+  --gold-light: #d4ad45;
+  --border: #cfc4b0;
+  --muted: #8a7d6b;
+  --success: #2d6a4f;
+  --white: #fdfaf5;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--ink);
+  font-family: 'DM Mono', monospace;
+}
