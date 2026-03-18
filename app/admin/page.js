@@ -82,15 +82,20 @@ export default function AdminPage() {
     return '#c0392b'
   }
 
+  function openHedonism(description, vintage) {
+    const query = encodeURIComponent(`${vintage} ${description}`)
+    window.open(`https://www.hedonism.co.uk/search?q=${query}`, '_blank')
+  }
+
   function exportCSV() {
-    const headers = ['Source','ID','Description','Vintage','Colour','Country','Region','Format','Volume','Quantity','Cost/Bottle','10%','15%','Retail Price IB','Retail Price Date','Sale Price','In Buyer View']
+    const headers = ['Source','ID','Description','Vintage','Colour','Country','Region','Format','Volume','Quantity','Cost/Bottle','10%','15%','Retail Price IB','Retail Price Source','Retail Price Date','Sale Price','In Buyer View']
     const rows = wines.map(w => [
       w.source, w.source_id, w.description, w.vintage, w.colour, w.country, w.region,
       w.bottle_format, w.bottle_volume, w.quantity,
       w.purchase_price_per_bottle,
       w.purchase_price_per_bottle ? (w.purchase_price_per_bottle * 1.10).toFixed(2) : '',
       w.purchase_price_per_bottle ? (w.purchase_price_per_bottle * 1.15).toFixed(2) : '',
-      w.retail_price, w.retail_price_date, w.sale_price,
+      w.retail_price, w.retail_price_source || '', w.retail_price_date, w.sale_price,
       w.include_in_buyer_view ? 'Yes' : 'No'
     ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
     const csv = [headers.join(','), ...rows].join('\n')
@@ -105,11 +110,28 @@ export default function AdminPage() {
 
   const slice = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+
+  // Stats
   const bbCount = wines.filter(w => w.source === 'Berry Brothers').length
   const flintCount = wines.filter(w => w.source === 'Flint').length
   const inBuyerCount = wines.filter(w => w.include_in_buyer_view).length
   const competitiveCount = wines.filter(w => isCompetitive(w)).length
   const missingRetailCount = wines.filter(w => !w.retail_price).length
+
+  // Collection values
+  const totalCostValue = wines.reduce((sum, w) => {
+    const qty = parseInt(w.quantity) || 0
+    const pp = parseFloat(w.purchase_price_per_bottle) || 0
+    return sum + (qty * pp)
+  }, 0)
+
+  const totalRetailValue = wines.reduce((sum, w) => {
+    const qty = parseInt(w.quantity) || 0
+    const rp = parseFloat(w.retail_price) || 0
+    return sum + (qty * rp)
+  }, 0)
+
+  const winesWithRetail = wines.filter(w => w.retail_price).length
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -119,6 +141,8 @@ export default function AdminPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)' }}>
+
+      {/* Topbar */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
@@ -129,12 +153,15 @@ export default function AdminPage() {
       </div>
 
       <div style={{ padding: '24px 28px' }}>
+
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '20px' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Wine Inventory</div>
           <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{filtered.length} wines</div>
         </div>
 
-        <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '16px', fontSize: '11px', flexWrap: 'wrap' }}>
+        {/* Stats bar */}
+        <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '12px', fontSize: '11px', flexWrap: 'wrap' }}>
           {[['wines total', wines.length], ['Berry Brothers', bbCount], ['Flint', flintCount], ['in buyer view', inBuyerCount], ['competitive', competitiveCount], ['need retail price', missingRetailCount]].map(([label, n]) => (
             <div key={label} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
               <span style={{ fontWeight: 500, color: 'var(--wine)', fontSize: '14px' }}>{n}</span>
@@ -143,6 +170,30 @@ export default function AdminPage() {
           ))}
         </div>
 
+        {/* Collection value bar */}
+        <div style={{ display: 'flex', gap: '28px', padding: '12px 16px', background: 'var(--ink)', border: '1px solid var(--border)', marginBottom: '16px', fontSize: '11px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+            <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Collection cost</span>
+            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#d4ad45' }}>£{totalCostValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+            <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Retail value</span>
+            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#86efac' }}>£{totalRetailValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+            {winesWithRetail < wines.length && (
+              <span style={{ fontSize: '10px', color: 'rgba(253,250,245,0.3)' }}>({winesWithRetail} of {wines.length} wines priced)</span>
+            )}
+          </div>
+          {totalRetailValue > 0 && totalCostValue > 0 && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+              <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Uplift</span>
+              <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#d4748a' }}>
+                {((totalRetailValue / totalCostValue - 1) * 100).toFixed(1)}%
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Toolbar */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by description, region, vintage…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
@@ -165,6 +216,7 @@ export default function AdminPage() {
           <button onClick={exportCSV} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--ink)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>↓ Export</button>
         </div>
 
+        {/* Table */}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
@@ -176,7 +228,7 @@ export default function AdminPage() {
                 ))}
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#86efac' }}>+10%</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#4ade80' }}>+15%</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Retail IB</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '200px' }}>Retail IB</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Competitive?</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sale Price</th>
                 <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Buyer View</th>
@@ -213,12 +265,31 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', fontWeight: 500 }}>£{pp ? pp.toFixed(2) : '—'}</td>
                     <td style={{ padding: '9px 12px', color: '#2d6a4f', fontWeight: 500 }}>£{p10 || '—'}</td>
                     <td style={{ padding: '9px 12px', color: '#1b4332', fontWeight: 600 }}>£{p15 || '—'}</td>
-                    <td style={{ padding: '9px 12px' }}>
-                      <input type="number" step="0.01" defaultValue={w.retail_price || ''} placeholder="0.00"
-                        onBlur={e => { if (e.target.value !== String(w.retail_price || '')) updateWine(w.id, 'retail_price', e.target.value ? parseFloat(e.target.value) : null) }}
-                        style={{ width: '80px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
-                      {w.retail_price_date && <div style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), marginTop: '2px' }}>{w.retail_price_date}</div>}
+
+                    {/* Retail IB with source selector and Hedonism lookup */}
+                    <td style={{ padding: '9px 12px', minWidth: '200px' }}>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px' }}>
+                        <input type="number" step="0.01" defaultValue={w.retail_price || ''} placeholder="0.00"
+                          onBlur={e => { if (e.target.value !== String(w.retail_price || '')) updateWine(w.id, 'retail_price', e.target.value ? parseFloat(e.target.value) : null) }}
+                          style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+                        <button onClick={() => openHedonism(w.description, w.vintage)}
+                          title="Look up on Hedonism"
+                          style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 6px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>🔍 H</button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <select value={w.retail_price_source || ''} onChange={e => updateWine(w.id, 'retail_price_source', e.target.value)}
+                          style={{ fontSize: '10px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', outline: 'none', color: 'var(--muted)', flex: 1 }}>
+                          <option value="">Source…</option>
+                          <option value="Hedonism">Hedonism</option>
+                          <option value="Wine Searcher">Wine Searcher</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        {w.retail_price_date && (
+                          <span style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), whiteSpace: 'nowrap' }}>{w.retail_price_date}</span>
+                        )}
+                      </div>
                     </td>
+
                     <td style={{ padding: '9px 12px', color: comp === null ? 'var(--muted)' : comp ? '#2d6a4f' : '#c0392b', fontWeight: comp ? 600 : 400 }}>
                       {comp === null ? '—' : comp ? '✓ Yes' : '✗ No'}
                     </td>
@@ -239,6 +310,7 @@ export default function AdminPage() {
           </table>
         </div>
 
+        {/* Pagination */}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', fontSize: '11px', color: 'var(--muted)' }}>
             <span>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
