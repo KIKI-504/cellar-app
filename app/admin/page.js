@@ -174,7 +174,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-   {/* Collection value bar */}
+{/* Collection value bar */}
 <div style={{ marginBottom: '16px' }}>
   <button onClick={() => setShowValues(v => !v)} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', color: 'var(--muted)' }}>
     {showValues ? '▲ Hide collection value' : '▼ Show collection value'}
@@ -200,6 +200,7 @@ export default function AdminPage() {
       )}
     </div>
   )}
+</div>)}
 </div>
           {totalRetailValue > 0 && totalCostValue > 0 && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
