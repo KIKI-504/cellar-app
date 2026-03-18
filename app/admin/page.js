@@ -83,7 +83,9 @@ export default function AdminPage() {
   }
 
   function openWineSearcher(description, vintage) {
-    const keywords = description.split(',')[0].trim().toLowerCase().replace(/\s+/g, '+')
+    const parts = description.split(',').map(p => p.trim())
+    const keywords = (parts.length > 2 ? parts.slice(0, -2) : parts)
+      .join(' ').toLowerCase().replace(/\s+/g, '+')
     const url = `https://www.wine-searcher.com/find/${keywords}/${vintage}/uk/gbp`
     window.open(url, '_blank')
   }
@@ -274,7 +276,7 @@ export default function AdminPage() {
                           onBlur={e => { if (e.target.value !== String(w.retail_price || '')) updateWine(w.id, 'retail_price', e.target.value ? parseFloat(e.target.value) : null) }}
                           style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                         <button onClick={() => openWineSearcher(w.description, w.vintage)}
-                          title="Look up on Hedonism"
+                          title="Look up on Wine Searcher"
                           style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 6px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>🔍 WS</button>
                       </div>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
