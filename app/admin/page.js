@@ -277,12 +277,23 @@ export default function AdminPage() {
                           style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 6px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>🔍 H</button>
                       </div>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        <select value={w.retail_price_source || ''} onChange={e => updateWine(w.id, 'retail_price_source', e.target.value)}
-                          style={{ fontSize: '10px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', outline: 'none', color: 'var(--muted)', flex: 1 }}>
-                          <option value="">Source…</option>
-                          <option value="WineSearcher">WineSearcher</option>
-                          <option value="Wine Searcher">Wine Searcher</option>
-                          <option value="Other">Other</option>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: 1 }}>
+  <label style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+    <input type="checkbox" 
+      checked={w.retail_price_source === 'Wine Searcher avg'}
+      onChange={e => updateWine(w.id, 'retail_price_source', e.target.checked ? 'Wine Searcher avg' : '')}
+      style={{ accentColor: 'var(--wine)', cursor: 'pointer' }} />
+    <span style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>WS avg</span>
+  </label>
+  {w.retail_price_source !== 'Wine Searcher avg' && (
+    <input type="text" 
+      defaultValue={w.retail_price_source && w.retail_price_source !== 'Wine Searcher avg' ? w.retail_price_source : ''}
+      placeholder="or note source…"
+      onBlur={e => { if (e.target.value) updateWine(w.id, 'retail_price_source', e.target.value) }}
+      style={{ fontSize: '10px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', outline: 'none', flex: 1, minWidth: 0 }} />
+  )}
+</div>
+value="Other">Other</option>
                         </select>
                         {w.retail_price_date && (
                           <span style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), whiteSpace: 'nowrap' }}>{w.retail_price_date}</span>
