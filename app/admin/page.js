@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
 export default function AdminPage() {
+  const [showValues, setShowValues] = useState(false)
   const router = useRouter()
   const [wines, setWines] = useState([])
   const [filtered, setFiltered] = useState([])
@@ -173,19 +174,33 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* Collection value bar */}
-        <div style={{ display: 'flex', gap: '28px', padding: '12px 16px', background: 'var(--ink)', border: '1px solid var(--border)', marginBottom: '16px', fontSize: '11px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-            <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Collection cost</span>
-            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#d4ad45' }}>£{totalCostValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-            <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Retail value</span>
-            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#86efac' }}>£{totalRetailValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-            {winesWithRetail < wines.length && (
-              <span style={{ fontSize: '10px', color: 'rgba(253,250,245,0.3)' }}>({winesWithRetail} of {wines.length} wines priced)</span>
-            )}
-          </div>
+   {/* Collection value bar */}
+<div style={{ marginBottom: '16px' }}>
+  <button onClick={() => setShowValues(v => !v)} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', color: 'var(--muted)' }}>
+    {showValues ? '▲ Hide collection value' : '▼ Show collection value'}
+  </button>
+  {showValues && (
+    <div style={{ display: 'flex', gap: '28px', padding: '12px 16px', background: 'var(--ink)', border: '1px solid var(--border)', marginTop: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+        <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Collection cost</span>
+        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#d4ad45' }}>£{totalCostValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+        <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Retail value</span>
+        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#86efac' }}>£{totalRetailValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+        {winesWithRetail < wines.length && (
+          <span style={{ fontSize: '10px', color: 'rgba(253,250,245,0.3)' }}>({winesWithRetail} of {wines.length} wines priced)</span>
+        )}
+      </div>
+      {totalRetailValue > 0 && totalCostValue > 0 && (
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+          <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Uplift</span>
+          <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 400, color: '#d4748a' }}>{((totalRetailValue / totalCostValue - 1) * 100).toFixed(1)}%</span>
+        </div>
+      )}
+    </div>
+  )}
+</div>
           {totalRetailValue > 0 && totalCostValue > 0 && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
               <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Uplift</span>
