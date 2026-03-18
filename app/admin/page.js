@@ -82,9 +82,9 @@ export default function AdminPage() {
     return '#c0392b'
   }
 
- function openWineSearcher(description, vintage) {
+  function openWineSearcher(description, vintage) {
     const query = encodeURIComponent(`${vintage} ${description}`)
-    window.open(`https://www.wine-searcher.com/find/${query}`, '_blank')
+    window.open(`https://www.hedonism.co.uk/search?q=${query}`, '_blank')
   }
 
   function exportCSV() {
@@ -266,35 +266,31 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', color: '#2d6a4f', fontWeight: 500 }}>£{p10 || '—'}</td>
                     <td style={{ padding: '9px 12px', color: '#1b4332', fontWeight: 600 }}>£{p15 || '—'}</td>
 
-                    {/* Retail IB with source selector and WineSearcher lookup */}
+                    {/* Retail IB with source selector and Hedonism lookup */}
                     <td style={{ padding: '9px 12px', minWidth: '200px' }}>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px' }}>
                         <input type="number" step="0.01" defaultValue={w.retail_price || ''} placeholder="0.00"
                           onBlur={e => { if (e.target.value !== String(w.retail_price || '')) updateWine(w.id, 'retail_price', e.target.value ? parseFloat(e.target.value) : null) }}
                           style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                         <button onClick={() => openWineSearcher(w.description, w.vintage)}
-                          title="Look up on WineSearcher"
-                          style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 6px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>🔍 H</button>
+                          title="Look up on Hedonism"
+                          style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 6px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>🔍 WS</button>
                       </div>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: 1 }}>
-  <label style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-    <input type="checkbox" 
-      checked={w.retail_price_source === 'Wine Searcher avg'}
-      onChange={e => updateWine(w.id, 'retail_price_source', e.target.checked ? 'Wine Searcher avg' : '')}
-      style={{ accentColor: 'var(--wine)', cursor: 'pointer' }} />
-    <span style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>WS avg</span>
-  </label>
-  {w.retail_price_source !== 'Wine Searcher avg' && (
-    <input type="text" 
-      defaultValue={w.retail_price_source && w.retail_price_source !== 'Wine Searcher avg' ? w.retail_price_source : ''}
-      placeholder="or note source…"
-      onBlur={e => { if (e.target.value) updateWine(w.id, 'retail_price_source', e.target.value) }}
-      style={{ fontSize: '10px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', outline: 'none', flex: 1, minWidth: 0 }} />
-  )}
-</div>
-value="Other">Other</option>
-                        </select>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          <input type="checkbox"
+                            checked={w.retail_price_source === 'Wine Searcher avg'}
+                            onChange={e => updateWine(w.id, 'retail_price_source', e.target.checked ? 'Wine Searcher avg' : '')}
+                            style={{ accentColor: 'var(--wine)', cursor: 'pointer' }} />
+                          <span style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>WS avg</span>
+                        </label>
+                        {w.retail_price_source !== 'Wine Searcher avg' && (
+                          <input type="text"
+                            defaultValue={w.retail_price_source || ''}
+                            placeholder="source…"
+                            onBlur={e => { if (e.target.value !== (w.retail_price_source || '')) updateWine(w.id, 'retail_price_source', e.target.value || null) }}
+                            style={{ fontSize: '10px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', outline: 'none', width: '80px' }} />
+                        )}
                         {w.retail_price_date && (
                           <span style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), whiteSpace: 'nowrap' }}>{w.retail_price_date}</span>
                         )}
