@@ -83,8 +83,9 @@ export default function AdminPage() {
   }
 
   function openWineSearcher(description, vintage) {
-    const query = encodeURIComponent(`${vintage} ${description}`)
-    window.open(`https://www.hedonism.co.uk/search?q=${query}`, '_blank')
+    const keywords = description.split(',')[0].trim().toLowerCase().replace(/\s+/g, '+')
+    const url = `https://www.wine-searcher.com/find/${keywords}/${vintage}/uk/gbp`
+    window.open(url, '_blank')
   }
 
   function exportCSV() {
