@@ -82,9 +82,9 @@ export default function AdminPage() {
     return '#c0392b'
   }
 
-  function openHedonism(description, vintage) {
+ function openWineSearcher(description, vintage) {
     const query = encodeURIComponent(`${vintage} ${description}`)
-    window.open(`https://www.hedonism.co.uk/search?q=${query}`, '_blank')
+    window.open(`https://www.wine-searcher.com/find/${query}`, '_blank')
   }
 
   function exportCSV() {
@@ -266,21 +266,21 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', color: '#2d6a4f', fontWeight: 500 }}>£{p10 || '—'}</td>
                     <td style={{ padding: '9px 12px', color: '#1b4332', fontWeight: 600 }}>£{p15 || '—'}</td>
 
-                    {/* Retail IB with source selector and Hedonism lookup */}
+                    {/* Retail IB with source selector and WineSearcher lookup */}
                     <td style={{ padding: '9px 12px', minWidth: '200px' }}>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px' }}>
                         <input type="number" step="0.01" defaultValue={w.retail_price || ''} placeholder="0.00"
                           onBlur={e => { if (e.target.value !== String(w.retail_price || '')) updateWine(w.id, 'retail_price', e.target.value ? parseFloat(e.target.value) : null) }}
                           style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
-                        <button onClick={() => openHedonism(w.description, w.vintage)}
-                          title="Look up on Hedonism"
+                        <button onClick={() => openWineSearcher(w.description, w.vintage)}
+                          title="Look up on WineSearcher"
                           style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 6px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>🔍 H</button>
                       </div>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                         <select value={w.retail_price_source || ''} onChange={e => updateWine(w.id, 'retail_price_source', e.target.value)}
                           style={{ fontSize: '10px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', outline: 'none', color: 'var(--muted)', flex: 1 }}>
                           <option value="">Source…</option>
-                          <option value="Hedonism">Hedonism</option>
+                          <option value="WineSearcher">WineSearcher</option>
                           <option value="Wine Searcher">Wine Searcher</option>
                           <option value="Other">Other</option>
                         </select>
