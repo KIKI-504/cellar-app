@@ -200,8 +200,7 @@ export default function AdminPage() {
       )}
     </div>
   )}
-</div>)}
-</div>
+
           {totalRetailValue > 0 && totalCostValue > 0 && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
               <span style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.5)' }}>Uplift</span>
