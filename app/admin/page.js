@@ -84,6 +84,22 @@ export default function AdminPage() {
     window.open(`https://www.wine-searcher.com/find/${keywords}/${vintage}/uk/gbp`, '_blank')
   }
 
+  async function moveToStudio(wine) {
+    const qty = parseInt(prompt(`Move to studio — how many bottles?\n\n${wine.description} ${wine.vintage}\n(${wine.quantity} in bond)`))
+    if (!qty || isNaN(qty) || qty < 1) return
+    const dp = ((parseFloat(wine.purchase_price_per_bottle) + 3) * 1.2).toFixed(2)
+    const { error } = await supabase.from('studio').insert({
+      wine_id: wine.id,
+      quantity: qty,
+      date_moved: new Date().toISOString().split('T')[0],
+      dp_price: dp,
+      status: 'Available',
+      include_in_local: false
+    })
+    if (error) alert('Error moving to studio: ' + error.message)
+    else alert(`✓ ${qty} bottle${qty > 1 ? 's' : ''} moved to studio at DP £${dp}`)
+  }
+
   function exportCSV() {
     const headers = ['Source','ID','Description','Vintage','Colour','Country','Region','Format','Volume','Quantity','Cost/Bottle','10%','15%','Retail Price IB','Retail Price Source','Retail Price Date','Sale Price','In Buyer View','Women Note','Producer Note']
     const rows = wines.map(w => [
@@ -128,7 +144,8 @@ export default function AdminPage() {
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => router.push('/admin')} style={{ background: 'rgba(107,30,46,0.6)', color: '#d4ad45', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Inventory</button>
-    <button onClick={() => router.push('/labels')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Labels</button>
+          <button onClick={() => router.push('/studio')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Studio</button>
+          <button onClick={() => router.push('/labels')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Labels</button>
           <button onClick={() => router.push('/buyer')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Buyer View</button>
         </div>
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
@@ -217,6 +234,7 @@ export default function AdminPage() {
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sale £</th>
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Notes</th>
                 <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Buyer</th>
+                <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
               </tr>
             </thead>
             <tbody>
@@ -347,6 +365,10 @@ export default function AdminPage() {
                       <input type="checkbox" checked={!!w.include_in_buyer_view}
                         onChange={e => updateWine(w.id, 'include_in_buyer_view', e.target.checked)}
                         style={{ width: '16px', height: '16px', accentColor: 'var(--wine)', cursor: 'pointer' }} />
+                    </td>
+                    <td style={{ padding: '9px 12px' }}>
+                      <button onClick={() => moveToStudio(w)} title="Move to studio"
+                        style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 8px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>→ Studio</button>
                     </td>
                   </tr>
                 )
