@@ -121,48 +121,24 @@ export default function StudioPage() {
         r.readAsDataURL(photoFile)
       })
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/analyse-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: photoFile.type, data: base64 }
-              },
-              {
-                type: 'text',
-                text: `You are reading a wine bottle label. Extract the following information and respond ONLY with a JSON object, no other text:
-{
-  "producer": "producer or domaine name",
-  "wine_name": "the wine or appellation name",
-  "vintage": "4-digit year as string",
-  "region": "region if visible"
-}
-If you cannot determine a field, use null. Be precise — extract exactly what is on the label.`
-              }
-            ]
-          }]
-        })
+        body: JSON.stringify({ imageBase64: base64, mediaType: photoFile.type })
       })
 
-      const data = await response.json()
-      const text = data.content?.find(b => b.type === 'text')?.text || ''
-      const clean = text.replace(/```json|```/g, '').trim()
-      const extracted = JSON.parse(clean)
+      const result = await response.json()
+      if (!result.success) throw new Error(result.error)
+      const extracted = result.data
       setPhotoRaw(extracted)
 
       // Try to match against wines database
-      const searchTerm = [extracted.producer, extracted.wine_name].filter(Boolean).join(' ')
+      const searchTerm = extracted.producer || extracted.wine_name
       if (searchTerm) {
         const { data: matches } = await supabase
           .from('wines')
           .select('id, description, vintage, colour, region, purchase_price_per_bottle, quantity')
-          .ilike('description', `%${extracted.producer || extracted.wine_name}%`)
+          .ilike('description', `%${searchTerm}%`)
           .eq('vintage', extracted.vintage || '')
           .limit(5)
 
@@ -174,7 +150,7 @@ If you cannot determine a field, use null. Be precise — extract exactly what i
           const { data: matches2 } = await supabase
             .from('wines')
             .select('id, description, vintage, colour, region, purchase_price_per_bottle, quantity')
-            .ilike('description', `%${extracted.producer || extracted.wine_name}%`)
+            .ilike('description', `%${searchTerm}%`)
             .limit(5)
           if (matches2 && matches2.length > 0) {
             setPhotoMatch(matches2[0])
