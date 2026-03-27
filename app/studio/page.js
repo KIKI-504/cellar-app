@@ -62,6 +62,12 @@ export default function StudioPage() {
     if (!error) setStudioWines(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
+  async function deleteStudio(id) {
+    if (!confirm('Remove this entry from studio inventory?')) return
+    const { error } = await supabase.from('studio').delete().eq('id', id)
+    if (!error) setStudioWines(prev => prev.filter(s => s.id !== id))
+  }
+
   // Move to studio
   async function searchWines(q) {
     setMoveSearch(q)
@@ -173,15 +179,18 @@ export default function StudioPage() {
     setMoveSaving(true)
     const priceToUse = photoPrice ? parseFloat(photoPrice) : (selectedWine?.purchase_price_per_bottle || null)
     const dp = priceToUse ? ((priceToUse + 3) * 1.2).toFixed(2) : null
-    const { error } = await supabase.from('studio').insert({
+    const insertData = {
       wine_id: selectedWine?.id || null,
       quantity: photoQty,
       date_moved: photoDate,
       dp_price: dp,
       status: 'Available',
-      notes: [photoNotes, !selectedWine ? `${photoRaw?.wine_name || ''} ${photoRaw?.producer || ''} ${photoVintage || ''}`.trim() : ''].filter(Boolean).join(' — ') || null,
-      include_in_local: false
-    })
+      notes: photoNotes || null,
+      include_in_local: false,
+      unlinked_description: !selectedWine ? `${photoRaw?.wine_name || ''} ${photoRaw?.producer ? ', ' + photoRaw.producer : ''}`.trim() : null,
+      unlinked_vintage: !selectedWine ? (photoVintage || photoRaw?.vintage || null) : null,
+    }
+    const { error } = await supabase.from('studio').insert(insertData)
     if (!error) {
       await fetchStudio()
       setShowPhotoModal(false)
@@ -274,7 +283,7 @@ export default function StudioPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                {['Wine', 'Vintage', 'Qty', 'Moved', 'DP Price', 'Status', 'Local Sales', 'Notes'].map(h => (
+                {['Wine', 'Vintage', 'Qty', 'Moved', 'DP Price', 'Status', 'Local Sales', 'Notes', ''].map(h => (
                   <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -292,12 +301,26 @@ export default function StudioPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
                         <div>
-                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3 }}>{w?.description || '—'}</div>
-                          <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w?.region}</div>
+                          {w ? (
+                            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3 }}>{w.description}</div>
+                          ) : (
+                            <input type="text" defaultValue={s.unlinked_description || ''}
+                              onBlur={e => { if (e.target.value !== (s.unlinked_description || '')) updateStudio(s.id, 'unlinked_description', e.target.value) }}
+                              placeholder="Wine name…"
+                              style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', outline: 'none', width: '180px' }} />
+                          )}
+                          <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w?.region || (s.unlinked_description ? 'Not in cellar database' : '')}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ padding: '9px 12px', fontWeight: 500 }}>{w?.vintage || '—'}</td>
+                    <td style={{ padding: '9px 12px', fontWeight: 500 }}>
+                      {w ? w.vintage : (
+                        <input type="text" defaultValue={s.unlinked_vintage || ''}
+                          onBlur={e => { if (e.target.value !== (s.unlinked_vintage || '')) updateStudio(s.id, 'unlinked_vintage', e.target.value) }}
+                          placeholder="e.g. 2021"
+                          style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+                      )}
+                    </td>
                     <td style={{ padding: '9px 12px' }}>
                       <input type="number" min="0" defaultValue={s.quantity}
                         onBlur={e => { if (parseInt(e.target.value) !== s.quantity) updateStudio(s.id, 'quantity', parseInt(e.target.value)) }}
@@ -305,7 +328,10 @@ export default function StudioPage() {
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{s.date_moved}</td>
                     <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--ink)' }}>
-                      £{s.dp_price ? parseFloat(s.dp_price).toFixed(2) : calcDP(w?.purchase_price_per_bottle) || '—'}
+                      <input type="number" step="0.01" defaultValue={s.dp_price ? parseFloat(s.dp_price).toFixed(2) : calcDP(w?.purchase_price_per_bottle) || ''}
+                        onBlur={e => { if (e.target.value !== String(s.dp_price || '')) updateStudio(s.id, 'dp_price', e.target.value ? parseFloat(e.target.value) : null) }}
+                        placeholder="0.00"
+                        style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                     </td>
                     <td style={{ padding: '9px 12px' }}>
                       <select value={s.status} onChange={e => updateStudio(s.id, 'status', e.target.value)}
@@ -324,6 +350,10 @@ export default function StudioPage() {
                       <input type="text" defaultValue={s.notes || ''} placeholder="notes…"
                         onBlur={e => { if (e.target.value !== (s.notes || '')) updateStudio(s.id, 'notes', e.target.value || null) }}
                         style={{ width: '120px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
+                    </td>
+                    <td style={{ padding: '9px 12px' }}>
+                      <button onClick={() => deleteStudio(s.id)} title="Remove from studio"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 4px' }}>✕</button>
                     </td>
                   </tr>
                 )
