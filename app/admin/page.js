@@ -80,8 +80,7 @@ export default function AdminPage() {
   }
 
   function openWineSearcher(description, vintage) {
-    const parts = description.split(',').map(p => p.trim())
-    const keywords = (parts.length > 1 ? parts.slice(0, -1) : parts).join(' ').toLowerCase().replace(/\s+/g, '+')
+    const keywords = description.toLowerCase().replace(/,/g, '').replace(/\s+/g, '+')
     window.open(`https://www.wine-searcher.com/find/${keywords}/${vintage}/uk/gbp`, '_blank')
   }
 
