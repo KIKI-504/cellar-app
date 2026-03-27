@@ -31,6 +31,8 @@ export default function StudioPage() {
   const [photoQty, setPhotoQty] = useState(1)
   const [photoDate, setPhotoDate] = useState(new Date().toISOString().split('T')[0])
   const [photoNotes, setPhotoNotes] = useState('')
+  const [photoVintage, setPhotoVintage] = useState('')
+  const [photoPrice, setPhotoPrice] = useState('')
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -131,8 +133,7 @@ export default function StudioPage() {
       if (!result.success) throw new Error(result.error)
       const extracted = result.data
       setPhotoRaw(extracted)
-
-      // Try to match against wines database
+      setPhotoVintage(extracted.vintage || '') against wines database
       const searchTerm = extracted.producer || extracted.wine_name
       if (searchTerm) {
         const { data: matches } = await supabase
@@ -145,6 +146,7 @@ export default function StudioPage() {
         if (matches && matches.length > 0) {
           setPhotoMatch(matches[0])
           setSelectedWine(matches[0])
+          setPhotoPrice(matches[0].purchase_price_per_bottle ? String(matches[0].purchase_price_per_bottle) : '')
         } else {
           // Try without vintage
           const { data: matches2 } = await supabase
@@ -155,6 +157,7 @@ export default function StudioPage() {
           if (matches2 && matches2.length > 0) {
             setPhotoMatch(matches2[0])
             setSelectedWine(matches2[0])
+            setPhotoPrice(matches2[0].purchase_price_per_bottle ? String(matches2[0].purchase_price_per_bottle) : '')
           }
         }
       }
@@ -165,16 +168,16 @@ export default function StudioPage() {
   }
 
   async function confirmPhotoMove() {
-    if (!selectedWine) return
     setMoveSaving(true)
-    const dp = calcDP(selectedWine.purchase_price_per_bottle)
+    const priceToUse = photoPrice ? parseFloat(photoPrice) : (selectedWine?.purchase_price_per_bottle || null)
+    const dp = priceToUse ? ((priceToUse + 3) * 1.2).toFixed(2) : null
     const { error } = await supabase.from('studio').insert({
-      wine_id: selectedWine.id,
+      wine_id: selectedWine?.id || null,
       quantity: photoQty,
       date_moved: photoDate,
       dp_price: dp,
       status: 'Available',
-      notes: photoNotes || null,
+      notes: [photoNotes, !selectedWine ? `${photoRaw?.wine_name || ''} ${photoRaw?.producer || ''} ${photoVintage || ''}`.trim() : ''].filter(Boolean).join(' — ') || null,
       include_in_local: false
     })
     if (!error) {
@@ -187,6 +190,8 @@ export default function StudioPage() {
       setSelectedWine(null)
       setPhotoQty(1)
       setPhotoNotes('')
+      setPhotoVintage('')
+      setPhotoPrice('')
     }
     setMoveSaving(false)
   }
@@ -455,7 +460,7 @@ export default function StudioPage() {
                     {moveResults.length > 0 && (
                       <div style={{ border: '1px solid var(--border)', borderTop: 'none', background: 'var(--white)', maxHeight: '160px', overflowY: 'auto' }}>
                         {moveResults.map(w => (
-                          <div key={w.id} onClick={() => { setSelectedWine(w); setPhotoMatch(w); setMoveResults([]) }}
+                          <div key={w.id} onClick={() => { setSelectedWine(w); setPhotoMatch(w); setPhotoPrice(w.purchase_price_per_bottle ? String(w.purchase_price_per_bottle) : ''); setMoveResults([]) }}
                             style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #ede6d6' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#f5f0e8'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -470,9 +475,24 @@ export default function StudioPage() {
               </div>
             )}
 
-            {/* Qty, date, notes */}
-            {(photoMatch || selectedWine) && photoRaw && (
+            {/* Qty, date, vintage, notes — show as soon as label is read */}
+            {photoRaw && (
               <>
+                {!selectedWine && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Vintage</label>
+                    <input type="text" value={photoVintage} onChange={e => setPhotoVintage(e.target.value)} placeholder="e.g. 2021"
+                      style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                )}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>
+                    Purchase price IB (£/bottle)
+                    {photoPrice && <span style={{ marginLeft: '8px', color: 'var(--wine)' }}>→ DP £{((parseFloat(photoPrice) + 3) * 1.2).toFixed(2)}</span>}
+                  </label>
+                  <input type="number" step="0.01" value={photoPrice} onChange={e => setPhotoPrice(e.target.value)} placeholder="0.00"
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Quantity</label>
@@ -494,9 +514,9 @@ export default function StudioPage() {
             )}
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowPhotoModal(false); setPhotoFile(null); setPhotoPreview(null); setPhotoMatch(null); setPhotoRaw(null); setSelectedWine(null) }}
+              <button onClick={() => { setShowPhotoModal(false); setPhotoFile(null); setPhotoPreview(null); setPhotoMatch(null); setPhotoRaw(null); setSelectedWine(null); setPhotoVintage(''); setPhotoPrice('') }}
                 style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
-              {(photoMatch || selectedWine) && photoRaw && (
+              {photoRaw && (
                 <button onClick={confirmPhotoMove} disabled={moveSaving}
                   style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>
                   {moveSaving ? 'Saving…' : 'Add to Studio'}
