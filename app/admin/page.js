@@ -147,6 +147,7 @@ export default function AdminPage() {
           <button onClick={() => router.push('/studio')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Studio</button>
           <button onClick={() => router.push('/labels')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Labels</button>
           <button onClick={() => router.push('/buyer')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Buyer View</button>
+          <button onClick={() => router.push('/local')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Local Sales</button>
         </div>
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
       </div>
@@ -252,7 +253,7 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px' }}>
                       <span style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: '2px', background: w.source === 'Berry Brothers' ? 'rgba(107,30,46,0.1)' : 'rgba(184,148,42,0.12)', color: w.source === 'Berry Brothers' ? 'var(--wine)' : '#7a5e10', whiteSpace: 'nowrap' }}>{w.source === 'Berry Brothers' ? 'BB' : 'Flint'}</span>
                     </td>
-                    <td style={{ padding: '9px 12px', maxWidth: '240px' }}>
+                    <td style={{ padding: '9px 12px', maxWidth: '320px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                         {w.women_note && <span title={w.women_note} style={{ fontSize: '12px', flexShrink: 0, cursor: 'help' }}>♀</span>}
                         <div>
@@ -267,7 +268,7 @@ export default function AdminPage() {
                       {w.colour}
                     </td>
                     <td style={{ padding: '9px 12px' }}>{w.region}</td>
-                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{w.bottle_format ? `${w.bottle_format}${w.bottle_volume ? ' · ' + w.bottle_volume : ''}` : '—'}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{w.bottle_volume || (w.bottle_format === 'Magnum' ? '150cl' : w.bottle_format ? '75cl' : '—')}</td>
                     <td style={{ padding: '9px 12px' }}>{w.quantity || '—'}</td>
                     <td style={{ padding: '9px 12px', fontWeight: 500 }}>£{pp ? pp.toFixed(2) : '—'}</td>
                     <td style={{ padding: '9px 12px', color: '#2d6a4f', fontWeight: 500 }}>£{p10 || '—'}</td>
