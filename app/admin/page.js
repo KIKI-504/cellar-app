@@ -20,6 +20,9 @@ export default function AdminPage() {
   const [expandedPrice, setExpandedPrice] = useState(null)
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState('')
+  const [importConflicts, setImportConflicts] = useState([]) // wines with price conflicts
+  const [overrideModal, setOverrideModal] = useState(null)  // { wine, field, oldVal, newVal }
+  const [overrideNote, setOverrideNote] = useState('')
   const PAGE_SIZE = 50
 
   useEffect(() => {
@@ -67,6 +70,28 @@ export default function AdminPage() {
     if (field === 'retail_price') update.retail_price_date = new Date().toISOString().split('T')[0]
     const { error } = await supabase.from('wines').update(update).eq('id', id)
     if (!error) setWines(prev => prev.map(w => w.id === id ? { ...w, ...update } : w))
+  }
+
+  async function saveOverride() {
+    if (!overrideModal || !overrideNote.trim()) return
+    const { wine, field, newVal } = overrideModal
+    const update = {
+      [field]: newVal,
+      manual_override_note: overrideNote.trim(),
+      manual_override_date: new Date().toISOString().split('T')[0],
+      manual_override_field: field,
+    }
+    const { error } = await supabase.from('wines').update(update).eq('id', wine.id)
+    if (!error) {
+      setWines(prev => prev.map(w => w.id === wine.id ? { ...w, ...update } : w))
+      setOverrideModal(null)
+      setOverrideNote('')
+    }
+  }
+
+  function openOverride(wine, field, newVal) {
+    setOverrideModal({ wine, field, oldVal: wine[field], newVal })
+    setOverrideNote('')
   }
 
   function handleSort(col) {
@@ -177,22 +202,46 @@ export default function AdminPage() {
     const wines = rows.map(transformBBRRow).filter(r => r.description && r.source_id)
     setImportStatus(`Parsed ${wines.length} wines — importing…`)
     let inserted = 0, updated = 0, errors = 0
+    const conflicts = []
     for (const wine of wines) {
       try {
         const { data: existing } = await supabase.from('wines')
-          .select('id, include_in_buyer_view, sale_price, women_note, producer_note')
+          .select('id, include_in_buyer_view, sale_price, women_note, producer_note, purchase_price_per_bottle, manual_override_note')
           .eq('source_id', wine.source_id).eq('source', 'Berry Brothers').maybeSingle()
         if (existing) {
-          const { error } = await supabase.from('wines').update({
+          // If there's a manual override note AND the incoming price differs, flag as conflict
+          // and do NOT overwrite the purchase price
+          const hasOverride = !!existing.manual_override_note
+          const incomingPrice = wine.purchase_price_per_bottle
+          const storedPrice = parseFloat(existing.purchase_price_per_bottle)
+          const priceConflict = hasOverride && incomingPrice &&
+            Math.abs(incomingPrice - storedPrice) > 0.01
+
+          if (priceConflict) {
+            conflicts.push({
+              description: wine.description,
+              vintage: wine.vintage,
+              storedPrice,
+              incomingPrice,
+              note: existing.manual_override_note
+            })
+          }
+
+          const updateData = {
             quantity: wine.quantity,
-            purchase_price_per_bottle: wine.purchase_price_per_bottle,
             bbx_highest_bid: wine.bbx_highest_bid,
             ws_lowest_per_bottle: wine.ws_lowest_per_bottle,
             retail_price: wine.retail_price,
             retail_price_source: wine.retail_price_source,
             retail_price_date: wine.retail_price_date,
             livex_market_price: wine.livex_market_price,
-          }).eq('id', existing.id)
+          }
+          // Only update purchase price if no manual override exists
+          if (!hasOverride) {
+            updateData.purchase_price_per_bottle = wine.purchase_price_per_bottle
+          }
+
+          const { error } = await supabase.from('wines').update(updateData).eq('id', existing.id)
           if (error) throw error
           updated++
         } else {
@@ -205,7 +254,8 @@ export default function AdminPage() {
         errors++
       }
     }
-    setImportStatus(`✓ Done — ${inserted} inserted, ${updated} updated${errors ? `, ${errors} errors` : ''}`)
+    setImportConflicts(conflicts)
+    setImportStatus(`✓ Done — ${inserted} inserted, ${updated} updated${errors ? `, ${errors} errors` : ''}${conflicts.length ? ` · ⚠️ ${conflicts.length} price conflict${conflicts.length > 1 ? 's' : ''} — see below` : ''}`)
     setImporting(false)
     e.target.value = ''
     await fetchWines()
@@ -385,7 +435,24 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Table */}
+        {/* Import conflict warnings */}
+        {importConflicts.length > 0 && (
+          <div style={{ background: 'rgba(184,148,42,0.08)', border: '1px solid rgba(184,148,42,0.4)', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
+              ⚠️ Price conflicts — your manual overrides were preserved
+            </div>
+            {importConflicts.map((c, i) => (
+              <div key={i} style={{ fontSize: '12px', padding: '8px 0', borderTop: i > 0 ? '1px solid rgba(184,148,42,0.2)' : 'none' }}>
+                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', marginBottom: '3px' }}>{c.description} {c.vintage}</div>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>
+                  Your price: <strong>£{parseFloat(c.storedPrice).toFixed(2)}</strong> · Incoming spreadsheet: <strong>£{parseFloat(c.incomingPrice).toFixed(2)}</strong>
+                </div>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#7a5e10', marginTop: '2px' }}>Note: {c.note}</div>
+              </div>
+            ))}
+            <button onClick={() => setImportConflicts([])} style={{ marginTop: '10px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', cursor: 'pointer' }}>Dismiss</button>
+          </div>
+        )}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
@@ -439,7 +506,7 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{w.bottle_volume || (w.bottle_format === 'Magnum' ? '150cl' : w.bottle_format ? '75cl' : '—')}</td>
                     <td style={{ padding: '9px 12px' }}>{w.quantity || '—'}</td>
 
-                    {/* Cost IB — click to open price breakdown */}
+                    {/* Cost IB — click to open price breakdown, double-click to edit */}
                     <td style={{ padding: '9px 12px', position: 'relative' }}
                       onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none' }}>
@@ -447,8 +514,19 @@ export default function AdminPage() {
                           {pp ? `£${parseFloat(pp).toFixed(2)}` : '—'}
                         </span>
                         <span style={{ fontSize: '9px', color: isPriceOpen ? 'var(--wine)' : '#bbb' }}>{isPriceOpen ? '▲' : '▼'}</span>
+                        {w.manual_override_note && <span title={`Override: ${w.manual_override_note}`} style={{ fontSize: '9px', color: '#b8942a', cursor: 'help' }}>✎</span>}
                       </div>
-                      {isPriceOpen && <PriceBreakdown w={w} />}
+                      {isPriceOpen && (
+                        <>
+                          <PriceBreakdown w={w} />
+                          <div style={{ marginTop: '8px' }}>
+                            <button onClick={e => { e.stopPropagation(); setExpandedPrice(null); openOverride(w, 'purchase_price_per_bottle', pp) }}
+                              style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(184,148,42,0.12)', border: '1px solid rgba(184,148,42,0.3)', color: '#7a5e10', padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              ✎ Override price
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </td>
 
                     {/* Retail IB */}
@@ -575,6 +653,51 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* ─── Price Override Modal ──────────────────────────────────────────────── */}
+      {overrideModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '440px', padding: '28px', border: '1px solid var(--border)' }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, marginBottom: '6px' }}>Override Purchase Price</div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--muted)', marginBottom: '20px' }}>{overrideModal.wine.description}, {overrideModal.wine.vintage}</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>Current price</label>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '18px', color: 'var(--muted)', padding: '9px 0' }}>£{parseFloat(overrideModal.oldVal || 0).toFixed(2)}</div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>New price (£/btl IB)</label>
+                <input type="number" step="0.01"
+                  defaultValue={overrideModal.newVal ? parseFloat(overrideModal.newVal).toFixed(2) : ''}
+                  onChange={e => setOverrideModal(prev => ({ ...prev, newVal: e.target.value }))}
+                  style={{ width: '100%', border: '2px solid var(--wine)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'var(--wine)' }} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
+                Reason for override <span style={{ color: 'var(--wine)' }}>*</span>
+              </label>
+              <input type="text" value={overrideNote} onChange={e => setOverrideNote(e.target.value)}
+                placeholder="e.g. Supplier corrected invoice price"
+                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+              <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px', fontFamily: 'DM Mono, monospace' }}>
+                This note will appear as a warning if the next import has a different price.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setOverrideModal(null); setOverrideNote('') }}
+                style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveOverride} disabled={!overrideNote.trim() || !overrideModal.newVal}
+                style={{ background: overrideNote.trim() && overrideModal.newVal ? 'var(--wine)' : '#ccc', color: 'var(--white)', border: 'none', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: overrideNote.trim() ? 'pointer' : 'not-allowed' }}>
+                Save Override
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
