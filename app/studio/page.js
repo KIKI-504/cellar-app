@@ -431,8 +431,14 @@ export default function StudioPage() {
                           style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                       )}
                     </td>
-                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: '11px' }}>
-                      {s.bottle_size ? `${s.bottle_size}cl` : (w?.bottle_volume || '75cl')}
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      <select defaultValue={s.bottle_size || '75'}
+                        onChange={e => updateStudio(s.id, 'bottle_size', e.target.value)}
+                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
+                        <option value="37.5">37.5cl</option>
+                        <option value="75">75cl</option>
+                        <option value="150">150cl</option>
+                      </select>
                     </td>
                     <td style={{ padding: '9px 12px' }}>
                       <input type="number" min="0" defaultValue={s.quantity}
