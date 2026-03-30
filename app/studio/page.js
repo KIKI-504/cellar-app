@@ -404,9 +404,13 @@ export default function StudioPage() {
               )}
               {filtered.map(s => {
                 const w = s.wines
-                const dotColor = w?.colour?.toLowerCase().includes('red') ? '#8b2535' : w?.colour?.toLowerCase().includes('white') ? '#d4c88a' : '#d4748a'
+                const colour = w?.colour || ''
+                const dotColor = colour.toLowerCase().includes('white') ? '#d4c88a' : colour.toLowerCase().includes('ros') ? '#d4748a' : colour.toLowerCase().includes('red') ? '#8b2535' : '#aaa'
+                const isDetailOpen = expandedNote === s.id
+                const ibPrice = s.dp_price ? ((parseFloat(s.dp_price) / 1.2) - 3).toFixed(2) : null
                 return (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
+                  <>
+                  <tr key={s.id} style={{ borderBottom: isDetailOpen ? 'none' : '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
                     <td style={{ padding: '9px 12px', maxWidth: '260px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
@@ -476,11 +480,61 @@ export default function StudioPage() {
                         onBlur={e => { if (e.target.value !== (s.notes || '')) updateStudio(s.id, 'notes', e.target.value || null) }}
                         style={{ width: '120px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
                     </td>
-                    <td style={{ padding: '9px 12px' }}>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      <button onClick={() => setExpandedNote(isDetailOpen ? null : s.id)}
+                        title="View price details"
+                        style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: isDetailOpen ? 'var(--wine)' : 'var(--muted)', fontSize: '11px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', marginRight: '4px' }}>
+                        {isDetailOpen ? '▲' : '£'}
+                      </button>
                       <button onClick={() => deleteStudio(s.id)} title="Remove from studio"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 4px' }}>✕</button>
                     </td>
                   </tr>
+                  {isDetailOpen && (
+                    <tr key={s.id + '-detail'} style={{ borderBottom: '1px solid #ede6d6', background: 'rgba(107,30,46,0.03)' }}>
+                      <td colSpan={11} style={{ padding: '8px 20px 12px 36px' }}>
+                        <div style={{ display: 'flex', gap: '28px', fontSize: '11px', fontFamily: 'DM Mono, monospace', flexWrap: 'wrap' }}>
+                          {ibPrice && (
+                            <div>
+                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>IB price</span>
+                              <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{ibPrice}</div>
+                            </div>
+                          )}
+                          {s.dp_price && (
+                            <div>
+                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>DP price</span>
+                              <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{parseFloat(s.dp_price).toFixed(2)}</div>
+                            </div>
+                          )}
+                          {s.sale_price && (
+                            <div>
+                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Sale price</span>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wine)', marginTop: '2px' }}>£{parseFloat(s.sale_price).toFixed(2)}</div>
+                            </div>
+                          )}
+                          {s.dp_price && s.sale_price && (
+                            <div>
+                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Margin on DP</span>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#2d6a4f', marginTop: '2px' }}>
+                                {((parseFloat(s.sale_price) - parseFloat(s.dp_price)) / parseFloat(s.dp_price) * 100).toFixed(1)}%
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Bottle size</span>
+                            <div style={{ fontSize: '13px', marginTop: '2px' }}>{s.bottle_size || '75'}cl</div>
+                          </div>
+                          {s.date_moved && (
+                            <div>
+                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Date moved</span>
+                              <div style={{ fontSize: '13px', marginTop: '2px' }}>{s.date_moved}</div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </>
                 )
               })}
             </tbody>
