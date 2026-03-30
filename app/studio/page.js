@@ -41,6 +41,7 @@ export default function StudioPage() {
   const [scanIBPrice, setScanIBPrice] = useState('')       // purchase price IB
   const [scanRetailPrice, setScanRetailPrice] = useState('') // retail price
   const [scanBottleSize, setScanBottleSize] = useState('75') // bottle size in cl
+  const [scanSalePrice, setScanSalePrice] = useState('')     // sale price
   const [scanSaving, setScanSaving] = useState(false)
 
   const fileInputRef = useRef(null)
@@ -137,6 +138,7 @@ export default function StudioPage() {
     setScanNotes('')
     setScanVintage('')
     setScanBottleSize('75')
+    setScanSalePrice('')
     setScanIBPrice('')
     setScanRetailPrice('')
   }
@@ -245,6 +247,7 @@ export default function StudioPage() {
       notes: scanNotes || null,
       include_in_local: false,
       bottle_size: scanBottleSize || '75',
+      sale_price: scanSalePrice ? parseFloat(scanSalePrice) : null,
       unlinked_description: !scanWine
         ? [scanRaw?.wine_name, scanRaw?.producer].filter(Boolean).join(', ')
         : null,
@@ -390,7 +393,7 @@ export default function StudioPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                {['Wine', 'Vintage', 'Size', 'Qty', 'Moved', 'DP Price', 'Status', 'Local Sales', 'Notes', ''].map(h => (
+                {['Wine', 'Vintage', 'Size', 'Qty', 'Moved', 'DP Price', 'Sale £', 'Status', 'Local Sales', 'Notes', ''].map(h => (
                   <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -442,6 +445,12 @@ export default function StudioPage() {
                         onBlur={e => { if (e.target.value !== String(s.dp_price || '')) updateStudio(s.id, 'dp_price', e.target.value ? parseFloat(e.target.value) : null) }}
                         placeholder="0.00"
                         style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600 }} />
+                    </td>
+                    <td style={{ padding: '9px 12px' }}>
+                      <input type="number" step="0.01" defaultValue={s.sale_price ? parseFloat(s.sale_price).toFixed(2) : ''}
+                        onBlur={e => { if (e.target.value !== String(s.sale_price || '')) updateStudio(s.id, 'sale_price', e.target.value ? parseFloat(e.target.value) : null) }}
+                        placeholder="0.00"
+                        style={{ width: '72px', border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: 'var(--wine)' }} />
                     </td>
                     <td style={{ padding: '9px 12px' }}>
                       <select value={s.status} onChange={e => updateStudio(s.id, 'status', e.target.value)}
@@ -675,6 +684,19 @@ export default function StudioPage() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
+                    YOUR SALE PRICE (£/btl)
+                  </label>
+                  <input type="number" step="0.01" value={scanSalePrice} onChange={e => setScanSalePrice(e.target.value)} placeholder="0.00"
+                    style={{ width: '100%', border: '2px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'var(--wine)' }} />
+                  {scanSalePrice && scanIBPrice && (
+                    <div style={{ fontSize: '10px', color: 'var(--wine)', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>
+                      Margin: £{(parseFloat(scanSalePrice) - ((parseFloat(scanIBPrice) + 3) * 1.2)).toFixed(2)} above DP
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
