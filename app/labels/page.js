@@ -6,8 +6,6 @@ import { supabase } from '../../lib/supabase'
 function abbreviateName(description) {
   const parts = description.split(',').map(p => p.trim())
   const wineName = parts[0] || description
-
-  // Producer is everything after the first comma, cleaned up
   const rawProducer = parts.slice(1).join(', ')
   const producer = rawProducer
     .replace(/^Domaine de la\s+/i, '')
@@ -17,9 +15,8 @@ function abbreviateName(description) {
     .replace(/^Domaine\s+/i, '')
     .replace(/^Château\s+/i, '')
     .replace(/^Chateau\s+/i, '')
-    .replace(/,.*$/, '') // strip anything after next comma (region etc)
+    .replace(/,.*$/, '')
     .trim()
-
   return { wineName, producer }
 }
 
@@ -28,52 +25,57 @@ function calcDP(ib) {
 }
 
 function isMagnum(w) {
-  return w.bottle_format?.toLowerCase().includes('magnum') ||
-    w.bottle_volume?.includes('150')
+  return w.bottle_format?.toLowerCase().includes('magnum') || w.bottle_volume?.includes('150')
 }
 
-function LabelContent({ wine, wineName, producer, isMag }) {
+// ─── Bond label content ────────────────────────────────────────────────────
+function BondLabelContent({ wine, wineName, producer, isMag }) {
   const source = wine.source === 'Berry Brothers' ? 'BBR' : 'FLINT'
   const ib = parseFloat(wine.purchase_price_per_bottle).toFixed(2)
   const dp = calcDP(wine.purchase_price_per_bottle)
+  return (
+    <div style={{ width: '100%', padding: '14px 18px', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box' }}>
+      {isMag && (
+        <div style={{ fontSize: '22px', fontWeight: 'bold', letterSpacing: '0.15em', marginBottom: '8px', textTransform: 'uppercase' }}>MAGNUM</div>
+      )}
+      <div style={{ fontSize: '15px', fontWeight: 'bold', lineHeight: 1.3, marginBottom: '2px' }}>{wine.vintage} {wineName}</div>
+      {producer && <div style={{ fontSize: '14px', lineHeight: 1.3, marginBottom: '6px' }}>{producer}</div>}
+      <div style={{ fontSize: '14px', marginTop: '4px' }}>£{ib} IB — {source}</div>
+      <div style={{ fontSize: '14px' }}>£{dp} DP</div>
+    </div>
+  )
+}
+
+// ─── Studio label content ──────────────────────────────────────────────────
+function StudioLabelContent({ entry, wineName, producer, isMag }) {
+  const bottleSize = entry.bottle_size || (entry.wines?.bottle_volume?.includes('150') ? '150' : '75')
+  const sizeLabel = bottleSize === '150' ? 'Magnum 150cl' : bottleSize === '37.5' ? 'Half Bottle 37.5cl' : '75cl'
+  const dp = entry.dp_price ? parseFloat(entry.dp_price).toFixed(2) : null
+  const sale = entry.sale_price ? parseFloat(entry.sale_price).toFixed(2) : null
+  const vintage = entry.wines?.vintage || entry.unlinked_vintage || ''
 
   return (
-    <div style={{
-      width: '100%',
-      padding: '14px 18px',
-      fontFamily: 'Arial, sans-serif',
-      boxSizing: 'border-box',
-    }}>
-      {isMag && (
-        <div style={{
-          fontSize: '22px',
-          fontWeight: 'bold',
-          letterSpacing: '0.15em',
-          marginBottom: '8px',
-          textTransform: 'uppercase',
-        }}>MAGNUM</div>
+    <div style={{ width: '100%', padding: '14px 18px', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box' }}>
+      {(isMag || bottleSize === '150') && (
+        <div style={{ fontSize: '22px', fontWeight: 'bold', letterSpacing: '0.15em', marginBottom: '8px', textTransform: 'uppercase' }}>MAGNUM</div>
       )}
-      <div style={{ fontSize: '15px', fontWeight: 'bold', lineHeight: 1.3, marginBottom: '2px' }}>
-        {wine.vintage} {wineName}
-      </div>
-      {producer && (
-        <div style={{ fontSize: '14px', lineHeight: 1.3, marginBottom: '6px' }}>
-          {producer}
-        </div>
+      {bottleSize === '37.5' && (
+        <div style={{ fontSize: '16px', fontWeight: 'bold', letterSpacing: '0.1em', marginBottom: '8px', textTransform: 'uppercase' }}>HALF BOTTLE</div>
       )}
-      <div style={{ fontSize: '14px', marginTop: '4px' }}>
-        £{ib} IB — {source}
-      </div>
-      <div style={{ fontSize: '14px' }}>
-        £{dp} DP
-      </div>
+      <div style={{ fontSize: '15px', fontWeight: 'bold', lineHeight: 1.3, marginBottom: '2px' }}>{vintage} {wineName}</div>
+      {producer && <div style={{ fontSize: '14px', lineHeight: 1.3, marginBottom: '6px' }}>{producer}</div>}
+      <div style={{ fontSize: '13px', color: '#555', marginBottom: '6px' }}>{sizeLabel}</div>
+      {dp && <div style={{ fontSize: '14px', marginTop: '4px' }}>£{dp} DP</div>}
+      {sale && <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '2px' }}>£{sale} Sale</div>}
     </div>
   )
 }
 
 export default function LabelPage() {
   const router = useRouter()
+  const [tab, setTab] = useState('bond') // bond | studio
   const [wines, setWines] = useState([])
+  const [studioEntries, setStudioEntries] = useState([])
   const [filtered, setFiltered] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -85,7 +87,7 @@ export default function LabelPage() {
   useEffect(() => {
     const role = sessionStorage.getItem('role')
     if (role !== 'admin') router.push('/')
-    else fetchWines()
+    else { fetchWines(); fetchStudio() }
   }, [])
 
   async function fetchWines() {
@@ -95,82 +97,110 @@ export default function LabelPage() {
       .select('id, source, description, vintage, bottle_format, bottle_volume, purchase_price_per_bottle, quantity')
       .order('description')
     setWines(data || [])
-    setFiltered(data || [])
     setLoading(false)
   }
 
-  useEffect(() => {
-    if (!search) { setFiltered(wines); return }
-    const q = search.toLowerCase()
-    setFiltered(wines.filter(w =>
-      [w.description, w.vintage, w.source].join(' ').toLowerCase().includes(q)
-    ))
-  }, [search, wines])
+  async function fetchStudio() {
+    const { data } = await supabase
+      .from('studio')
+      .select('*, wines(description, vintage, region, colour, bottle_format, bottle_volume, purchase_price_per_bottle)')
+      .eq('status', 'Available')
+      .order('created_at', { ascending: false })
+    setStudioEntries(data || [])
+  }
 
-  function selectWine(w) {
+  // Update filtered list when tab or search changes
+  useEffect(() => {
+    if (tab === 'bond') {
+      if (!search) { setFiltered(wines); return }
+      const q = search.toLowerCase()
+      setFiltered(wines.filter(w => [w.description, w.vintage, w.source].join(' ').toLowerCase().includes(q)))
+    } else {
+      const q = search.toLowerCase()
+      setFiltered(studioEntries.filter(s => {
+        const name = s.wines?.description || s.unlinked_description || ''
+        const vintage = s.wines?.vintage || s.unlinked_vintage || ''
+        return !q || [name, vintage].join(' ').toLowerCase().includes(q)
+      }))
+    }
+    setSelected(null)
+    setWineName('')
+    setProducer('')
+  }, [tab, search, wines, studioEntries])
+
+  function selectBondWine(w) {
     const { wineName: wn, producer: pr } = abbreviateName(w.description)
-    setSelected(w)
+    setSelected({ type: 'bond', data: w })
+    setWineName(wn)
+    setProducer(pr)
+  }
+
+  function selectStudioEntry(s) {
+    const desc = s.wines?.description || s.unlinked_description || ''
+    const { wineName: wn, producer: pr } = desc ? abbreviateName(desc) : { wineName: '', producer: '' }
+    setSelected({ type: 'studio', data: s })
     setWineName(wn)
     setProducer(pr)
   }
 
   function printLabel() {
-    const content = printRef.current
-    if (!content) return
+    if (!selected) return
+    const isBond = selected.type === 'bond'
+    const w = selected.data
+    const mag = isBond ? isMagnum(w) : (w.bottle_size === '150' || w.wines?.bottle_volume?.includes('150'))
+    const bottleSize = isBond ? null : (w.bottle_size || '75')
+    const sizeLabel = bottleSize === '150' ? 'Magnum 150cl' : bottleSize === '37.5' ? 'Half Bottle 37.5cl' : '75cl'
+    const vintage = isBond ? w.vintage : (w.wines?.vintage || w.unlinked_vintage || '')
+    const dp = isBond ? calcDP(w.purchase_price_per_bottle) : (w.dp_price ? parseFloat(w.dp_price).toFixed(2) : null)
+    const sale = !isBond && w.sale_price ? parseFloat(w.sale_price).toFixed(2) : null
+    const ib = isBond ? parseFloat(w.purchase_price_per_bottle).toFixed(2) : null
+    const source = isBond ? (w.source === 'Berry Brothers' ? 'BBR' : 'FLINT') : null
+
+    const labelHTML = `
+      ${mag ? '<div class="magnum">MAGNUM</div>' : ''}
+      ${!mag && bottleSize === '37.5' ? '<div class="magnum" style="font-size:16px">HALF BOTTLE</div>' : ''}
+      <div class="wine-name">${vintage} ${wineName}</div>
+      ${producer ? `<div class="producer">${producer}</div>` : ''}
+      ${isBond ? `
+        <div class="price">£${ib} IB — ${source}</div>
+        <div class="price">£${dp} DP</div>
+      ` : `
+        <div class="size">${sizeLabel}</div>
+        ${dp ? `<div class="price">£${dp} DP</div>` : ''}
+        ${sale ? `<div class="price" style="font-weight:bold;font-size:16px">£${sale} Sale</div>` : ''}
+      `}
+    `
 
     const printWindow = window.open('', '_blank', 'width=816,height=1056')
     printWindow.document.write(`
       <html>
       <head>
-        <title>Label — ${selected.vintage} ${wineName}</title>
+        <title>Label — ${vintage} ${wineName}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { width: 4in; font-family: Arial, sans-serif; }
           @page { size: 4in 6in; margin: 0; }
-          @media print {
-            body { width: 4in; }
-          }
           .label-half {
-            width: 4in;
-            height: 3in;
-            padding: 14px 18px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            width: 4in; height: 3in; padding: 14px 18px;
+            display: flex; flex-direction: column; justify-content: center;
             border-bottom: 1px dashed #ccc;
           }
           .label-half:last-child { border-bottom: none; }
-          .magnum {
-            font-size: 22px;
-            font-weight: bold;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-          }
+          .magnum { font-size: 22px; font-weight: bold; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 8px; }
           .wine-name { font-size: 15px; font-weight: bold; line-height: 1.3; margin-bottom: 2px; }
           .producer { font-size: 14px; line-height: 1.3; margin-bottom: 6px; }
+          .size { font-size: 13px; color: #555; margin-bottom: 6px; }
           .price { font-size: 14px; line-height: 1.5; }
         </style>
       </head>
       <body>
-        ${[1, 2].map(() => `
-          <div class="label-half">
-            ${isMagnum(selected) ? '<div class="magnum">MAGNUM</div>' : ''}
-            <div class="wine-name">${selected.vintage} ${wineName}</div>
-            ${producer ? `<div class="producer">${producer}</div>` : ''}
-            <div class="price">£${parseFloat(selected.purchase_price_per_bottle).toFixed(2)} IB — ${selected.source === 'Berry Brothers' ? 'BBR' : 'FLINT'}</div>
-            <div class="price">£${calcDP(selected.purchase_price_per_bottle)} DP</div>
-          </div>
-        `).join('')}
+        ${[1, 2].map(() => `<div class="label-half">${labelHTML}</div>`).join('')}
       </body>
       </html>
     `)
     printWindow.document.close()
     printWindow.focus()
-    setTimeout(() => {
-      printWindow.print()
-      printWindow.close()
-    }, 300)
+    setTimeout(() => { printWindow.print(); printWindow.close() }, 300)
   }
 
   if (loading) return (
@@ -186,6 +216,7 @@ export default function LabelPage() {
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => router.push('/admin')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px' }}>Inventory</button>
+          <button onClick={() => router.push('/studio')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px' }}>Studio</button>
           <button onClick={() => router.push('/labels')} style={{ background: 'rgba(107,30,46,0.6)', color: '#d4ad45', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Labels</button>
           <button onClick={() => router.push('/buyer')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px' }}>Buyer View</button>
         </div>
@@ -194,43 +225,72 @@ export default function LabelPage() {
 
       <div style={{ padding: '24px 28px', display: 'grid', gridTemplateColumns: '1fr 380px', gap: '28px', alignItems: 'start' }}>
 
-        {/* Left — wine list */}
+        {/* Left — list */}
         <div>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300, marginBottom: '16px' }}>Print Labels</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Print Labels</div>
+            {/* Tab toggle */}
+            <div style={{ display: 'flex', gap: '0', border: '1px solid var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+              <button onClick={() => setTab('bond')} style={{ padding: '5px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', cursor: 'pointer', background: tab === 'bond' ? 'var(--wine)' : 'var(--white)', color: tab === 'bond' ? 'var(--white)' : 'var(--muted)' }}>Bond</button>
+              <button onClick={() => setTab('studio')} style={{ padding: '5px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', background: tab === 'studio' ? 'var(--wine)' : 'var(--white)', color: tab === 'studio' ? 'var(--white)' : 'var(--muted)' }}>Studio</button>
+            </div>
+          </div>
+
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search wines…"
+            placeholder={tab === 'bond' ? 'Search bond wines…' : 'Search studio wines…'}
             style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 14px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', marginBottom: '12px' }} />
 
-          <div style={{ border: '1px solid var(--border)', background: 'var(--white)', maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
-            {filtered.map(w => {
-              const isSel = selected?.id === w.id
+          <div style={{ border: '1px solid var(--border)', background: 'var(--white)', maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' }}>
+            {tab === 'bond' && filtered.map(w => {
+              const isSel = selected?.data?.id === w.id
               const mag = isMagnum(w)
               return (
-                <div key={w.id} onClick={() => selectWine(w)}
+                <div key={w.id} onClick={() => selectBondWine(w)}
                   style={{ padding: '10px 14px', borderBottom: '1px solid var(--parchment)', cursor: 'pointer', background: isSel ? 'rgba(107,30,46,0.06)' : 'transparent', borderLeft: isSel ? '3px solid var(--wine)' : '3px solid transparent' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <div>
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px' }}>{w.vintage} </span>
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px' }}>{w.description.split(',')[0]}</span>
+                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px' }}>{w.vintage} {w.description.split(',')[0]}</span>
                       {mag && <span style={{ marginLeft: '6px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(184,148,42,0.15)', color: '#7a5e10', padding: '1px 5px', borderRadius: '2px' }}>Magnum</span>}
                     </div>
                     <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '12px', whiteSpace: 'nowrap' }}>£{parseFloat(w.purchase_price_per_bottle).toFixed(2)}</span>
                   </div>
-                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
-                    {w.source === 'Berry Brothers' ? 'BBR' : 'Flint'} · {w.quantity} btls
-                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w.source === 'Berry Brothers' ? 'BBR' : 'Flint'} · {w.quantity} btls</div>
                 </div>
               )
             })}
+            {tab === 'studio' && filtered.map(s => {
+              const isSel = selected?.data?.id === s.id
+              const name = s.wines?.description || s.unlinked_description || 'Unknown wine'
+              const vintage = s.wines?.vintage || s.unlinked_vintage || ''
+              const bottleSize = s.bottle_size || '75'
+              const sizeTag = bottleSize === '150' ? 'Magnum' : bottleSize === '37.5' ? 'Half' : null
+              return (
+                <div key={s.id} onClick={() => selectStudioEntry(s)}
+                  style={{ padding: '10px 14px', borderBottom: '1px solid var(--parchment)', cursor: 'pointer', background: isSel ? 'rgba(107,30,46,0.06)' : 'transparent', borderLeft: isSel ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <div>
+                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px' }}>{vintage} {name.split(',')[0]}</span>
+                      {sizeTag && <span style={{ marginLeft: '6px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(184,148,42,0.15)', color: '#7a5e10', padding: '1px 5px', borderRadius: '2px' }}>{sizeTag}</span>}
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '12px', whiteSpace: 'nowrap' }}>
+                      {s.sale_price ? `£${parseFloat(s.sale_price).toFixed(2)}` : s.dp_price ? `£${parseFloat(s.dp_price).toFixed(2)} DP` : '—'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>Studio · {s.quantity} btls</div>
+                </div>
+              )
+            })}
+            {filtered.length === 0 && (
+              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No wines found</div>
+            )}
           </div>
         </div>
 
-        {/* Right — label preview & edit */}
+        {/* Right — preview & print */}
         {selected ? (
           <div style={{ position: 'sticky', top: '76px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, marginBottom: '16px', color: 'var(--wine)' }}>Label Preview</div>
 
-            {/* Editable fields */}
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Wine Name (Line 1)</label>
               <input value={wineName} onChange={e => setWineName(e.target.value)}
@@ -242,29 +302,50 @@ export default function LabelPage() {
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
             </div>
 
-            {/* Preview — 4×6 at screen scale */}
+            {/* Preview */}
             <div ref={printRef} style={{ border: '1px solid var(--border)', background: 'var(--white)', width: '288px', margin: '0 auto 20px' }}>
-              {/* Top half */}
-              <div style={{ borderBottom: '1px dashed #ccc', padding: '0' }}>
-                <LabelContent wine={selected} wineName={wineName} producer={producer} isMag={isMagnum(selected)} />
+              <div style={{ borderBottom: '1px dashed #ccc' }}>
+                {selected.type === 'bond'
+                  ? <BondLabelContent wine={selected.data} wineName={wineName} producer={producer} isMag={isMagnum(selected.data)} />
+                  : <StudioLabelContent entry={selected.data} wineName={wineName} producer={producer} isMag={false} />
+                }
               </div>
-              {/* Bottom half */}
               <div>
-                <LabelContent wine={selected} wineName={wineName} producer={producer} isMag={isMagnum(selected)} />
+                {selected.type === 'bond'
+                  ? <BondLabelContent wine={selected.data} wineName={wineName} producer={producer} isMag={isMagnum(selected.data)} />
+                  : <StudioLabelContent entry={selected.data} wineName={wineName} producer={producer} isMag={false} />
+                }
               </div>
             </div>
 
-            {/* Prices */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', fontSize: '12px' }}>
-              <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>IB Price</div>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px' }}>£{parseFloat(selected.purchase_price_per_bottle).toFixed(2)}</div>
+            {/* Price summary */}
+            {selected.type === 'bond' ? (
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>IB Price</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px' }}>£{parseFloat(selected.data.purchase_price_per_bottle).toFixed(2)}</div>
+                </div>
+                <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>DP Price</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--wine)' }}>£{calcDP(selected.data.purchase_price_per_bottle)}</div>
+                </div>
               </div>
-              <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>DP Price</div>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--wine)' }}>£{calcDP(selected.purchase_price_per_bottle)}</div>
+            ) : (
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                {selected.data.dp_price && (
+                  <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>DP Price</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px' }}>£{parseFloat(selected.data.dp_price).toFixed(2)}</div>
+                  </div>
+                )}
+                {selected.data.sale_price && (
+                  <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Sale Price</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--wine)' }}>£{parseFloat(selected.data.sale_price).toFixed(2)}</div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             <button onClick={printLabel}
               style={{ width: '100%', background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer' }}>
@@ -277,7 +358,7 @@ export default function LabelPage() {
         ) : (
           <div style={{ position: 'sticky', top: '76px', border: '2px dashed var(--border)', padding: '40px', textAlign: 'center', color: 'var(--muted)' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', marginBottom: '8px', color: 'var(--ink)' }}>Select a wine</div>
-            <div style={{ fontSize: '12px' }}>Choose a wine from the list to preview and print its label</div>
+            <div style={{ fontSize: '12px' }}>Choose from Bond or Studio inventory to preview and print</div>
           </div>
         )}
       </div>
