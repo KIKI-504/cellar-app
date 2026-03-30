@@ -38,8 +38,9 @@ export default function StudioPage() {
   const [scanDate, setScanDate] = useState(new Date().toISOString().split('T')[0])
   const [scanNotes, setScanNotes] = useState('')
   const [scanVintage, setScanVintage] = useState('')
-  const [scanIBPrice, setScanIBPrice] = useState('')     // purchase price IB
-  const [scanRetailPrice, setScanRetailPrice] = useState('')  // retail price
+  const [scanIBPrice, setScanIBPrice] = useState('')       // purchase price IB
+  const [scanRetailPrice, setScanRetailPrice] = useState('') // retail price
+  const [scanBottleSize, setScanBottleSize] = useState('75') // bottle size in cl
   const [scanSaving, setScanSaving] = useState(false)
 
   const fileInputRef = useRef(null)
@@ -135,6 +136,7 @@ export default function StudioPage() {
     setScanDate(new Date().toISOString().split('T')[0])
     setScanNotes('')
     setScanVintage('')
+    setScanBottleSize('75')
     setScanIBPrice('')
     setScanRetailPrice('')
   }
@@ -242,6 +244,7 @@ export default function StudioPage() {
       status: 'Available',
       notes: scanNotes || null,
       include_in_local: false,
+      bottle_size: scanBottleSize || '75',
       unlinked_description: !scanWine
         ? [scanRaw?.wine_name, scanRaw?.producer].filter(Boolean).join(', ')
         : null,
@@ -387,7 +390,7 @@ export default function StudioPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                {['Wine', 'Vintage', 'Qty', 'Moved', 'DP Price', 'Status', 'Local Sales', 'Notes', ''].map(h => (
+                {['Wine', 'Vintage', 'Size', 'Qty', 'Moved', 'DP Price', 'Status', 'Local Sales', 'Notes', ''].map(h => (
                   <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -424,6 +427,9 @@ export default function StudioPage() {
                           placeholder="e.g. 2021"
                           style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                       )}
+                    </td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: '11px' }}>
+                      {s.bottle_size ? `${s.bottle_size}cl` : (w?.bottle_volume || '75cl')}
                     </td>
                     <td style={{ padding: '9px 12px' }}>
                       <input type="number" min="0" defaultValue={s.quantity}
@@ -618,11 +624,20 @@ export default function StudioPage() {
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>3. Enter details</label>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>QUANTITY</label>
                     <input type="number" min="1" value={scanQty} onChange={e => setScanQty(parseInt(e.target.value) || 1)}
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>BOTTLE SIZE</label>
+                    <select value={scanBottleSize} onChange={e => setScanBottleSize(e.target.value)}
+                      style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}>
+                      <option value="37.5">37.5cl (half)</option>
+                      <option value="75">75cl (bottle)</option>
+                      <option value="150">150cl (magnum)</option>
+                    </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>DATE MOVED</label>
