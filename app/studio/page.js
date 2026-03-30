@@ -10,6 +10,7 @@ export default function StudioPage() {
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('Available')
   const [search, setSearch] = useState('')
+  const [expandedNote, setExpandedNote] = useState(null)
 
   // Move to studio modal
   const [showMoveModal, setShowMoveModal] = useState(false)
