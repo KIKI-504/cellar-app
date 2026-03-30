@@ -257,12 +257,54 @@ export default function StudioPage() {
       }).eq('id', scanWine.id)
     }
 
-    const { error } = await supabase.from('studio').insert(insertData)
-    if (!error) {
+    // ── Consolidation: check for an existing Available entry for the same wine ──
+    let saved = false
+
+    if (scanWine?.id) {
+      // Linked wine — match on wine_id
+      const { data: existing } = await supabase
+        .from('studio')
+        .select('id, quantity')
+        .eq('wine_id', scanWine.id)
+        .eq('status', 'Available')
+        .maybeSingle()
+      if (existing) {
+        const { error } = await supabase
+          .from('studio')
+          .update({ quantity: existing.quantity + scanQty })
+          .eq('id', existing.id)
+        if (!error) saved = true
+        else alert('Save failed: ' + error.message)
+      }
+    } else if (insertData.unlinked_description) {
+      // Unlinked wine — match on description + vintage
+      const { data: existing } = await supabase
+        .from('studio')
+        .select('id, quantity')
+        .eq('unlinked_description', insertData.unlinked_description)
+        .eq('unlinked_vintage', insertData.unlinked_vintage || '')
+        .eq('status', 'Available')
+        .maybeSingle()
+      if (existing) {
+        const { error } = await supabase
+          .from('studio')
+          .update({ quantity: existing.quantity + scanQty })
+          .eq('id', existing.id)
+        if (!error) saved = true
+        else alert('Save failed: ' + error.message)
+      }
+    }
+
+    // No existing entry found — insert fresh
+    if (!saved) {
+      const { error } = await supabase.from('studio').insert(insertData)
+      if (!error) saved = true
+      else alert('Save failed: ' + error.message)
+    }
+
+    if (saved) {
       await fetchStudio()
       setShowScanModal(false)
-    } else {
-      alert('Save failed: ' + error.message)
     }
     setScanSaving(false)
   }
