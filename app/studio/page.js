@@ -16,6 +16,35 @@ const colourDot = (colour) => {
   return '#aaa'
 }
 
+// Editable cell that holds its own local state so re-renders don't clobber typed values
+function EditableCell({ value, onSave, type = 'text', step, min, placeholder, style, width }) {
+  const [local, setLocal] = useState(value ?? '')
+  const [focused, setFocused] = useState(false)
+
+  // Only sync from parent when not focused (i.e. after a save round-trip)
+  useEffect(() => {
+    if (!focused) setLocal(value ?? '')
+  }, [value, focused])
+
+  return (
+    <input
+      type={type}
+      step={step}
+      min={min}
+      value={local}
+      placeholder={placeholder}
+      onChange={e => setLocal(e.target.value)}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={e => {
+        setFocused(false)
+        const parsed = type === 'number' ? (e.target.value === '' ? null : parseFloat(e.target.value)) : e.target.value
+        if (parsed !== (value ?? '')) onSave(parsed)
+      }}
+      style={{ width: width || '100%', ...style }}
+    />
+  )
+}
+
 export default function StudioPage() {
   const router = useRouter()
   const [studioWines, setStudioWines] = useState([])
@@ -642,10 +671,8 @@ export default function StudioPage() {
                           {w ? (
                             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3 }}>{w.description}</div>
                           ) : (
-                            <input type="text" defaultValue={s.unlinked_description || ''}
-                              onBlur={e => { if (e.target.value !== (s.unlinked_description || '')) updateStudio(s.id, 'unlinked_description', e.target.value) }}
-                              placeholder="Wine name…"
-                              style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', outline: 'none', width: '180px' }} />
+                            <EditableCell value={s.unlinked_description || ''} onSave={v => updateStudio(s.id, 'unlinked_description', v)} placeholder="Wine name…"
+                              style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', outline: 'none' }} width="180px" />
                           )}
                           <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w?.region || (s.unlinked_description ? 'Not in cellar database' : '')}</div>
                         </div>
@@ -655,10 +682,8 @@ export default function StudioPage() {
                     {/* Vintage */}
                     <td style={{ padding: '9px 12px', fontWeight: 500 }}>
                       {w ? w.vintage : (
-                        <input type="text" defaultValue={s.unlinked_vintage || ''}
-                          onBlur={e => { if (e.target.value !== (s.unlinked_vintage || '')) updateStudio(s.id, 'unlinked_vintage', e.target.value) }}
-                          placeholder="e.g. 2021"
-                          style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+                        <EditableCell value={s.unlinked_vintage || ''} onSave={v => updateStudio(s.id, 'unlinked_vintage', v)} placeholder="e.g. 2021"
+                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} width="60px" />
                       )}
                     </td>
 
@@ -690,10 +715,9 @@ export default function StudioPage() {
 
                     {/* Qty — auto-selects on focus for easy mobile editing */}
                     <td style={{ padding: '9px 12px' }}>
-                      <input type="number" min="0" defaultValue={s.quantity}
-                        onFocus={e => e.target.select()}
-                        onBlur={e => { if (parseInt(e.target.value) !== s.quantity) updateStudio(s.id, 'quantity', parseInt(e.target.value)) }}
-                        style={{ width: '52px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+                      <EditableCell type="number" min="0" value={s.quantity}
+                        onSave={v => updateStudio(s.id, 'quantity', v === null ? 0 : parseInt(v))}
+                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} width="52px" />
                     </td>
 
                     {/* Date moved */}
@@ -701,20 +725,20 @@ export default function StudioPage() {
 
                     {/* DP Price */}
                     <td style={{ padding: '9px 12px' }}>
-                      <input type="number" step="0.01" defaultValue={s.dp_price ? parseFloat(s.dp_price).toFixed(2) : calcDP(w?.purchase_price_per_bottle) || ''}
-                        onFocus={e => e.target.select()}
-                        onBlur={e => { if (e.target.value !== String(s.dp_price || '')) updateStudio(s.id, 'dp_price', e.target.value ? parseFloat(e.target.value) : null) }}
+                      <EditableCell type="number" step="0.01"
+                        value={s.dp_price ? parseFloat(s.dp_price) : (w?.purchase_price_per_bottle ? parseFloat(calcDP(w.purchase_price_per_bottle)) : null)}
+                        onSave={v => updateStudio(s.id, 'dp_price', v)}
                         placeholder="0.00"
-                        style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600 }} />
+                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600 }} width="72px" />
                     </td>
 
                     {/* Sale price */}
                     <td style={{ padding: '9px 12px' }}>
-                      <input type="number" step="0.01" defaultValue={s.sale_price ? parseFloat(s.sale_price).toFixed(2) : ''}
-                        onFocus={e => e.target.select()}
-                        onBlur={e => { if (e.target.value !== String(s.sale_price || '')) updateStudio(s.id, 'sale_price', e.target.value ? parseFloat(e.target.value) : null) }}
+                      <EditableCell type="number" step="0.01"
+                        value={s.sale_price ? parseFloat(s.sale_price) : null}
+                        onSave={v => updateStudio(s.id, 'sale_price', v)}
                         placeholder="0.00"
-                        style={{ width: '72px', border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: 'var(--wine)' }} />
+                        style={{ border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: 'var(--wine)' }} width="72px" />
                     </td>
 
                     {/* Status */}
@@ -736,9 +760,8 @@ export default function StudioPage() {
 
                     {/* Notes */}
                     <td style={{ padding: '9px 12px' }}>
-                      <input type="text" defaultValue={s.notes || ''} placeholder="notes…"
-                        onBlur={e => { if (e.target.value !== (s.notes || '')) updateStudio(s.id, 'notes', e.target.value || null) }}
-                        style={{ width: '120px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
+                      <EditableCell value={s.notes || ''} onSave={v => updateStudio(s.id, 'notes', v || null)} placeholder="notes…"
+                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} width="120px" />
                     </td>
 
                     {/* Actions */}
