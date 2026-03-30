@@ -63,6 +63,22 @@ export default function StudioPage() {
 
   const fileInputRef = useRef(null)
 
+  // ─── Add Wine manually modal ─────────────────────────────────────────────
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addDescription, setAddDescription] = useState('')
+  const [addProducer, setAddProducer] = useState('')
+  const [addVintage, setAddVintage] = useState('')
+  const [addColour, setAddColour] = useState('')
+  const [addRegion, setAddRegion] = useState('')
+  const [addCountry, setAddCountry] = useState('')
+  const [addBottleSize, setAddBottleSize] = useState('75')
+  const [addQuantity, setAddQuantity] = useState(1)
+  const [addIBPrice, setAddIBPrice] = useState('')
+  const [addSalePrice, setAddSalePrice] = useState('')
+  const [addNotes, setAddNotes] = useState('')
+  const [addWineId, setAddWineId] = useState('')
+  const [addSaving, setAddSaving] = useState(false)
+
   useEffect(() => {
     const role = sessionStorage.getItem('role')
     if (role !== 'admin') router.push('/')
@@ -151,6 +167,119 @@ export default function StudioPage() {
     setMoveQty(1)
     setMoveNotes('')
     setMoveDate(new Date().toISOString().split('T')[0])
+  }
+
+  // ─── Add Wine manually ──────────────────────────────────────────────────────
+
+  function generateWineId(vintage, producer, description, colour, bottleSize) {
+    const yy = vintage ? String(vintage).slice(-2) : 'XX'
+    const mm = producer ? producer.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() : 'XX'
+    const ww = description ? description.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase() : 'XXXX'
+    const c = colour ? colour.slice(0, 1).toUpperCase() : 'X'
+    const s = bottleSize === '150' ? 'M' : bottleSize === '37.5' ? 'H' : 'B'
+    return `${yy} ${mm} ${ww} ${c} ${s}`
+  }
+
+  function openAddModal() {
+    setShowAddModal(true)
+    setAddDescription('')
+    setAddProducer('')
+    setAddVintage('')
+    setAddColour('')
+    setAddRegion('')
+    setAddCountry('')
+    setAddBottleSize('75')
+    setAddQuantity(1)
+    setAddIBPrice('')
+    setAddSalePrice('')
+    setAddNotes('')
+    setAddWineId('')
+  }
+
+  function closeAddModal() {
+    setShowAddModal(false)
+  }
+
+  // Regenerate wine ID whenever key fields change
+  function updateAddField(field, value) {
+    const fields = { addDescription, addProducer, addVintage, addColour, addBottleSize, [field]: value }
+    if (['addDescription', 'addProducer', 'addVintage', 'addColour', 'addBottleSize'].includes(field)) {
+      const newId = generateWineId(
+        field === 'addVintage' ? value : fields.addVintage,
+        field === 'addProducer' ? value : fields.addProducer,
+        field === 'addDescription' ? value : fields.addDescription,
+        field === 'addColour' ? value : fields.addColour,
+        field === 'addBottleSize' ? value : fields.addBottleSize,
+      )
+      setAddWineId(newId)
+    }
+    if (field === 'addDescription') setAddDescription(value)
+    if (field === 'addProducer') setAddProducer(value)
+    if (field === 'addVintage') setAddVintage(value)
+    if (field === 'addColour') setAddColour(value)
+    if (field === 'addRegion') setAddRegion(value)
+    if (field === 'addCountry') setAddCountry(value)
+    if (field === 'addBottleSize') setAddBottleSize(value)
+    if (field === 'addQuantity') setAddQuantity(value)
+    if (field === 'addIBPrice') setAddIBPrice(value)
+    if (field === 'addSalePrice') setAddSalePrice(value)
+    if (field === 'addNotes') setAddNotes(value)
+  }
+
+  async function saveNewWine() {
+    if (!addDescription) return alert('Wine name is required')
+    setAddSaving(true)
+    try {
+      const ibPrice = addIBPrice ? parseFloat(addIBPrice) : null
+      const dp = ibPrice ? ((ibPrice + 3) * 1.2).toFixed(2) : null
+
+      // 1. Insert into wines table
+      const { data: newWine, error: wineError } = await supabase
+        .from('wines')
+        .insert({
+          source: 'Manual',
+          source_id: addWineId || null,
+          description: addDescription,
+          vintage: addVintage || null,
+          colour: addColour || null,
+          region: addRegion || null,
+          country: addCountry || null,
+          bottle_format: addBottleSize === '150' ? 'Magnum' : addBottleSize === '37.5' ? 'Half Bottle' : 'Bottle',
+          bottle_volume: addBottleSize,
+          quantity: String(addQuantity),
+          purchase_price_per_bottle: ibPrice,
+          include_in_buyer_view: false,
+        })
+        .select()
+        .single()
+
+      if (wineError) throw wineError
+
+      // 2. Immediately create a studio entry
+      const { error: studioError } = await supabase
+        .from('studio')
+        .insert({
+          wine_id: newWine.id,
+          quantity: addQuantity,
+          date_moved: new Date().toISOString().split('T')[0],
+          dp_price: dp,
+          sale_price: addSalePrice ? parseFloat(addSalePrice) : null,
+          status: 'Available',
+          notes: addNotes || null,
+          include_in_local: false,
+          bottle_size: addBottleSize,
+          colour: addColour || null,
+        })
+
+      if (studioError) throw studioError
+
+      await fetchStudio()
+      closeAddModal()
+    } catch (err) {
+      console.error(err)
+      alert('Save failed: ' + err.message)
+    }
+    setAddSaving(false)
   }
 
   // ─── Scan Flow ──────────────────────────────────────────────────────────────
@@ -401,9 +530,10 @@ export default function StudioPage() {
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Studio Inventory</div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{totalBottles} bottles available</div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={openScanModal} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📷 Scan Bottle</button>
             <button onClick={() => setShowMoveModal(true)} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Move to Studio</button>
+            <button onClick={openAddModal} style={{ background: 'none', border: '1px solid var(--ink)', color: 'var(--ink)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>✎ Add Wine</button>
           </div>
         </div>
 
@@ -910,6 +1040,142 @@ export default function StudioPage() {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* ─── Add Wine Manually Modal ──────────────────────────────────────────── */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '580px', padding: '28px', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
+
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300 }}>Add Wine Manually</div>
+              <button onClick={closeAddModal} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginBottom: '24px' }}>
+              Creates a new wine record + studio entry. Use for holiday finds, shop purchases, Corney &amp; Barrow, etc.
+            </div>
+
+            {/* Wine name + producer */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Wine Name *</label>
+                <input value={addDescription} onChange={e => updateAddField('addDescription', e.target.value)}
+                  placeholder="e.g. Chambolle-Musigny 1er Cru Les Amoureuses"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Producer</label>
+                <input value={addProducer} onChange={e => updateAddField('addProducer', e.target.value)}
+                  placeholder="e.g. Roumier"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Vintage</label>
+                <input value={addVintage} onChange={e => updateAddField('addVintage', e.target.value)}
+                  placeholder="e.g. 2019"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            {/* Colour + region + country */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Colour</label>
+                <select value={addColour} onChange={e => updateAddField('addColour', e.target.value)}
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}>
+                  <option value="">Select…</option>
+                  {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Region</label>
+                <input value={addRegion} onChange={e => updateAddField('addRegion', e.target.value)}
+                  placeholder="e.g. Burgundy"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Country</label>
+                <input value={addCountry} onChange={e => updateAddField('addCountry', e.target.value)}
+                  placeholder="e.g. France"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            {/* Bottle + qty */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Bottle Size</label>
+                <select value={addBottleSize} onChange={e => updateAddField('addBottleSize', e.target.value)}
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}>
+                  <option value="37.5">37.5cl (half)</option>
+                  <option value="75">75cl (bottle)</option>
+                  <option value="150">150cl (magnum)</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Quantity (bottles)</label>
+                <input type="number" min="1" value={addQuantity}
+                  onChange={e => updateAddField('addQuantity', parseInt(e.target.value) || 1)}
+                  onFocus={e => e.target.select()}
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            {/* Pricing */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Purchase Price (£/btl)</label>
+                <input type="number" step="0.01" value={addIBPrice}
+                  onChange={e => updateAddField('addIBPrice', e.target.value)}
+                  onFocus={e => e.target.select()}
+                  placeholder="0.00"
+                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                {addIBPrice && (
+                  <div style={{ fontSize: '10px', color: 'var(--wine)', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>
+                    DP £{((parseFloat(addIBPrice) + 3) * 1.2).toFixed(2)}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Sale Price (£/btl)</label>
+                <input type="number" step="0.01" value={addSalePrice}
+                  onChange={e => updateAddField('addSalePrice', e.target.value)}
+                  onFocus={e => e.target.select()}
+                  placeholder="0.00"
+                  style={{ width: '100%', border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box', color: 'var(--wine)', fontWeight: 600 }} />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Notes (optional)</label>
+              <input value={addNotes} onChange={e => updateAddField('addNotes', e.target.value)}
+                placeholder="e.g. Bought at Justerini & Brooks, Dec 2025"
+                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
+            {/* Wine ID — auto-generated, editable */}
+            <div style={{ marginBottom: '20px', background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.3)', padding: '12px' }}>
+              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8a6f1e', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>
+                Wine ID (Xero ref) — auto-generated, edit if needed
+              </label>
+              <input value={addWineId} onChange={e => setAddWineId(e.target.value)}
+                placeholder="Fill in fields above to generate…"
+                style={{ width: '100%', border: '1px solid rgba(212,173,69,0.5)', background: 'rgba(255,255,255,0.6)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, letterSpacing: '0.15em', outline: 'none', boxSizing: 'border-box', color: '#8a6f1e' }} />
+              <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px', fontFamily: 'DM Mono, monospace' }}>
+                Format: YY · MM (maker) · WWWW (wine) · C (colour) · S (size)
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={closeAddModal} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveNewWine} disabled={!addDescription || addSaving}
+                style={{ background: addDescription ? 'var(--ink)' : '#ccc', color: addDescription ? 'var(--white)' : '#999', border: 'none', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: addDescription ? 'pointer' : 'not-allowed' }}>
+                {addSaving ? 'Saving…' : `✓ Add ${addQuantity} bottle${addQuantity !== 1 ? 's' : ''} to Studio`}
+              </button>
+            </div>
           </div>
         </div>
       )}
