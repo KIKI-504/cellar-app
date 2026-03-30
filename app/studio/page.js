@@ -21,18 +21,27 @@ export default function StudioPage() {
   const [moveNotes, setMoveNotes] = useState('')
   const [moveSaving, setMoveSaving] = useState(false)
 
-  // Photo import
-  const [showPhotoModal, setShowPhotoModal] = useState(false)
-  const [photoFile, setPhotoFile] = useState(null)
-  const [photoPreview, setPhotoPreview] = useState(null)
-  const [photoAnalysing, setPhotoAnalysing] = useState(false)
-  const [photoMatch, setPhotoMatch] = useState(null)
-  const [photoRaw, setPhotoRaw] = useState(null)
-  const [photoQty, setPhotoQty] = useState(1)
-  const [photoDate, setPhotoDate] = useState(new Date().toISOString().split('T')[0])
-  const [photoNotes, setPhotoNotes] = useState('')
-  const [photoVintage, setPhotoVintage] = useState('')
-  const [photoPrice, setPhotoPrice] = useState('')
+  // Scan modal
+  const [showScanModal, setShowScanModal] = useState(false)
+  const [scanFile, setScanFile] = useState(null)
+  const [scanPreview, setScanPreview] = useState(null)
+  const [scanAnalysing, setScanAnalysing] = useState(false)
+  const [scanDone, setScanDone] = useState(false)
+  const [scanRaw, setScanRaw] = useState(null)
+  const [scanMatch, setScanMatch] = useState(null)       // matched wine from DB
+  const [scanWine, setScanWine] = useState(null)         // selected wine (may differ from match)
+  const [scanSearch, setScanSearch] = useState('')
+  const [scanSearchResults, setScanSearchResults] = useState([])
+
+  // Scan form fields
+  const [scanQty, setScanQty] = useState(1)
+  const [scanDate, setScanDate] = useState(new Date().toISOString().split('T')[0])
+  const [scanNotes, setScanNotes] = useState('')
+  const [scanVintage, setScanVintage] = useState('')
+  const [scanIBPrice, setScanIBPrice] = useState('')     // purchase price IB
+  const [scanRetailPrice, setScanRetailPrice] = useState('')  // retail price
+  const [scanSaving, setScanSaving] = useState(false)
+
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -52,9 +61,9 @@ export default function StudioPage() {
     setLoading(false)
   }
 
-  function calcDP(purchasePrice) {
-    if (!purchasePrice) return null
-    return ((parseFloat(purchasePrice) + 3) * 1.2).toFixed(2)
+  function calcDP(ibPrice) {
+    if (!ibPrice) return null
+    return ((parseFloat(ibPrice) + 3) * 1.2).toFixed(2)
   }
 
   async function updateStudio(id, field, value) {
@@ -68,11 +77,13 @@ export default function StudioPage() {
     if (!error) setStudioWines(prev => prev.filter(s => s.id !== id))
   }
 
-  // Move to studio
+  // ─── Move to Studio (manual search) ────────────────────────────────────────
+
   async function searchWines(q) {
     setMoveSearch(q)
     if (q.length < 2) { setMoveResults([]); return }
-    const { data } = await supabase.from('wines').select('id, description, vintage, colour, region, purchase_price_per_bottle, quantity')
+    const { data } = await supabase.from('wines')
+      .select('id, description, vintage, colour, region, purchase_price_per_bottle, quantity')
       .ilike('description', `%${q}%`).order('description').limit(10)
     setMoveResults(data || [])
   }
@@ -92,126 +103,177 @@ export default function StudioPage() {
     })
     if (!error) {
       await fetchStudio()
-      setShowMoveModal(false)
-      setSelectedWine(null)
-      setMoveSearch('')
-      setMoveResults([])
-      setMoveQty(1)
-      setMoveNotes('')
+      closeMoveModal()
     }
     setMoveSaving(false)
   }
 
-  // Photo import
-  function handlePhotoSelect(e) {
+  function closeMoveModal() {
+    setShowMoveModal(false)
+    setSelectedWine(null)
+    setMoveSearch('')
+    setMoveResults([])
+    setMoveQty(1)
+    setMoveNotes('')
+    setMoveDate(new Date().toISOString().split('T')[0])
+  }
+
+  // ─── Scan Flow ──────────────────────────────────────────────────────────────
+
+  function openScanModal() {
+    setShowScanModal(true)
+    setScanFile(null)
+    setScanPreview(null)
+    setScanAnalysing(false)
+    setScanDone(false)
+    setScanRaw(null)
+    setScanMatch(null)
+    setScanWine(null)
+    setScanSearch('')
+    setScanSearchResults([])
+    setScanQty(1)
+    setScanDate(new Date().toISOString().split('T')[0])
+    setScanNotes('')
+    setScanVintage('')
+    setScanIBPrice('')
+    setScanRetailPrice('')
+  }
+
+  function handleScanFileSelect(e) {
     const file = e.target.files[0]
     if (!file) return
-    setPhotoFile(file)
-    setPhotoMatch(null)
-    setPhotoRaw(null)
+    setScanFile(file)
+    setScanDone(false)
+    setScanRaw(null)
+    setScanMatch(null)
+    setScanWine(null)
     const reader = new FileReader()
-    reader.onload = ev => setPhotoPreview(ev.target.result)
+    reader.onload = ev => setScanPreview(ev.target.result)
     reader.readAsDataURL(file)
   }
 
-  async function analysePhoto() {
-    if (!photoFile) return
-    setPhotoAnalysing(true)
-    setPhotoMatch(null)
-    setPhotoRaw(null)
+  async function analyseLabel() {
+    if (!scanFile) return
+    setScanAnalysing(true)
 
     try {
-      // Convert to base64
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader()
         r.onload = () => res(r.result.split(',')[1])
         r.onerror = rej
-        r.readAsDataURL(photoFile)
+        r.readAsDataURL(scanFile)
       })
 
       const response = await fetch('/api/analyse-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mediaType: photoFile.type })
+        body: JSON.stringify({ imageBase64: base64, mediaType: scanFile.type })
       })
 
       const result = await response.json()
       if (!result.success) throw new Error(result.error)
       const extracted = result.data
-      setPhotoRaw(extracted)
-      setPhotoVintage(extracted.vintage || '')
+      setScanRaw(extracted)
+      setScanVintage(extracted.vintage || '')
+      setScanDone(true)
 
-      // Try to match against wines database
+      // Try to match in DB — first with vintage, then without
       const searchTerm = extracted.producer || extracted.wine_name
       if (searchTerm) {
-        const { data: matches } = await supabase
-          .from('wines')
-          .select('id, description, vintage, colour, region, purchase_price_per_bottle, quantity')
-          .ilike('description', `%${searchTerm}%`)
-          .eq('vintage', extracted.vintage || '')
-          .limit(5)
-
-        if (matches && matches.length > 0) {
-          setPhotoMatch(matches[0])
-          setSelectedWine(matches[0])
-          setPhotoPrice(matches[0].purchase_price_per_bottle ? String(matches[0].purchase_price_per_bottle) : '')
-        } else {
-          // Try without vintage
-          const { data: matches2 } = await supabase
-            .from('wines')
-            .select('id, description, vintage, colour, region, purchase_price_per_bottle, quantity')
+        let matches = null
+        if (extracted.vintage) {
+          const { data } = await supabase.from('wines')
+            .select('id, description, vintage, colour, region, purchase_price_per_bottle, retail_price, quantity')
+            .ilike('description', `%${searchTerm}%`)
+            .eq('vintage', extracted.vintage)
+            .limit(5)
+          matches = data
+        }
+        if (!matches || matches.length === 0) {
+          const { data } = await supabase.from('wines')
+            .select('id, description, vintage, colour, region, purchase_price_per_bottle, retail_price, quantity')
             .ilike('description', `%${searchTerm}%`)
             .limit(5)
-          if (matches2 && matches2.length > 0) {
-            setPhotoMatch(matches2[0])
-            setSelectedWine(matches2[0])
-            setPhotoPrice(matches2[0].purchase_price_per_bottle ? String(matches2[0].purchase_price_per_bottle) : '')
-          }
+          matches = data
+        }
+        if (matches && matches.length > 0) {
+          setScanMatch(matches[0])
+          setScanWine(matches[0])
+          setScanIBPrice(matches[0].purchase_price_per_bottle ? String(matches[0].purchase_price_per_bottle) : '')
+          setScanRetailPrice(matches[0].retail_price ? String(matches[0].retail_price) : '')
         }
       }
     } catch (err) {
-      console.error('Photo analysis error:', err)
+      console.error('Label analysis error:', err)
+      alert('Label reading failed: ' + err.message)
     }
-    setPhotoAnalysing(false)
+    setScanAnalysing(false)
   }
 
-  async function confirmPhotoMove() {
-    setMoveSaving(true)
-    const priceToUse = photoPrice ? parseFloat(photoPrice) : (selectedWine?.purchase_price_per_bottle || null)
-    const dp = priceToUse ? ((priceToUse + 3) * 1.2).toFixed(2) : null
+  async function scanSearchWines(q) {
+    setScanSearch(q)
+    if (q.length < 2) { setScanSearchResults([]); return }
+    const { data } = await supabase.from('wines')
+      .select('id, description, vintage, colour, region, purchase_price_per_bottle, retail_price, quantity')
+      .ilike('description', `%${q}%`).order('description').limit(8)
+    setScanSearchResults(data || [])
+  }
+
+  function selectScanWine(w) {
+    setScanWine(w)
+    setScanMatch(w)
+    setScanSearch('')
+    setScanSearchResults([])
+    setScanIBPrice(w.purchase_price_per_bottle ? String(w.purchase_price_per_bottle) : '')
+    setScanRetailPrice(w.retail_price ? String(w.retail_price) : '')
+  }
+
+  async function saveScanEntry() {
+    setScanSaving(true)
+    const ibPrice = scanIBPrice ? parseFloat(scanIBPrice) : (scanWine?.purchase_price_per_bottle || null)
+    const dp = ibPrice ? ((ibPrice + 3) * 1.2).toFixed(2) : null
+    const retailPrice = scanRetailPrice ? parseFloat(scanRetailPrice) : (scanWine?.retail_price || null)
+
     const insertData = {
-      wine_id: selectedWine?.id || null,
-      quantity: photoQty,
-      date_moved: photoDate,
+      wine_id: scanWine?.id || null,
+      quantity: scanQty,
+      date_moved: scanDate,
       dp_price: dp,
       status: 'Available',
-      notes: photoNotes || null,
+      notes: scanNotes || null,
       include_in_local: false,
-      unlinked_description: !selectedWine ? `${photoRaw?.wine_name || ''} ${photoRaw?.producer ? ', ' + photoRaw.producer : ''}`.trim() : null,
-      unlinked_vintage: !selectedWine ? (photoVintage || photoRaw?.vintage || null) : null,
+      unlinked_description: !scanWine
+        ? [scanRaw?.wine_name, scanRaw?.producer].filter(Boolean).join(', ')
+        : null,
+      unlinked_vintage: !scanWine ? (scanVintage || scanRaw?.vintage || null) : null,
     }
+
+    // If we have a linked wine and a retail price, update it on the wine record too
+    if (scanWine?.id && retailPrice && retailPrice !== scanWine?.retail_price) {
+      await supabase.from('wines').update({
+        retail_price: retailPrice,
+        retail_price_source: 'Manual',
+        retail_price_date: new Date().toISOString().split('T')[0]
+      }).eq('id', scanWine.id)
+    }
+
     const { error } = await supabase.from('studio').insert(insertData)
     if (!error) {
       await fetchStudio()
-      setShowPhotoModal(false)
-      setPhotoFile(null)
-      setPhotoPreview(null)
-      setPhotoMatch(null)
-      setPhotoRaw(null)
-      setSelectedWine(null)
-      setPhotoQty(1)
-      setPhotoNotes('')
-      setPhotoVintage('')
-      setPhotoPrice('')
+      setShowScanModal(false)
+    } else {
+      alert('Save failed: ' + error.message)
     }
-    setMoveSaving(false)
+    setScanSaving(false)
   }
+
+  // ─── Table helpers ──────────────────────────────────────────────────────────
 
   const filtered = studioWines.filter(s => {
     if (filterStatus && s.status !== filterStatus) return false
     if (search) {
       const q = search.toLowerCase()
-      return [s.wines?.description, s.wines?.vintage, s.wines?.region].join(' ').toLowerCase().includes(q)
+      return [s.wines?.description, s.wines?.vintage, s.wines?.region, s.unlinked_description].join(' ').toLowerCase().includes(q)
     }
     return true
   })
@@ -219,7 +281,6 @@ export default function StudioPage() {
   const availableCount = studioWines.filter(s => s.status === 'Available').length
   const localCount = studioWines.filter(s => s.include_in_local && s.status === 'Available').length
   const totalBottles = studioWines.filter(s => s.status === 'Available').reduce((sum, s) => sum + (s.quantity || 0), 0)
-
   const statusColour = s => s === 'Available' ? '#2d6a4f' : s === 'Consumed' ? '#7a5e10' : '#c0392b'
 
   if (loading) return (
@@ -228,6 +289,8 @@ export default function StudioPage() {
     </div>
   )
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)' }}>
 
@@ -235,11 +298,9 @@ export default function StudioPage() {
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
-          <button onClick={() => router.push('/admin')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Inventory</button>
-          <button onClick={() => router.push('/studio')} style={{ background: 'rgba(107,30,46,0.6)', color: '#d4ad45', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Studio</button>
-          <button onClick={() => router.push('/labels')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Labels</button>
-          <button onClick={() => router.push('/buyer')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Buyer View</button>
-          <button onClick={() => router.push('/local')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Local Sales</button>
+          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Labels', '/labels'], ['Buyer View', '/buyer'], ['Local Sales', '/local']].map(([label, path]) => (
+            <button key={path} onClick={() => router.push(path)} style={{ background: path === '/studio' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/studio' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>{label}</button>
+          ))}
         </div>
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
       </div>
@@ -253,7 +314,7 @@ export default function StudioPage() {
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{totalBottles} bottles available</div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => setShowPhotoModal(true)} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📷 Scan Bottle</button>
+            <button onClick={openScanModal} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📷 Scan Bottle</button>
             <button onClick={() => setShowMoveModal(true)} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Move to Studio</button>
           </div>
         </div>
@@ -291,7 +352,7 @@ export default function StudioPage() {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No studio wines yet — move something from bond to get started.</td></tr>
+                <tr><td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No studio wines yet — scan or move something from bond to get started.</td></tr>
               )}
               {filtered.map(s => {
                 const w = s.wines
@@ -328,11 +389,11 @@ export default function StudioPage() {
                         style={{ width: '52px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{s.date_moved}</td>
-                    <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--ink)' }}>
+                    <td style={{ padding: '9px 12px' }}>
                       <input type="number" step="0.01" defaultValue={s.dp_price ? parseFloat(s.dp_price).toFixed(2) : calcDP(w?.purchase_price_per_bottle) || ''}
                         onBlur={e => { if (e.target.value !== String(s.dp_price || '')) updateStudio(s.id, 'dp_price', e.target.value ? parseFloat(e.target.value) : null) }}
                         placeholder="0.00"
-                        style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+                        style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600 }} />
                     </td>
                     <td style={{ padding: '9px 12px' }}>
                       <select value={s.status} onChange={e => updateStudio(s.id, 'status', e.target.value)}
@@ -364,12 +425,11 @@ export default function StudioPage() {
         </div>
       </div>
 
-      {/* Move to Studio Modal */}
+      {/* ─── Move to Studio Modal ─────────────────────────────────────────────── */}
       {showMoveModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '520px', padding: '28px', border: '1px solid var(--border)' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, marginBottom: '20px' }}>Move to Studio</div>
-
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Search wine</label>
               <input value={moveSearch} onChange={e => searchWines(e.target.value)} placeholder="Start typing a wine name…"
@@ -388,17 +448,13 @@ export default function StudioPage() {
                 </div>
               )}
             </div>
-
             {selectedWine && (
               <div style={{ background: 'rgba(107,30,46,0.06)', border: '1px solid rgba(107,30,46,0.2)', padding: '12px', marginBottom: '16px' }}>
                 <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>{selectedWine.description}, {selectedWine.vintage}</div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-                  IB £{parseFloat(selectedWine.purchase_price_per_bottle).toFixed(2)} → DP £{calcDP(selectedWine.purchase_price_per_bottle)} · {selectedWine.quantity} in bond
-                </div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>IB £{parseFloat(selectedWine.purchase_price_per_bottle).toFixed(2)} → DP £{calcDP(selectedWine.purchase_price_per_bottle)} · {selectedWine.quantity} in bond</div>
                 <button onClick={() => { setSelectedWine(null); setMoveSearch('') }} style={{ marginTop: '8px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'DM Mono, monospace' }}>✕ Change</button>
               </div>
             )}
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Quantity (bottles)</label>
@@ -411,16 +467,13 @@ export default function StudioPage() {
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
-
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Notes (optional)</label>
               <input type="text" value={moveNotes} onChange={e => setMoveNotes(e.target.value)} placeholder="e.g. From case opened for tasting"
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
-
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowMoveModal(false); setSelectedWine(null); setMoveSearch(''); setMoveResults([]) }}
-                style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={closeMoveModal} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={confirmMove} disabled={!selectedWine || moveSaving}
                 style={{ background: selectedWine ? 'var(--wine)' : '#ccc', color: 'var(--white)', border: 'none', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: selectedWine ? 'pointer' : 'not-allowed' }}>
                 {moveSaving ? 'Saving…' : 'Confirm Move'}
@@ -430,70 +483,80 @@ export default function StudioPage() {
         </div>
       )}
 
-      {/* Photo Import Modal */}
-      {showPhotoModal && (
+      {/* ─── Scan Modal ───────────────────────────────────────────────────────── */}
+      {showScanModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '560px', padding: '28px', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, marginBottom: '20px' }}>Scan a Bottle</div>
 
-            {/* Upload area */}
-            {!photoPreview ? (
-              <div onClick={() => fileInputRef.current?.click()}
-                style={{ border: '2px dashed var(--border)', padding: '40px', textAlign: 'center', cursor: 'pointer', marginBottom: '16px', background: 'var(--white)' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--wine)'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
-                <div style={{ fontSize: '32px', marginBottom: '8px' }}>📷</div>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', letterSpacing: '0.1em' }}>TAP TO PHOTOGRAPH OR UPLOAD A LABEL</div>
-                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} style={{ display: 'none' }} />
-              </div>
-            ) : (
-              <div style={{ marginBottom: '16px' }}>
-                <img src={photoPreview} alt="Label" style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', border: '1px solid var(--border)', background: 'var(--white)' }} />
-                <button onClick={() => { setPhotoFile(null); setPhotoPreview(null); setPhotoMatch(null); setPhotoRaw(null); setSelectedWine(null) }}
-                  style={{ marginTop: '8px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'DM Mono, monospace' }}>✕ Remove photo</button>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300 }}>Scan a Bottle</div>
+              <button onClick={() => setShowScanModal(false)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
+            </div>
 
-            {photoPreview && !photoRaw && (
-              <button onClick={analysePhoto} disabled={photoAnalysing}
-                style={{ width: '100%', background: 'var(--ink)', color: '#d4ad45', border: 'none', padding: '12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: photoAnalysing ? 'wait' : 'pointer', marginBottom: '16px' }}>
-                {photoAnalysing ? '🔍 Analysing label…' : '🔍 Read Label'}
+            {/* Step 1 — Photo */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>1. Photograph the label</label>
+              {!scanPreview ? (
+                <div onClick={() => fileInputRef.current?.click()}
+                  style={{ border: '2px dashed var(--border)', padding: '32px', textAlign: 'center', cursor: 'pointer', background: 'var(--white)' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--wine)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                  <div style={{ fontSize: '28px', marginBottom: '8px' }}>📷</div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', letterSpacing: '0.1em' }}>TAP TO TAKE PHOTO OR UPLOAD</div>
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleScanFileSelect} style={{ display: 'none' }} />
+                </div>
+              ) : (
+                <div>
+                  <img src={scanPreview} alt="Label" style={{ width: '100%', maxHeight: '220px', objectFit: 'contain', border: '1px solid var(--border)', background: 'var(--white)' }} />
+                  <button onClick={() => { setScanFile(null); setScanPreview(null); setScanDone(false); setScanRaw(null); setScanMatch(null); setScanWine(null) }}
+                    style={{ marginTop: '6px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'DM Mono, monospace' }}>✕ Retake photo</button>
+                </div>
+              )}
+            </div>
+
+            {/* Read Label button */}
+            {scanPreview && !scanDone && (
+              <button onClick={analyseLabel} disabled={scanAnalysing}
+                style={{ width: '100%', background: 'var(--ink)', color: '#d4ad45', border: 'none', padding: '12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: scanAnalysing ? 'wait' : 'pointer', marginBottom: '16px' }}>
+                {scanAnalysing ? '🔍 Reading label…' : '🔍 Read Label'}
               </button>
             )}
 
-            {/* Extracted info */}
-            {photoRaw && (
-              <div style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '12px', marginBottom: '16px' }}>
-                <div style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Extracted from label</div>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>
-                  {[photoRaw.wine_name, photoRaw.producer].filter(Boolean).join(', ')}
-                  {photoRaw.vintage && <span style={{ color: 'var(--muted)', marginLeft: '8px' }}>{photoRaw.vintage}</span>}
-                </div>
-                {photoRaw.region && <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>{photoRaw.region}</div>}
-              </div>
-            )}
-
-            {/* Match result */}
-            {photoRaw && (
+            {/* Step 2 — Match */}
+            {scanDone && (
               <div style={{ marginBottom: '16px' }}>
-                {photoMatch ? (
-                  <div style={{ background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.3)', padding: '12px' }}>
-                    <div style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#2d6a4f', marginBottom: '6px' }}>✓ Match found in cellar</div>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>{photoMatch.description}, {photoMatch.vintage}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-                      IB £{parseFloat(photoMatch.purchase_price_per_bottle).toFixed(2)} → DP £{calcDP(photoMatch.purchase_price_per_bottle)} · {photoMatch.quantity} in bond
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>2. Confirm wine</label>
+
+                {/* What was extracted */}
+                {scanRaw && (
+                  <div style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 12px', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>READ FROM LABEL</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>
+                      {[scanRaw.wine_name, scanRaw.producer].filter(Boolean).join(' — ')}
+                      {scanRaw.vintage && <span style={{ color: 'var(--muted)', marginLeft: '8px' }}>{scanRaw.vintage}</span>}
                     </div>
-                    <button onClick={() => setPhotoMatch(null)} style={{ marginTop: '8px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'DM Mono, monospace' }}>✕ Not right — search manually</button>
+                    {scanRaw.region && <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{scanRaw.region}</div>}
+                  </div>
+                )}
+
+                {/* Match or no match */}
+                {scanWine ? (
+                  <div style={{ background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.3)', padding: '12px' }}>
+                    <div style={{ fontSize: '10px', color: '#2d6a4f', fontFamily: 'DM Mono, monospace', marginBottom: '6px' }}>✓ MATCHED IN CELLAR DATABASE</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>{scanWine.description}, {scanWine.vintage}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '3px' }}>{scanWine.region} · {scanWine.quantity} in bond</div>
+                    <button onClick={() => { setScanWine(null); setScanMatch(null) }}
+                      style={{ marginTop: '8px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'DM Mono, monospace' }}>✕ Not right — search manually</button>
                   </div>
                 ) : (
-                  <div style={{ background: 'rgba(192,57,43,0.06)', border: '1px solid rgba(192,57,43,0.2)', padding: '12px' }}>
-                    <div style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#c0392b', marginBottom: '8px' }}>No match found — search manually</div>
-                    <input value={moveSearch} onChange={e => searchWines(e.target.value)} placeholder="Search by wine name…"
+                  <div style={{ background: 'rgba(192,57,43,0.05)', border: '1px solid rgba(192,57,43,0.2)', padding: '12px' }}>
+                    <div style={{ fontSize: '10px', color: '#c0392b', fontFamily: 'DM Mono, monospace', marginBottom: '8px' }}>NO MATCH FOUND — search manually or save as unlinked</div>
+                    <input value={scanSearch} onChange={e => scanSearchWines(e.target.value)} placeholder="Search wine name…"
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-                    {moveResults.length > 0 && (
+                    {scanSearchResults.length > 0 && (
                       <div style={{ border: '1px solid var(--border)', borderTop: 'none', background: 'var(--white)', maxHeight: '160px', overflowY: 'auto' }}>
-                        {moveResults.map(w => (
-                          <div key={w.id} onClick={() => { setSelectedWine(w); setPhotoMatch(w); setPhotoPrice(w.purchase_price_per_bottle ? String(w.purchase_price_per_bottle) : ''); setMoveResults([]) }}
+                        {scanSearchResults.map(w => (
+                          <div key={w.id} onClick={() => selectScanWine(w)}
                             style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #ede6d6' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#f5f0e8'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -508,54 +571,69 @@ export default function StudioPage() {
               </div>
             )}
 
-            {/* Qty, date, vintage, notes — show as soon as label is read */}
-            {photoRaw && (
-              <>
-                {!selectedWine && (
+            {/* Step 3 — Details form — always visible once label is read */}
+            {scanDone && (
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>3. Enter details</label>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>QUANTITY</label>
+                    <input type="number" min="1" value={scanQty} onChange={e => setScanQty(parseInt(e.target.value) || 1)}
+                      style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>DATE MOVED</label>
+                    <input type="date" value={scanDate} onChange={e => setScanDate(e.target.value)}
+                      style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+
+                {!scanWine && (
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Vintage</label>
-                    <input type="text" value={photoVintage} onChange={e => setPhotoVintage(e.target.value)} placeholder="e.g. 2021"
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>VINTAGE</label>
+                    <input type="text" value={scanVintage} onChange={e => setScanVintage(e.target.value)} placeholder="e.g. 2021"
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 )}
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>
-                    Purchase price IB (£/bottle)
-                    {photoPrice && <span style={{ marginLeft: '8px', color: 'var(--wine)' }}>→ DP £{((parseFloat(photoPrice) + 3) * 1.2).toFixed(2)}</span>}
-                  </label>
-                  <input type="number" step="0.01" value={photoPrice} onChange={e => setPhotoPrice(e.target.value)} placeholder="0.00"
-                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Quantity</label>
-                    <input type="number" min="1" value={photoQty} onChange={e => setPhotoQty(parseInt(e.target.value))}
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
+                      PURCHASE PRICE IB (£/btl)
+                    </label>
+                    <input type="number" step="0.01" value={scanIBPrice} onChange={e => setScanIBPrice(e.target.value)} placeholder="0.00"
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                    {scanIBPrice && <div style={{ fontSize: '10px', color: 'var(--wine)', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>DP £{((parseFloat(scanIBPrice) + 3) * 1.2).toFixed(2)}</div>}
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Date moved</label>
-                    <input type="date" value={photoDate} onChange={e => setPhotoDate(e.target.value)}
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
+                      RETAIL PRICE (£/btl)
+                    </label>
+                    <input type="number" step="0.01" value={scanRetailPrice} onChange={e => setScanRetailPrice(e.target.value)} placeholder="0.00"
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                    {scanRetailPrice && scanIBPrice && (
+                      <div style={{ fontSize: '10px', color: '#2d6a4f', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>
+                        {((parseFloat(scanRetailPrice) / parseFloat(scanIBPrice) - 1) * 100).toFixed(0)}% above cost
+                      </div>
+                    )}
                   </div>
                 </div>
+
                 <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Notes (optional)</label>
-                  <input type="text" value={photoNotes} onChange={e => setPhotoNotes(e.target.value)} placeholder="optional notes…"
+                  <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>NOTES (optional)</label>
+                  <input type="text" value={scanNotes} onChange={e => setScanNotes(e.target.value)} placeholder="optional notes…"
                     style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
-              </>
+
+                {/* Save button — big and obvious */}
+                <button onClick={saveScanEntry} disabled={scanSaving}
+                  style={{ width: '100%', background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: scanSaving ? 'wait' : 'pointer', fontWeight: 600 }}>
+                  {scanSaving ? 'Saving…' : `✓ Add ${scanQty} bottle${scanQty !== 1 ? 's' : ''} to Studio`}
+                </button>
+              </div>
             )}
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowPhotoModal(false); setPhotoFile(null); setPhotoPreview(null); setPhotoMatch(null); setPhotoRaw(null); setSelectedWine(null); setPhotoVintage(''); setPhotoPrice('') }}
-                style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
-              {photoRaw && (
-                <button onClick={confirmPhotoMove} disabled={moveSaving}
-                  style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>
-                  {moveSaving ? 'Saving…' : 'Add to Studio'}
-                </button>
-              )}
-            </div>
           </div>
         </div>
       )}
