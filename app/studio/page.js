@@ -684,25 +684,22 @@ export default function StudioPage() {
                     </label>
                     <input type="number" step="0.01" value={scanRetailPrice} onChange={e => setScanRetailPrice(e.target.value)} placeholder="0.00"
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-                    {scanRetailPrice && scanIBPrice && (
-                      <div style={{ fontSize: '10px', color: '#2d6a4f', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>
-                        {((parseFloat(scanRetailPrice) / parseFloat(scanIBPrice) - 1) * 100).toFixed(0)}% above cost
-                      </div>
-                    )}
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
-                    YOUR SALE PRICE (£/btl)
+                    YOUR SALE PRICE incl. Duty &amp; VAT (£/btl)
                   </label>
                   <input type="number" step="0.01" value={scanSalePrice} onChange={e => setScanSalePrice(e.target.value)} placeholder="0.00"
                     style={{ width: '100%', border: '2px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'var(--wine)' }} />
-                  {scanSalePrice && scanIBPrice && (
-                    <div style={{ fontSize: '10px', color: 'var(--wine)', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>
-                      Margin: £{(parseFloat(scanSalePrice) - ((parseFloat(scanIBPrice) + 3) * 1.2)).toFixed(2)} above DP
+                  {scanSalePrice && scanIBPrice && (() => {
+                    const dp = (parseFloat(scanIBPrice) + 3) * 1.2
+                    const margin = ((parseFloat(scanSalePrice) - dp) / dp * 100)
+                    return <div style={{ fontSize: '10px', color: margin >= 0 ? '#2d6a4f' : '#c0392b', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>
+                      {margin >= 0 ? '+' : ''}{margin.toFixed(1)}% on DP
                     </div>
-                  )}
+                  })()}
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
