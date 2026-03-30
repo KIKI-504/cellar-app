@@ -55,11 +55,38 @@ export default function LocalPage() {
     setWishlist(prev => ({ ...prev, [id]: qty }))
   }
 
+  // Helper: get display name for a studio entry
+  function getWineName(s) {
+    return s.wines?.description || s.unlinked_description || 'Unknown wine'
+  }
+
+  // Helper: get display vintage
+  function getWineVintage(s) {
+    return s.wines?.vintage || s.unlinked_vintage || ''
+  }
+
+  // Helper: get display region
+  function getWineRegion(s) {
+    return s.wines?.region || ''
+  }
+
+  // Helper: get display colour
+  function getWineColour(s) {
+    return s.wines?.colour || ''
+  }
+
+  // Helper: get display price — sale_price first, then dp_price, then null
+  function getPrice(s) {
+    const p = s.sale_price ?? s.dp_price
+    return p ? parseFloat(p) : null
+  }
+
   function downloadWishlist() {
     const items = Object.entries(wishlist).map(([id, qty]) => {
       const s = wines.find(w => w.id === id)
       if (!s) return null
-      return `${qty} x ${s.wines?.description} ${s.wines?.vintage} — £${parseFloat(s.dp_price).toFixed(2)}/bottle`
+      const price = getPrice(s)
+      return `${qty} x ${getWineName(s)} ${getWineVintage(s)} — ${price ? `£${price.toFixed(2)}/bottle` : 'POA'}`
     }).filter(Boolean)
     if (!items.length) return
     const text = [
@@ -80,10 +107,10 @@ export default function LocalPage() {
   }
 
   const filtered = wines.filter(s => {
-    if (filterColour && s.wines?.colour?.toLowerCase() !== filterColour.toLowerCase()) return false
+    if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
     if (search) {
       const q = search.toLowerCase()
-      return [s.wines?.description, s.wines?.vintage, s.wines?.region].join(' ').toLowerCase().includes(q)
+      return [getWineName(s), getWineVintage(s), getWineRegion(s)].join(' ').toLowerCase().includes(q)
     }
     return true
   })
@@ -169,22 +196,28 @@ export default function LocalPage() {
             {filtered.map(s => {
               const w = s.wines
               const inWishlist = !!wishlist[s.id]
-              const dotColor = w?.colour?.toLowerCase().includes('red') ? '#8b2535' : w?.colour?.toLowerCase().includes('white') ? '#c4a84f' : '#d4748a'
+              const colour = getWineColour(s)
+              const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
+              const price = getPrice(s)
+              const isUnlinked = !s.wine_id
               return (
                 <div key={s.id} style={{ background: 'var(--white)', border: inWishlist ? '1px solid var(--wine)' : '1px solid var(--border)', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                       <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', lineHeight: 1.3 }}>{w?.description}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', lineHeight: 1.3 }}>{getWineName(s)}</div>
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--muted)', paddingLeft: '16px' }}>
-                      {w?.vintage} · {w?.region}
-                      {w?.bottle_format === 'Magnum' && <span style={{ marginLeft: '6px', fontSize: '10px', background: 'rgba(107,30,46,0.1)', color: 'var(--wine)', padding: '1px 5px' }}>Magnum</span>}
+                      {getWineVintage(s)}{getWineVintage(s) && getWineRegion(s) ? ' · ' : ''}{getWineRegion(s)}
+                      {w?.bottle_format === 'Magnum' || s.bottle_size === '150' ? <span style={{ marginLeft: '6px', fontSize: '10px', background: 'rgba(107,30,46,0.1)', color: 'var(--wine)', padding: '1px 5px' }}>Magnum</span> : null}
+                      {s.bottle_size === '37.5' ? <span style={{ marginLeft: '6px', fontSize: '10px', background: 'rgba(107,30,46,0.1)', color: 'var(--wine)', padding: '1px 5px' }}>Half</span> : null}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500 }}>£{parseFloat(s.dp_price).toFixed(2)}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500 }}>
+                        {price ? `£${price.toFixed(2)}` : 'POA'}
+                      </div>
                       <div style={{ fontSize: '10px', color: 'var(--muted)' }}>{s.quantity} available</div>
                     </div>
                     {inWishlist ? (
