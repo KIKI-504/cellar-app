@@ -172,38 +172,41 @@ export default function LabelPage() {
       <div class="date">(${today})</div>
     `
 
-    const printWindow = window.open('', '_blank', 'width=816,height=1056')
-    printWindow.document.write(`
-      <html>
-      <head>
-        <title>Label — ${vintage} ${wineName}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { width: 4in; font-family: Arial, sans-serif; }
-          @page { size: 4in 6in; margin: 0; }
-          .label-half {
-            width: 4in; height: 3in; padding: 18px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            border-bottom: 1px dashed #ccc; text-align: center;
-          }
-          .label-half:last-child { border-bottom: none; }
-          .magnum { font-size: 36px; font-weight: bold; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; }
-          .half { font-size: 26px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
-          .wine-name { font-size: 24px; font-weight: bold; line-height: 1.3; margin-bottom: 2px; }
-          .producer { font-size: 22px; line-height: 1.3; margin-bottom: 10px; }
-          .price { font-size: 22px; line-height: 1.6; }
-          .date { font-size: 20px; color: #444; margin-top: 4px; }
-        </style>
-      </head>
-      <body>
-        ${[1, 2].map(() => `<div class="label-half">${labelHTML}</div>`).join('')}
-      </body>
-      </html>
-    `)
-    printWindow.document.close()
-    printWindow.focus()
-    setTimeout(() => { printWindow.print(); printWindow.close() }, 300)
+    const css = `
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { width: 4in; font-family: Arial, sans-serif; }
+      @page { size: 4in 6in; margin: 0; }
+      .label-half {
+        width: 4in; height: 3in; padding: 18px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        border-bottom: 1px dashed #ccc; text-align: center;
+      }
+      .label-half:last-child { border-bottom: none; }
+      .magnum { font-size: 36px; font-weight: bold; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; }
+      .half { font-size: 26px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
+      .wine-name { font-size: 24px; font-weight: bold; line-height: 1.3; margin-bottom: 2px; }
+      .producer { font-size: 22px; line-height: 1.3; margin-bottom: 10px; }
+      .price { font-size: 22px; line-height: 1.6; }
+      .date { font-size: 20px; color: #444; margin-top: 4px; }
+    `
+
+    // Use hidden iframe so main page stays open after printing
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentDocument || iframe.contentWindow.document
+    doc.open()
+    doc.write(`<html><head><style>${css}</style></head><body>
+      ${[1, 2].map(() => `<div class="label-half">${labelHTML}</div>`).join('')}
+    </body></html>`)
+    doc.close()
+    setTimeout(() => {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+      setTimeout(() => document.body.removeChild(iframe), 1000)
+    }, 300)
   }
+
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
