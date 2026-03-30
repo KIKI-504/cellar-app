@@ -43,6 +43,7 @@ export default function StudioPage() {
   const [scanRetailPrice, setScanRetailPrice] = useState('') // retail price
   const [scanBottleSize, setScanBottleSize] = useState('75') // bottle size in cl
   const [scanSalePrice, setScanSalePrice] = useState('')     // sale price
+  const [scanColour, setScanColour] = useState('')           // colour for unlinked wines
   const [scanSaving, setScanSaving] = useState(false)
 
   const fileInputRef = useRef(null)
@@ -140,6 +141,7 @@ export default function StudioPage() {
     setScanVintage('')
     setScanBottleSize('75')
     setScanSalePrice('')
+    setScanColour('')
     setScanIBPrice('')
     setScanRetailPrice('')
   }
@@ -249,6 +251,7 @@ export default function StudioPage() {
       include_in_local: false,
       bottle_size: scanBottleSize || '75',
       sale_price: scanSalePrice ? parseFloat(scanSalePrice) : null,
+      colour: scanWine ? (scanWine.colour || null) : (scanColour || null),
       unlinked_description: !scanWine
         ? [scanRaw?.wine_name, scanRaw?.producer].filter(Boolean).join(', ')
         : null,
@@ -405,7 +408,7 @@ export default function StudioPage() {
               )}
               {filtered.map(s => {
                 const w = s.wines
-                const colour = w?.colour || ''
+                const colour = w?.colour || s.colour || ''
                 const dotColor = colour.toLowerCase().includes('white') ? '#d4c88a' : colour.toLowerCase().includes('ros') ? '#d4748a' : colour.toLowerCase().includes('red') ? '#8b2535' : '#aaa'
                 const isDetailOpen = expandedNote === s.id
                 const ibPrice = s.dp_price ? ((parseFloat(s.dp_price) / 1.2) - 3).toFixed(2) : null
@@ -717,10 +720,24 @@ export default function StudioPage() {
                 </div>
 
                 {!scanWine && (
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>VINTAGE</label>
-                    <input type="text" value={scanVintage} onChange={e => setScanVintage(e.target.value)} placeholder="e.g. 2021"
-                      style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>VINTAGE</label>
+                      <input type="text" value={scanVintage} onChange={e => setScanVintage(e.target.value)} placeholder="e.g. 2021"
+                        style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>COLOUR</label>
+                      <select value={scanColour} onChange={e => setScanColour(e.target.value)}
+                        style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}>
+                        <option value="">Select…</option>
+                        <option value="White">White</option>
+                        <option value="Red">Red</option>
+                        <option value="Rosé">Rosé</option>
+                        <option value="Sparkling">Sparkling</option>
+                        <option value="Sweet">Sweet</option>
+                      </select>
+                    </div>
                   </div>
                 )}
 
