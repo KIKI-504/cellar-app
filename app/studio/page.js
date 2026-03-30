@@ -1,6 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
@@ -409,8 +409,8 @@ export default function StudioPage() {
                 const isDetailOpen = expandedNote === s.id
                 const ibPrice = s.dp_price ? ((parseFloat(s.dp_price) / 1.2) - 3).toFixed(2) : null
                 return (
-                  <>
-                  <tr key={s.id} style={{ borderBottom: isDetailOpen ? 'none' : '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
+                  <React.Fragment key={s.id}>
+                  <tr style={{ borderBottom: isDetailOpen ? 'none' : '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
                     <td style={{ padding: '9px 12px', maxWidth: '260px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
@@ -534,7 +534,7 @@ export default function StudioPage() {
                       </td>
                     </tr>
                   )}
-                  </>
+                  </React.Fragment>
                 )
               })}
             </tbody>
