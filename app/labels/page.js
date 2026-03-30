@@ -194,17 +194,19 @@ export default function LabelPage() {
     const iframe = document.createElement('iframe')
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;'
     document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => document.body.removeChild(iframe), 1000)
+      }, 100)
+    }
     const doc = iframe.contentDocument || iframe.contentWindow.document
     doc.open()
     doc.write(`<html><head><style>${css}</style></head><body>
       ${[1, 2].map(() => `<div class="label-half">${labelHTML}</div>`).join('')}
     </body></html>`)
     doc.close()
-    setTimeout(() => {
-      iframe.contentWindow.focus()
-      iframe.contentWindow.print()
-      setTimeout(() => document.body.removeChild(iframe), 1000)
-    }, 300)
   }
 
 
