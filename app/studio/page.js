@@ -4,12 +4,27 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
+const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Sweet']
+
+const colourDot = (colour) => {
+  const c = (colour || '').toLowerCase()
+  if (c.includes('white')) return '#d4c88a'
+  if (c.includes('ros')) return '#d4748a'
+  if (c.includes('red')) return '#8b2535'
+  if (c.includes('spark')) return '#a8c4d4'
+  if (c.includes('sweet')) return '#c4a85a'
+  return '#aaa'
+}
+
 export default function StudioPage() {
   const router = useRouter()
   const [studioWines, setStudioWines] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('Available')
+  const [filterColour, setFilterColour] = useState('')
   const [search, setSearch] = useState('')
+  const [sortField, setSortField] = useState('date_moved')
+  const [sortDir, setSortDir] = useState('desc')
   const [expandedNote, setExpandedNote] = useState(null)
 
   // Move to studio modal
@@ -29,8 +44,8 @@ export default function StudioPage() {
   const [scanAnalysing, setScanAnalysing] = useState(false)
   const [scanDone, setScanDone] = useState(false)
   const [scanRaw, setScanRaw] = useState(null)
-  const [scanMatch, setScanMatch] = useState(null)       // matched wine from DB
-  const [scanWine, setScanWine] = useState(null)         // selected wine (may differ from match)
+  const [scanMatch, setScanMatch] = useState(null)
+  const [scanWine, setScanWine] = useState(null)
   const [scanSearch, setScanSearch] = useState('')
   const [scanSearchResults, setScanSearchResults] = useState([])
 
@@ -39,11 +54,11 @@ export default function StudioPage() {
   const [scanDate, setScanDate] = useState(new Date().toISOString().split('T')[0])
   const [scanNotes, setScanNotes] = useState('')
   const [scanVintage, setScanVintage] = useState('')
-  const [scanIBPrice, setScanIBPrice] = useState('')       // purchase price IB
-  const [scanRetailPrice, setScanRetailPrice] = useState('') // retail price
-  const [scanBottleSize, setScanBottleSize] = useState('75') // bottle size in cl
-  const [scanSalePrice, setScanSalePrice] = useState('')     // sale price
-  const [scanColour, setScanColour] = useState('')           // colour for unlinked wines
+  const [scanIBPrice, setScanIBPrice] = useState('')
+  const [scanRetailPrice, setScanRetailPrice] = useState('')
+  const [scanBottleSize, setScanBottleSize] = useState('75')
+  const [scanSalePrice, setScanSalePrice] = useState('')
+  const [scanColour, setScanColour] = useState('')
   const [scanSaving, setScanSaving] = useState(false)
 
   const fileInputRef = useRef(null)
@@ -79,6 +94,22 @@ export default function StudioPage() {
     if (!confirm('Remove this entry from studio inventory?')) return
     const { error } = await supabase.from('studio').delete().eq('id', id)
     if (!error) setStudioWines(prev => prev.filter(s => s.id !== id))
+  }
+
+  // ─── Sort helper ────────────────────────────────────────────────────────────
+
+  function cycleSort(field) {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir(field === 'quantity' ? 'asc' : 'asc')
+    }
+  }
+
+  function sortIcon(field) {
+    if (sortField !== field) return <span style={{ opacity: 0.3, fontSize: '9px' }}>⇅</span>
+    return <span style={{ fontSize: '9px', color: '#d4ad45' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
   // ─── Move to Studio (manual search) ────────────────────────────────────────
@@ -162,7 +193,6 @@ export default function StudioPage() {
   async function analyseLabel() {
     if (!scanFile) return
     setScanAnalysing(true)
-
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader()
@@ -170,21 +200,17 @@ export default function StudioPage() {
         r.onerror = rej
         r.readAsDataURL(scanFile)
       })
-
       const response = await fetch('/api/analyse-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64, mediaType: scanFile.type })
       })
-
       const result = await response.json()
       if (!result.success) throw new Error(result.error)
       const extracted = result.data
       setScanRaw(extracted)
       setScanVintage(extracted.vintage || '')
       setScanDone(true)
-
-      // Try to match in DB — first with vintage, then without
       const searchTerm = extracted.producer || extracted.wine_name
       if (searchTerm) {
         let matches = null
@@ -258,7 +284,6 @@ export default function StudioPage() {
       unlinked_vintage: !scanWine ? (scanVintage || scanRaw?.vintage || null) : null,
     }
 
-    // If we have a linked wine and a retail price, update it on the wine record too
     if (scanWine?.id && retailPrice && retailPrice !== scanWine?.retail_price) {
       await supabase.from('wines').update({
         retail_price: retailPrice,
@@ -267,45 +292,31 @@ export default function StudioPage() {
       }).eq('id', scanWine.id)
     }
 
-    // ── Consolidation: check for an existing Available entry for the same wine ──
     let saved = false
-
     if (scanWine?.id) {
-      // Linked wine — match on wine_id
       const { data: existing } = await supabase
-        .from('studio')
-        .select('id, quantity')
-        .eq('wine_id', scanWine.id)
-        .eq('status', 'Available')
-        .maybeSingle()
+        .from('studio').select('id, quantity')
+        .eq('wine_id', scanWine.id).eq('status', 'Available').maybeSingle()
       if (existing) {
-        const { error } = await supabase
-          .from('studio')
-          .update({ quantity: existing.quantity + scanQty })
-          .eq('id', existing.id)
+        const { error } = await supabase.from('studio')
+          .update({ quantity: existing.quantity + scanQty }).eq('id', existing.id)
         if (!error) saved = true
         else alert('Save failed: ' + error.message)
       }
     } else if (insertData.unlinked_description) {
-      // Unlinked wine — match on description + vintage
       const { data: existing } = await supabase
-        .from('studio')
-        .select('id, quantity')
+        .from('studio').select('id, quantity')
         .eq('unlinked_description', insertData.unlinked_description)
         .eq('unlinked_vintage', insertData.unlinked_vintage || '')
-        .eq('status', 'Available')
-        .maybeSingle()
+        .eq('status', 'Available').maybeSingle()
       if (existing) {
-        const { error } = await supabase
-          .from('studio')
-          .update({ quantity: existing.quantity + scanQty })
-          .eq('id', existing.id)
+        const { error } = await supabase.from('studio')
+          .update({ quantity: existing.quantity + scanQty }).eq('id', existing.id)
         if (!error) saved = true
         else alert('Save failed: ' + error.message)
       }
     }
 
-    // No existing entry found — insert fresh
     if (!saved) {
       const { error } = await supabase.from('studio').insert(insertData)
       if (!error) saved = true
@@ -319,16 +330,41 @@ export default function StudioPage() {
     setScanSaving(false)
   }
 
-  // ─── Table helpers ──────────────────────────────────────────────────────────
+  // ─── Filter + Sort ──────────────────────────────────────────────────────────
 
-  const filtered = studioWines.filter(s => {
-    if (filterStatus && s.status !== filterStatus) return false
-    if (search) {
-      const q = search.toLowerCase()
-      return [s.wines?.description, s.wines?.vintage, s.wines?.region, s.unlinked_description].join(' ').toLowerCase().includes(q)
-    }
-    return true
-  })
+  const filtered = studioWines
+    .filter(s => {
+      if (filterStatus && s.status !== filterStatus) return false
+      if (filterColour) {
+        const c = (s.wines?.colour || s.colour || '').toLowerCase()
+        if (!c.includes(filterColour.toLowerCase())) return false
+      }
+      if (search) {
+        const q = search.toLowerCase()
+        return [s.wines?.description, s.wines?.vintage, s.wines?.region, s.unlinked_description]
+          .join(' ').toLowerCase().includes(q)
+      }
+      return true
+    })
+    .sort((a, b) => {
+      let av, bv
+      if (sortField === 'quantity') {
+        av = a.quantity || 0; bv = b.quantity || 0
+      } else if (sortField === 'name') {
+        av = (a.wines?.description || a.unlinked_description || '').toLowerCase()
+        bv = (b.wines?.description || b.unlinked_description || '').toLowerCase()
+      } else if (sortField === 'dp_price') {
+        av = parseFloat(a.dp_price) || 0; bv = parseFloat(b.dp_price) || 0
+      } else if (sortField === 'sale_price') {
+        av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0
+      } else {
+        // date_moved default
+        av = a.date_moved || ''; bv = b.date_moved || ''
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
 
   const availableCount = studioWines.filter(s => s.status === 'Available').length
   const localCount = studioWines.filter(s => s.include_in_local && s.status === 'Available').length
@@ -382,42 +418,96 @@ export default function StudioPage() {
         </div>
 
         {/* Toolbar */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search studio…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search studio…"
+            style={{ flex: 1, minWidth: '160px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Status</option>
             <option value="Available">Available</option>
             <option value="Consumed">Consumed</option>
             <option value="Sold">Sold</option>
           </select>
+          <select value={filterColour} onChange={e => setFilterColour(e.target.value)}
+            style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
+            <option value="">All Colours</option>
+            {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={`${sortField}:${sortDir}`}
+            onChange={e => { const [f, d] = e.target.value.split(':'); setSortField(f); setSortDir(d) }}
+            style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
+            <option value="date_moved:desc">Newest first</option>
+            <option value="date_moved:asc">Oldest first</option>
+            <option value="quantity:asc">Qty: low → high</option>
+            <option value="quantity:desc">Qty: high → low</option>
+            <option value="name:asc">Name A→Z</option>
+            <option value="name:desc">Name Z→A</option>
+            <option value="dp_price:asc">DP price ↑</option>
+            <option value="dp_price:desc">DP price ↓</option>
+            <option value="sale_price:asc">Sale price ↑</option>
+            <option value="sale_price:desc">Sale price ↓</option>
+          </select>
         </div>
+
+        {/* Active filter summary */}
+        {(filterColour || sortField !== 'date_moved') && (
+          <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', letterSpacing: '0.08em' }}>
+              {filtered.length} wine{filtered.length !== 1 ? 's' : ''}
+              {filterColour ? ` · ${filterColour}` : ''}
+            </span>
+            {(filterColour || filterStatus || search) && (
+              <button onClick={() => { setFilterColour(''); setFilterStatus('Available'); setSearch('') }}
+                style={{ background: 'none', border: 'none', fontSize: '10px', color: 'var(--wine)', cursor: 'pointer', fontFamily: 'DM Mono, monospace', padding: 0 }}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Table */}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                {['Wine', 'Vintage', 'Size', 'Qty', 'Moved', 'DP Price', 'Sale £', 'Status', 'Local Sales', 'Notes', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                {[
+                  { label: 'Wine', field: 'name' },
+                  { label: 'Vintage', field: null },
+                  { label: 'Colour', field: null },
+                  { label: 'Size', field: null },
+                  { label: 'Qty', field: 'quantity' },
+                  { label: 'Moved', field: 'date_moved' },
+                  { label: 'DP Price', field: 'dp_price' },
+                  { label: 'Sale £', field: 'sale_price' },
+                  { label: 'Status', field: null },
+                  { label: 'Local Sales', field: null },
+                  { label: 'Notes', field: null },
+                  { label: '', field: null },
+                ].map(({ label, field }) => (
+                  <th key={label}
+                    onClick={field ? () => cycleSort(field) : undefined}
+                    style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: field ? 'pointer' : 'default', userSelect: 'none' }}>
+                    {label} {field && sortIcon(field)}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No studio wines yet — scan or move something from bond to get started.</td></tr>
+                <tr><td colSpan={12} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No studio wines yet — scan or move something from bond to get started.</td></tr>
               )}
               {filtered.map(s => {
                 const w = s.wines
                 const colour = w?.colour || s.colour || ''
-                const dotColor = colour.toLowerCase().includes('white') ? '#d4c88a' : colour.toLowerCase().includes('ros') ? '#d4748a' : colour.toLowerCase().includes('red') ? '#8b2535' : '#aaa'
                 const isDetailOpen = expandedNote === s.id
                 const ibPrice = s.dp_price ? ((parseFloat(s.dp_price) / 1.2) - 3).toFixed(2) : null
                 return (
                   <React.Fragment key={s.id}>
                   <tr style={{ borderBottom: isDetailOpen ? 'none' : '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
-                    <td style={{ padding: '9px 12px', maxWidth: '260px' }}>
+                    {/* Wine name */}
+                    <td style={{ padding: '9px 12px', maxWidth: '240px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
+                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: colourDot(colour), flexShrink: 0 }}></span>
                         <div>
                           {w ? (
                             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3 }}>{w.description}</div>
@@ -431,6 +521,8 @@ export default function StudioPage() {
                         </div>
                       </div>
                     </td>
+
+                    {/* Vintage */}
                     <td style={{ padding: '9px 12px', fontWeight: 500 }}>
                       {w ? w.vintage : (
                         <input type="text" defaultValue={s.unlinked_vintage || ''}
@@ -439,6 +531,23 @@ export default function StudioPage() {
                           style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                       )}
                     </td>
+
+                    {/* Colour — editable for all rows */}
+                    <td style={{ padding: '9px 12px' }}>
+                      <select
+                        value={colour}
+                        onChange={e => {
+                          // For linked wines, update the studio record's colour override
+                          // For unlinked, update studio colour directly
+                          updateStudio(s.id, 'colour', e.target.value)
+                        }}
+                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', minWidth: '82px' }}>
+                        <option value="">—</option>
+                        {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </td>
+
+                    {/* Size */}
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <select defaultValue={s.bottle_size || '75'}
                         onChange={e => updateStudio(s.id, 'bottle_size', e.target.value)}
@@ -448,24 +557,37 @@ export default function StudioPage() {
                         <option value="150">150cl</option>
                       </select>
                     </td>
+
+                    {/* Qty — auto-selects on focus for easy mobile editing */}
                     <td style={{ padding: '9px 12px' }}>
                       <input type="number" min="0" defaultValue={s.quantity}
+                        onFocus={e => e.target.select()}
                         onBlur={e => { if (parseInt(e.target.value) !== s.quantity) updateStudio(s.id, 'quantity', parseInt(e.target.value)) }}
                         style={{ width: '52px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
                     </td>
+
+                    {/* Date moved */}
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{s.date_moved}</td>
+
+                    {/* DP Price */}
                     <td style={{ padding: '9px 12px' }}>
                       <input type="number" step="0.01" defaultValue={s.dp_price ? parseFloat(s.dp_price).toFixed(2) : calcDP(w?.purchase_price_per_bottle) || ''}
+                        onFocus={e => e.target.select()}
                         onBlur={e => { if (e.target.value !== String(s.dp_price || '')) updateStudio(s.id, 'dp_price', e.target.value ? parseFloat(e.target.value) : null) }}
                         placeholder="0.00"
                         style={{ width: '72px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600 }} />
                     </td>
+
+                    {/* Sale price */}
                     <td style={{ padding: '9px 12px' }}>
                       <input type="number" step="0.01" defaultValue={s.sale_price ? parseFloat(s.sale_price).toFixed(2) : ''}
+                        onFocus={e => e.target.select()}
                         onBlur={e => { if (e.target.value !== String(s.sale_price || '')) updateStudio(s.id, 'sale_price', e.target.value ? parseFloat(e.target.value) : null) }}
                         placeholder="0.00"
                         style={{ width: '72px', border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: 'var(--wine)' }} />
                     </td>
+
+                    {/* Status */}
                     <td style={{ padding: '9px 12px' }}>
                       <select value={s.status} onChange={e => updateStudio(s.id, 'status', e.target.value)}
                         style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: statusColour(s.status) }}>
@@ -474,16 +596,22 @@ export default function StudioPage() {
                         <option value="Sold">Sold</option>
                       </select>
                     </td>
+
+                    {/* Local Sales toggle */}
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
                       <input type="checkbox" checked={!!s.include_in_local}
                         onChange={e => updateStudio(s.id, 'include_in_local', e.target.checked)}
                         style={{ width: '16px', height: '16px', accentColor: 'var(--wine)', cursor: 'pointer' }} />
                     </td>
+
+                    {/* Notes */}
                     <td style={{ padding: '9px 12px' }}>
                       <input type="text" defaultValue={s.notes || ''} placeholder="notes…"
                         onBlur={e => { if (e.target.value !== (s.notes || '')) updateStudio(s.id, 'notes', e.target.value || null) }}
                         style={{ width: '120px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
                     </td>
+
+                    {/* Actions */}
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => setExpandedNote(isDetailOpen ? null : s.id)}
                         title="View price details"
@@ -494,9 +622,11 @@ export default function StudioPage() {
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 4px' }}>✕</button>
                     </td>
                   </tr>
+
+                  {/* Price detail row */}
                   {isDetailOpen && (
                     <tr key={s.id + '-detail'} style={{ borderBottom: '1px solid #ede6d6', background: 'rgba(107,30,46,0.03)' }}>
-                      <td colSpan={11} style={{ padding: '8px 20px 12px 36px' }}>
+                      <td colSpan={12} style={{ padding: '8px 20px 12px 36px' }}>
                         <div style={{ display: 'flex', gap: '28px', fontSize: '11px', fontFamily: 'DM Mono, monospace', flexWrap: 'wrap' }}>
                           {ibPrice && (
                             <div>
@@ -580,6 +710,7 @@ export default function StudioPage() {
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Quantity (bottles)</label>
                 <input type="number" min="1" value={moveQty} onChange={e => setMoveQty(parseInt(e.target.value))}
+                  onFocus={e => e.target.select()}
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
@@ -648,7 +779,6 @@ export default function StudioPage() {
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>2. Confirm wine</label>
 
-                {/* What was extracted */}
                 {scanRaw && (
                   <div style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 12px', marginBottom: '10px' }}>
                     <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>READ FROM LABEL</div>
@@ -660,7 +790,6 @@ export default function StudioPage() {
                   </div>
                 )}
 
-                {/* Match or no match */}
                 {scanWine ? (
                   <div style={{ background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.3)', padding: '12px' }}>
                     <div style={{ fontSize: '10px', color: '#2d6a4f', fontFamily: 'DM Mono, monospace', marginBottom: '6px' }}>✓ MATCHED IN CELLAR DATABASE</div>
@@ -692,7 +821,7 @@ export default function StudioPage() {
               </div>
             )}
 
-            {/* Step 3 — Details form — always visible once label is read */}
+            {/* Step 3 — Details */}
             {scanDone && (
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>3. Enter details</label>
@@ -701,6 +830,7 @@ export default function StudioPage() {
                   <div>
                     <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>QUANTITY</label>
                     <input type="number" min="1" value={scanQty} onChange={e => setScanQty(parseInt(e.target.value) || 1)}
+                      onFocus={e => e.target.select()}
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                   <div>
@@ -731,11 +861,7 @@ export default function StudioPage() {
                       <select value={scanColour} onChange={e => setScanColour(e.target.value)}
                         style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}>
                         <option value="">Select…</option>
-                        <option value="White">White</option>
-                        <option value="Red">Red</option>
-                        <option value="Rosé">Rosé</option>
-                        <option value="Sparkling">Sparkling</option>
-                        <option value="Sweet">Sweet</option>
+                        {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                   </div>
@@ -743,27 +869,24 @@ export default function StudioPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
-                      PURCHASE PRICE IB (£/btl)
-                    </label>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>PURCHASE PRICE IB (£/btl)</label>
                     <input type="number" step="0.01" value={scanIBPrice} onChange={e => setScanIBPrice(e.target.value)} placeholder="0.00"
+                      onFocus={e => e.target.select()}
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                     {scanIBPrice && <div style={{ fontSize: '10px', color: 'var(--wine)', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>DP £{((parseFloat(scanIBPrice) + 3) * 1.2).toFixed(2)}</div>}
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
-                      RETAIL PRICE (£/btl)
-                    </label>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>RETAIL PRICE (£/btl)</label>
                     <input type="number" step="0.01" value={scanRetailPrice} onChange={e => setScanRetailPrice(e.target.value)} placeholder="0.00"
+                      onFocus={e => e.target.select()}
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
-                    YOUR SALE PRICE incl. Duty &amp; VAT (£/btl)
-                  </label>
+                  <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>YOUR SALE PRICE incl. Duty &amp; VAT (£/btl)</label>
                   <input type="number" step="0.01" value={scanSalePrice} onChange={e => setScanSalePrice(e.target.value)} placeholder="0.00"
+                    onFocus={e => e.target.select()}
                     style={{ width: '100%', border: '2px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'var(--wine)' }} />
                   {scanSalePrice && scanIBPrice && (() => {
                     const dp = (parseFloat(scanIBPrice) + 3) * 1.2
@@ -780,7 +903,6 @@ export default function StudioPage() {
                     style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
 
-                {/* Save button — big and obvious */}
                 <button onClick={saveScanEntry} disabled={scanSaving}
                   style={{ width: '100%', background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: scanSaving ? 'wait' : 'pointer', fontWeight: 600 }}>
                   {scanSaving ? 'Saving…' : `✓ Add ${scanQty} bottle${scanQty !== 1 ? 's' : ''} to Studio`}
