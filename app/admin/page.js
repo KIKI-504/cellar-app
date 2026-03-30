@@ -17,6 +17,8 @@ export default function AdminPage() {
   const [page, setPage] = useState(0)
   const [showValues, setShowValues] = useState(false)
   const [expandedNote, setExpandedNote] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const [importStatus, setImportStatus] = useState('')
   const PAGE_SIZE = 50
 
   useEffect(() => {
@@ -100,14 +102,155 @@ export default function AdminPage() {
     else alert(`✓ ${qty} bottle${qty > 1 ? 's' : ''} moved to studio at DP £${dp}`)
   }
 
+  // ─── BBR CSV Import ────────────────────────────────────────────────────────
+
+  function parseBBRCsv(text) {
+    const lines = text.split('\n').filter(l => l.trim())
+    if (lines.length < 2) return []
+    const headers = []
+    let current = '', inQuotes = false
+    for (const ch of lines[0]) {
+      if (ch === '"') { inQuotes = !inQuotes }
+      else if (ch === ',' && !inQuotes) { headers.push(current.trim()); current = '' }
+      else { current += ch }
+    }
+    headers.push(current.trim())
+
+    const rows = []
+    for (let i = 1; i < lines.length; i++) {
+      const parts = []
+      current = ''; inQuotes = false
+      for (const ch of lines[i]) {
+        if (ch === '"') { inQuotes = !inQuotes }
+        else if (ch === ',' && !inQuotes) { parts.push(current); current = '' }
+        else { current += ch }
+      }
+      parts.push(current)
+      const row = {}
+      headers.forEach((h, idx) => { row[h] = (parts[idx] || '').trim() })
+      rows.push(row)
+    }
+    return rows
+  }
+
+  function transformBBRRow(row) {
+    const description = (row['Description'] || '').replace(/^[\s,]+/, '').trim()
+    const vintage = (row['Vintage'] || '').trim()
+    const caseSize = parseInt(row['Case Size'], 10) || 1
+
+    // Purchase price per bottle (BBR provides case price)
+    const purchaseCasePrice = parseFloat(row['Purchase Price per Case']) || null
+    const purchase_price_per_bottle = purchaseCasePrice
+      ? Math.round((purchaseCasePrice / caseSize) * 100) / 100
+      : null
+
+    // WS Lowest List Price — BBR provides as a CASE price, divide to get per bottle
+    const wsCasePrice = parseFloat(row['Wine Searcher Lowest List Price']) || null
+    const ws_lowest_per_bottle = wsCasePrice
+      ? Math.round((wsCasePrice / caseSize) * 100) / 100
+      : null
+
+    // Estimated UK retail: WS lowest per bottle + 20%
+    const retail_price = ws_lowest_per_bottle
+      ? Math.round(ws_lowest_per_bottle * 1.20 * 100) / 100
+      : null
+
+    // Livex Market Price — also a case price
+    const livexCasePrice = parseFloat(row['Livex Market Price']) || null
+    const livex_market_price = livexCasePrice
+      ? Math.round((livexCasePrice / caseSize) * 100) / 100
+      : null
+
+    return {
+      source: 'Berry Brothers',
+      source_id: row['Parent ID'] || '',
+      country: row['Country'] || '',
+      region: (row['Region'] || '').trim(),
+      vintage,
+      description,
+      colour: row['Colour'] || '',
+      bottle_format: row['Bottle Format'] || '',
+      bottle_volume: row['Bottle Volume'] || '',
+      quantity: row['Quantity in Bottles'] || '',
+      case_size: row['Case Size'] || '',
+      purchase_price_per_bottle,
+      bbx_highest_bid: row['BBX Highest Bid'] || '',
+      ws_lowest_per_bottle,
+      retail_price,
+      retail_price_source: retail_price ? 'Wine Searcher lowest +20%' : null,
+      retail_price_date: retail_price ? new Date().toISOString().split('T')[0] : null,
+      livex_market_price,
+      include_in_buyer_view: false,
+    }
+  }
+
+  async function handleBBRImport(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setImporting(true)
+    setImportStatus('Reading file…')
+
+    const text = await file.text()
+    const rows = parseBBRCsv(text)
+    const wines = rows.map(transformBBRRow).filter(r => r.description && r.source_id)
+
+    setImportStatus(`Parsed ${wines.length} wines — importing…`)
+
+    let inserted = 0, updated = 0, errors = 0
+
+    for (const wine of wines) {
+      try {
+        const { data: existing } = await supabase
+          .from('wines')
+          .select('id, include_in_buyer_view, sale_price, women_note, producer_note')
+          .eq('source_id', wine.source_id)
+          .eq('source', 'Berry Brothers')
+          .maybeSingle()
+
+        if (existing) {
+          // Update inventory + pricing fields; preserve buyer-facing fields
+          const { error } = await supabase.from('wines').update({
+            quantity: wine.quantity,
+            purchase_price_per_bottle: wine.purchase_price_per_bottle,
+            bbx_highest_bid: wine.bbx_highest_bid,
+            ws_lowest_per_bottle: wine.ws_lowest_per_bottle,
+            retail_price: wine.retail_price,
+            retail_price_source: wine.retail_price_source,
+            retail_price_date: wine.retail_price_date,
+            livex_market_price: wine.livex_market_price,
+          }).eq('id', existing.id)
+          if (error) throw error
+          updated++
+        } else {
+          const { error } = await supabase.from('wines').insert(wine)
+          if (error) throw error
+          inserted++
+        }
+      } catch (err) {
+        console.error('Import error:', wine.description, err)
+        errors++
+      }
+    }
+
+    setImportStatus(`✓ Done — ${inserted} inserted, ${updated} updated${errors ? `, ${errors} errors` : ''}`)
+    setImporting(false)
+    e.target.value = ''
+    await fetchWines()
+  }
+
+  // ─── Export ────────────────────────────────────────────────────────────────
+
   function exportCSV() {
-    const headers = ['Source','ID','Description','Vintage','Colour','Country','Region','Format','Volume','Quantity','Cost/Bottle','10%','15%','Retail Price IB','Retail Price Source','Retail Price Date','Sale Price','In Buyer View','Women Note','Producer Note']
+    const headers = ['Source','ID','Description','Vintage','Colour','Country','Region','Format','Volume','Quantity','Cost/Bottle','10%','15%','WS Lowest/Btl','Retail Price IB','Retail Price Source','Retail Price Date','Livex/Btl','Sale Price','In Buyer View','Women Note','Producer Note']
     const rows = wines.map(w => [
       w.source, w.source_id, w.description, w.vintage, w.colour, w.country, w.region,
       w.bottle_format, w.bottle_volume, w.quantity, w.purchase_price_per_bottle,
       w.purchase_price_per_bottle ? (w.purchase_price_per_bottle * 1.10).toFixed(2) : '',
       w.purchase_price_per_bottle ? (w.purchase_price_per_bottle * 1.15).toFixed(2) : '',
-      w.retail_price, w.retail_price_source || '', w.retail_price_date, w.sale_price,
+      w.ws_lowest_per_bottle || '',
+      w.retail_price, w.retail_price_source || '', w.retail_price_date,
+      w.livex_market_price || '',
+      w.sale_price,
       w.include_in_buyer_view ? 'Yes' : 'No', w.women_note || '', w.producer_note || ''
     ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
     const csv = [headers.join(','), ...rows].join('\n')
@@ -195,7 +338,7 @@ export default function AdminPage() {
         </div>
 
         {/* Toolbar */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by description, region, vintage…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Sources</option>
@@ -216,6 +359,17 @@ export default function AdminPage() {
             <option value="women">Women-Led</option>
           </select>
           <button onClick={exportCSV} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--ink)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>↓ Export</button>
+
+          {/* BBR Import */}
+          <label style={{ position: 'relative', cursor: 'pointer' }}>
+            <input type="file" accept=".csv" onChange={handleBBRImport} disabled={importing} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
+            <span style={{ display: 'inline-block', background: importing ? 'rgba(107,30,46,0.4)' : 'rgba(107,30,46,0.08)', border: '1px solid rgba(107,30,46,0.3)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: importing ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+              {importing ? '⏳ Importing…' : '↑ Import BBR'}
+            </span>
+          </label>
+          {importStatus && (
+            <span style={{ fontSize: '11px', color: importStatus.startsWith('✓') ? '#2d6a4f' : 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>{importStatus}</span>
+          )}
         </div>
 
         {/* Table */}
@@ -295,6 +449,12 @@ export default function AdminPage() {
                         )}
                         {w.retail_price_date && <span style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), whiteSpace: 'nowrap' }}>{w.retail_price_date}</span>}
                       </div>
+                      {w.ws_lowest_per_bottle && (
+                        <div style={{ marginTop: '3px', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                          WS low £{parseFloat(w.ws_lowest_per_bottle).toFixed(2)}
+                          {w.livex_market_price ? ` · Livex £${parseFloat(w.livex_market_price).toFixed(2)}` : ''}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '9px 12px', color: comp === null ? 'var(--muted)' : comp ? '#2d6a4f' : '#c0392b', fontWeight: comp ? 600 : 400 }}>
                       {comp === null ? '—' : comp ? '✓' : '✗'}
