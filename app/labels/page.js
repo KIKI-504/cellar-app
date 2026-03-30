@@ -49,24 +49,24 @@ function BondLabelContent({ wine, wineName, producer, isMag }) {
 // ─── Studio label content ──────────────────────────────────────────────────
 function StudioLabelContent({ entry, wineName, producer, isMag }) {
   const bottleSize = entry.bottle_size || (entry.wines?.bottle_volume?.includes('150') ? '150' : '75')
-  const sizeLabel = bottleSize === '150' ? 'Magnum 150cl' : bottleSize === '37.5' ? 'Half Bottle 37.5cl' : '75cl'
   const dp = entry.dp_price ? parseFloat(entry.dp_price).toFixed(2) : null
   const sale = entry.sale_price ? parseFloat(entry.sale_price).toFixed(2) : null
   const vintage = entry.wines?.vintage || entry.unlinked_vintage || ''
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '.')
 
   return (
-    <div style={{ width: '100%', padding: '14px 18px', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box' }}>
+    <div style={{ width: '100%', padding: '18px', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '144px' }}>
       {bottleSize === '150' && (
-        <div style={{ fontSize: '26px', fontWeight: 'bold', letterSpacing: '0.15em', marginBottom: '8px', textTransform: 'uppercase' }}>MAGNUM</div>
+        <div style={{ fontSize: '32px', fontWeight: 'bold', letterSpacing: '0.15em', marginBottom: '10px', textTransform: 'uppercase' }}>MAGNUM</div>
       )}
       {bottleSize === '37.5' && (
-        <div style={{ fontSize: '20px', fontWeight: 'bold', letterSpacing: '0.1em', marginBottom: '8px', textTransform: 'uppercase' }}>HALF BOTTLE</div>
+        <div style={{ fontSize: '24px', fontWeight: 'bold', letterSpacing: '0.1em', marginBottom: '10px', textTransform: 'uppercase' }}>HALF BOTTLE</div>
       )}
-      <div style={{ fontSize: '20px', fontWeight: 'bold', lineHeight: 1.3, marginBottom: '2px' }}>{vintage} {wineName}</div>
-      {producer && <div style={{ fontSize: '18px', lineHeight: 1.3, marginBottom: '6px' }}>{producer}</div>}
-      <div style={{ fontSize: '16px', color: '#555', marginBottom: '8px' }}>{sizeLabel}</div>
-      {dp && <div style={{ fontSize: '18px', marginTop: '4px' }}>£{dp} DP</div>}
-      {sale && <div style={{ fontSize: '22px', fontWeight: 'bold', marginTop: '4px' }}>£{sale} Sale</div>}
+      <div style={{ fontSize: '22px', fontWeight: 'bold', lineHeight: 1.3, marginBottom: '2px' }}>{vintage} {wineName}</div>
+      {producer && <div style={{ fontSize: '20px', lineHeight: 1.3, marginBottom: '10px' }}>{producer}</div>}
+      {dp && <div style={{ fontSize: '20px', marginTop: '8px' }}>£{dp} DP</div>}
+      {sale && <div style={{ fontSize: '20px' }}>£{sale} Retail</div>}
+      <div style={{ fontSize: '18px', marginTop: '4px', color: '#444' }}>({today})</div>
     </div>
   )
 }
@@ -149,26 +149,27 @@ export default function LabelPage() {
     const w = selected.data
     const mag = isBond ? isMagnum(w) : (w.bottle_size === '150' || w.wines?.bottle_volume?.includes('150'))
     const bottleSize = isBond ? null : (w.bottle_size || '75')
-    const sizeLabel = bottleSize === '150' ? 'Magnum 150cl' : bottleSize === '37.5' ? 'Half Bottle 37.5cl' : '75cl'
     const vintage = isBond ? w.vintage : (w.wines?.vintage || w.unlinked_vintage || '')
     const dp = isBond ? calcDP(w.purchase_price_per_bottle) : (w.dp_price ? parseFloat(w.dp_price).toFixed(2) : null)
     const sale = !isBond && w.sale_price ? parseFloat(w.sale_price).toFixed(2) : null
     const ib = isBond ? parseFloat(w.purchase_price_per_bottle).toFixed(2) : null
     const source = isBond ? (w.source === 'Berry Brothers' ? 'BBR' : 'FLINT') : null
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '.')
 
-    const labelHTML = `
+    const labelHTML = isBond ? `
       ${mag ? '<div class="magnum">MAGNUM</div>' : ''}
-      ${!mag && bottleSize === '37.5' ? '<div class="magnum" style="font-size:16px">HALF BOTTLE</div>' : ''}
       <div class="wine-name">${vintage} ${wineName}</div>
       ${producer ? `<div class="producer">${producer}</div>` : ''}
-      ${isBond ? `
-        <div class="price">£${ib} IB — ${source}</div>
-        <div class="price">£${dp} DP</div>
-      ` : `
-        <div class="size">${sizeLabel}</div>
-        ${dp ? `<div class="price">£${dp} DP</div>` : ''}
-        ${sale ? `<div class="price" style="font-weight:bold;font-size:22px">£${sale} Sale</div>` : ''}
-      `}
+      <div class="price">£${ib} IB — ${source}</div>
+      <div class="price">£${dp} DP</div>
+    ` : `
+      ${bottleSize === '150' ? '<div class="magnum">MAGNUM</div>' : ''}
+      ${bottleSize === '37.5' ? '<div class="half">HALF BOTTLE</div>' : ''}
+      <div class="wine-name">${vintage} ${wineName}</div>
+      ${producer ? `<div class="producer">${producer}</div>` : ''}
+      ${dp ? `<div class="price">£${dp} DP</div>` : ''}
+      ${sale ? `<div class="price">£${sale} Retail</div>` : ''}
+      <div class="date">(${today})</div>
     `
 
     const printWindow = window.open('', '_blank', 'width=816,height=1056')
@@ -181,16 +182,17 @@ export default function LabelPage() {
           body { width: 4in; font-family: Arial, sans-serif; }
           @page { size: 4in 6in; margin: 0; }
           .label-half {
-            width: 4in; height: 3in; padding: 14px 18px;
-            display: flex; flex-direction: column; justify-content: center;
-            border-bottom: 1px dashed #ccc;
+            width: 4in; height: 3in; padding: 18px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-bottom: 1px dashed #ccc; text-align: center;
           }
           .label-half:last-child { border-bottom: none; }
-          .magnum { font-size: 26px; font-weight: bold; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 8px; }
-          .wine-name { font-size: 20px; font-weight: bold; line-height: 1.3; margin-bottom: 2px; }
-          .producer { font-size: 18px; line-height: 1.3; margin-bottom: 6px; }
-          .size { font-size: 16px; color: #555; margin-bottom: 8px; }
-          .price { font-size: 18px; line-height: 1.6; }
+          .magnum { font-size: 36px; font-weight: bold; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; }
+          .half { font-size: 26px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
+          .wine-name { font-size: 24px; font-weight: bold; line-height: 1.3; margin-bottom: 2px; }
+          .producer { font-size: 22px; line-height: 1.3; margin-bottom: 10px; }
+          .price { font-size: 22px; line-height: 1.6; }
+          .date { font-size: 20px; color: #444; margin-top: 4px; }
         </style>
       </head>
       <body>
