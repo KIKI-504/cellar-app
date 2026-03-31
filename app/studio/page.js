@@ -703,96 +703,137 @@ export default function StudioPage() {
                 const w = s.wines
                 const colour = w?.colour || s.colour || ''
                 const isDetailOpen = expandedNote === s.id
+                const isEditing = editingRow === s.id
                 const ibPrice = s.dp_price ? ((parseFloat(s.dp_price) / 1.2) - 3).toFixed(2) : null
                 const alert = getPriceAlert(s)
+
+                // Inventory-style wine display
+                // Split wines.description on first comma: before = wine name, after = producer
+                const fullDesc = w?.description || s.unlinked_description || ''
+                const commaIdx = fullDesc.indexOf(',')
+                const winePart = commaIdx > -1 ? fullDesc.slice(0, commaIdx).trim() : fullDesc
+                const producerPart = commaIdx > -1 ? fullDesc.slice(commaIdx + 1).trim() : ''
+                const location = [w?.region || '', w?.country || ''].filter(Boolean).join(' · ')
+                const vintage = w?.vintage || s.unlinked_vintage || ''
+
                 return (
                   <React.Fragment key={s.id}>
                   <tr style={{ borderBottom: isDetailOpen ? 'none' : '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
-                    {/* Wine name */}
-                    <td style={{ padding: '9px 12px', maxWidth: '240px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: colourDot(colour), flexShrink: 0 }}></span>
+
+                    {/* Wine — inventory-style: wine name / producer / location */}
+                    <td style={{ padding: '9px 12px', maxWidth: '260px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: colourDot(colour), flexShrink: 0, marginTop: '5px' }}></span>
                         <div>
-                          {w ? (
-                            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3 }}>{w.description}</div>
-                          ) : (
+                          {isEditing && !w ? (
                             <EditableCell value={s.unlinked_description || ''} onSave={v => updateStudio(s.id, 'unlinked_description', v)} placeholder="Wine name…"
                               style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', outline: 'none' }} width="180px" />
+                          ) : (
+                            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3, fontWeight: 500 }}>{winePart}</div>
                           )}
-                          <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w?.region || (s.unlinked_description ? 'Not in cellar database' : '')}</div>
+                          {producerPart && <div style={{ fontSize: '12px', color: 'var(--ink)', marginTop: '1px', fontFamily: 'Cormorant Garamond, serif' }}>{producerPart}</div>}
+                          {location && <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{location}</div>}
+                          {!w && !producerPart && <div style={{ fontSize: '10px', color: 'rgba(192,57,43,0.6)', marginTop: '2px' }}>Not in cellar database</div>}
                         </div>
                       </div>
                     </td>
 
                     {/* Vintage */}
                     <td style={{ padding: '9px 12px', fontWeight: 500 }}>
-                      {w ? w.vintage : (
+                      {isEditing && !w ? (
                         <EditableCell value={s.unlinked_vintage || ''} onSave={v => updateStudio(s.id, 'unlinked_vintage', v)} placeholder="e.g. 2021"
                           style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} width="60px" />
+                      ) : (
+                        <span>{vintage}</span>
                       )}
                     </td>
 
                     {/* Colour */}
                     <td style={{ padding: '9px 12px' }}>
-                      <select
-                        value={colour}
-                        onChange={e => { updateStudio(s.id, 'colour', e.target.value) }}
-                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', minWidth: '82px' }}>
-                        <option value="">—</option>
-                        {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      {isEditing ? (
+                        <select value={colour} onChange={e => { updateStudio(s.id, 'colour', e.target.value) }}
+                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', minWidth: '82px' }}>
+                          <option value="">—</option>
+                          {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: 'var(--ink)', fontFamily: 'DM Mono, monospace' }}>{colour || '—'}</span>
+                      )}
                     </td>
 
                     {/* Size */}
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                      <select defaultValue={s.bottle_size || '75'}
-                        onChange={e => updateStudio(s.id, 'bottle_size', e.target.value)}
-                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
-                        <option value="37.5">37.5cl</option>
-                        <option value="75">75cl</option>
-                        <option value="150">150cl</option>
-                      </select>
+                      {isEditing ? (
+                        <select defaultValue={s.bottle_size || '75'} onChange={e => updateStudio(s.id, 'bottle_size', e.target.value)}
+                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
+                          <option value="37.5">37.5cl</option>
+                          <option value="75">75cl</option>
+                          <option value="150">150cl</option>
+                        </select>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace' }}>{s.bottle_size || '75'}cl</span>
+                      )}
                     </td>
 
                     {/* Qty */}
                     <td style={{ padding: '9px 12px' }}>
-                      <EditableCell type="number" min="0" value={s.quantity}
-                        onSave={v => updateStudio(s.id, 'quantity', v === null ? 0 : parseInt(v))}
-                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} width="52px" />
+                      {isEditing ? (
+                        <EditableCell type="number" min="0" value={s.quantity}
+                          onSave={v => updateStudio(s.id, 'quantity', v === null ? 0 : parseInt(v))}
+                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} width="52px" />
+                      ) : (
+                        <span style={{ fontWeight: 600, fontFamily: 'DM Mono, monospace', fontSize: '13px' }}>{s.quantity}</span>
+                      )}
                     </td>
 
                     {/* Date moved */}
-                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{s.date_moved}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: '11px' }}>{s.date_moved}</td>
 
                     {/* DP Price */}
                     <td style={{ padding: '9px 12px' }}>
-                      <EditableCell type="number" step="0.01"
-                        value={s.dp_price ? parseFloat(s.dp_price) : (w?.purchase_price_per_bottle ? parseFloat(calcDP(w.purchase_price_per_bottle)) : null)}
-                        onSave={v => updateStudio(s.id, 'dp_price', v)}
-                        placeholder="0.00"
-                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600 }} width="72px" />
+                      {isEditing ? (
+                        <EditableCell type="number" step="0.01"
+                          value={s.dp_price ? parseFloat(s.dp_price) : (w?.purchase_price_per_bottle ? parseFloat(calcDP(w.purchase_price_per_bottle)) : null)}
+                          onSave={v => updateStudio(s.id, 'dp_price', v)}
+                          placeholder="0.00"
+                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600 }} width="72px" />
+                      ) : (
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600 }}>
+                          {s.dp_price ? `£${parseFloat(s.dp_price).toFixed(2)}` : w?.purchase_price_per_bottle ? `£${calcDP(w.purchase_price_per_bottle)}` : '—'}
+                        </span>
+                      )}
                     </td>
 
                     {/* Sale price */}
                     <td style={{ padding: '9px 12px' }}>
-                      <EditableCell type="number" step="0.01"
-                        value={s.sale_price ? parseFloat(s.sale_price) : null}
-                        onSave={v => updateStudio(s.id, 'sale_price', v)}
-                        placeholder="0.00"
-                        style={{ border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: 'var(--wine)' }} width="72px" />
+                      {isEditing ? (
+                        <EditableCell type="number" step="0.01"
+                          value={s.sale_price ? parseFloat(s.sale_price) : null}
+                          onSave={v => updateStudio(s.id, 'sale_price', v)}
+                          placeholder="0.00"
+                          style={{ border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: 'var(--wine)' }} width="72px" />
+                      ) : (
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, color: s.sale_price ? 'var(--wine)' : 'var(--muted)' }}>
+                          {s.sale_price ? `£${parseFloat(s.sale_price).toFixed(2)}` : '—'}
+                        </span>
+                      )}
                     </td>
 
                     {/* Status */}
                     <td style={{ padding: '9px 12px' }}>
-                      <select value={s.status} onChange={e => updateStudio(s.id, 'status', e.target.value)}
-                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: statusColour(s.status) }}>
-                        <option value="Available">Available</option>
-                        <option value="Consumed">Consumed</option>
-                        <option value="Sold">Sold</option>
-                      </select>
+                      {isEditing ? (
+                        <select value={s.status} onChange={e => updateStudio(s.id, 'status', e.target.value)}
+                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: statusColour(s.status) }}>
+                          <option value="Available">Available</option>
+                          <option value="Consumed">Consumed</option>
+                          <option value="Sold">Sold</option>
+                        </select>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', color: statusColour(s.status), fontWeight: 500 }}>{s.status}</span>
+                      )}
                     </td>
 
-                    {/* Local Sales toggle */}
+                    {/* Local Sales toggle — always active */}
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
                       <input type="checkbox" checked={!!s.include_in_local}
                         onChange={e => updateStudio(s.id, 'include_in_local', e.target.checked)}
@@ -801,17 +842,33 @@ export default function StudioPage() {
 
                     {/* Notes */}
                     <td style={{ padding: '9px 12px' }}>
-                      <EditableCell value={s.notes || ''} onSave={v => updateStudio(s.id, 'notes', v || null)} placeholder="notes…"
-                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} width="120px" />
+                      {isEditing ? (
+                        <EditableCell value={s.notes || ''} onSave={v => updateStudio(s.id, 'notes', v || null)} placeholder="notes…"
+                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} width="120px" />
+                      ) : (
+                        <span style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>{s.notes || ''}</span>
+                      )}
                     </td>
 
-                    {/* Actions */}
+                    {/* Actions — price detail + edit/done + delete */}
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => setExpandedNote(isDetailOpen ? null : s.id)}
                         title="View price details"
                         style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: isDetailOpen ? 'var(--wine)' : 'var(--muted)', fontSize: '11px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', marginRight: '4px' }}>
                         {isDetailOpen ? '▲' : '£'}
                       </button>
+                      {isEditing ? (
+                        <button onClick={() => setEditingRow(null)}
+                          style={{ background: 'var(--wine)', border: 'none', cursor: 'pointer', color: 'var(--white)', fontSize: '10px', padding: '3px 8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.05em', marginRight: '4px' }}>
+                          Done
+                        </button>
+                      ) : (
+                        <button onClick={() => setEditingRow(s.id)}
+                          title="Edit this entry"
+                          style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--muted)', fontSize: '11px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', marginRight: '4px' }}>
+                          ✎
+                        </button>
+                      )}
                       <button onClick={() => deleteStudio(s.id)} title="Remove from studio"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 4px' }}>✕</button>
                     </td>
