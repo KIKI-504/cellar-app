@@ -212,9 +212,9 @@ export default function LabelPage() {
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--cream)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
       {/* Topbar — Inventory link removed */}
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'sticky', top: 0, zIndex: 100 }}>
+      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => router.push('/studio')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px' }}>Studio</button>
@@ -224,7 +224,7 @@ export default function LabelPage() {
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
       </div>
 
-      <div style={{ padding: '24px 28px', display: 'grid', gridTemplateColumns: '1fr 380px', gap: '28px', alignItems: 'start' }}>
+      <div style={{ padding: '76px 28px 24px', display: 'grid', gridTemplateColumns: '1fr 380px', gap: '28px', alignItems: 'start' }}>
 
         {/* Left — list */}
         <div>
@@ -288,7 +288,7 @@ export default function LabelPage() {
 
         {/* Right — preview & print */}
         {selected ? (
-          <div style={{ position: 'sticky', top: '76px' }}>
+          <div style={{ position: 'sticky', top: '88px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, marginBottom: '16px', color: 'var(--wine)' }}>Label Preview</div>
 
             <div style={{ marginBottom: '16px' }}>
@@ -354,7 +354,7 @@ export default function LabelPage() {
             </div>
           </div>
         ) : (
-          <div style={{ position: 'sticky', top: '76px', border: '2px dashed var(--border)', padding: '40px', textAlign: 'center', color: 'var(--muted)' }}>
+          <div style={{ position: 'sticky', top: '88px', border: '2px dashed var(--border)', padding: '40px', textAlign: 'center', color: 'var(--muted)' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', marginBottom: '8px', color: 'var(--ink)' }}>Select a wine</div>
             <div style={{ fontSize: '12px' }}>Choose from Bond or Studio inventory to preview and print</div>
           </div>
