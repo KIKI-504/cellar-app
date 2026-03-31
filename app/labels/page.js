@@ -28,7 +28,6 @@ function isMagnum(w) {
   return w.bottle_format?.toLowerCase().includes('magnum') || w.bottle_volume?.includes('150')
 }
 
-// ─── Bond label content ────────────────────────────────────────────────────
 function BondLabelContent({ wine, wineName, producer, isMag }) {
   const source = wine.source === 'Berry Brothers' ? 'BBR' : 'FLINT'
   const ib = parseFloat(wine.purchase_price_per_bottle).toFixed(2)
@@ -46,7 +45,6 @@ function BondLabelContent({ wine, wineName, producer, isMag }) {
   )
 }
 
-// ─── Studio label content ──────────────────────────────────────────────────
 function StudioLabelContent({ entry, wineName, producer, isMag }) {
   const bottleSize = entry.bottle_size || (entry.wines?.bottle_volume?.includes('150') ? '150' : '75')
   const dp = entry.dp_price ? parseFloat(entry.dp_price).toFixed(2) : null
@@ -73,7 +71,7 @@ function StudioLabelContent({ entry, wineName, producer, isMag }) {
 
 export default function LabelPage() {
   const router = useRouter()
-  const [tab, setTab] = useState('bond') // bond | studio
+  const [tab, setTab] = useState('bond')
   const [wines, setWines] = useState([])
   const [studioEntries, setStudioEntries] = useState([])
   const [filtered, setFiltered] = useState([])
@@ -109,7 +107,6 @@ export default function LabelPage() {
     setStudioEntries(data || [])
   }
 
-  // Update filtered list when tab or search changes
   useEffect(() => {
     if (tab === 'bond') {
       if (!search) { setFiltered(wines); return }
@@ -190,7 +187,6 @@ export default function LabelPage() {
       .date { font-size: 20px; color: #444; margin-top: 4px; }
     `
 
-    // Use hidden iframe so main page stays open after printing
     const iframe = document.createElement('iframe')
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;'
     document.body.appendChild(iframe)
@@ -209,7 +205,6 @@ export default function LabelPage() {
     doc.close()
   }
 
-
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', color: 'var(--wine)' }}>Loading…</div>
@@ -218,11 +213,10 @@ export default function LabelPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)' }}>
-      {/* Topbar */}
+      {/* Topbar — Inventory link removed */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
-          <button onClick={() => router.push('/admin')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px' }}>Inventory</button>
           <button onClick={() => router.push('/studio')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px' }}>Studio</button>
           <button onClick={() => router.push('/labels')} style={{ background: 'rgba(107,30,46,0.6)', color: '#d4ad45', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Labels</button>
           <button onClick={() => router.push('/buyer')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px' }}>Buyer View</button>
@@ -236,7 +230,6 @@ export default function LabelPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '16px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Print Labels</div>
-            {/* Tab toggle */}
             <div style={{ display: 'flex', gap: '0', border: '1px solid var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
               <button onClick={() => setTab('bond')} style={{ padding: '5px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', cursor: 'pointer', background: tab === 'bond' ? 'var(--wine)' : 'var(--white)', color: tab === 'bond' ? 'var(--white)' : 'var(--muted)' }}>Bond</button>
               <button onClick={() => setTab('studio')} style={{ padding: '5px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', background: tab === 'studio' ? 'var(--wine)' : 'var(--white)', color: tab === 'studio' ? 'var(--white)' : 'var(--muted)' }}>Studio</button>
@@ -309,7 +302,6 @@ export default function LabelPage() {
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
             </div>
 
-            {/* Preview */}
             <div ref={printRef} style={{ border: '1px solid var(--border)', background: 'var(--white)', width: '288px', margin: '0 auto 20px' }}>
               <div style={{ borderBottom: '1px dashed #ccc' }}>
                 {selected.type === 'bond'
@@ -325,7 +317,6 @@ export default function LabelPage() {
               </div>
             </div>
 
-            {/* Price summary */}
             {selected.type === 'bond' ? (
               <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
                 <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
