@@ -20,3 +20,7 @@ export default function RootLayout({ children }) {
     </html>
   )
 }
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+}
