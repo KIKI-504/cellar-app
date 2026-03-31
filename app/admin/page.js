@@ -64,9 +64,24 @@ export default function AdminPage() {
     setPage(0)
   }, [wines, search, filterSource, filterColour, filterBuyer, sortCol, sortDir])
 
+  // Normalise bottle size: '150', '150cl', '1500ml', 'Magnum' → true
+  function isMagnum(w) {
+    const vol = String(w.bottle_volume || '').replace(/[^0-9]/g, '')
+    const fmt = (w.bottle_format || '').toLowerCase()
+    return vol === '150' || vol === '1500' || fmt.includes('magnum')
+  }
+
+  function dutyForWine(w) {
+    return isMagnum(w) ? 6 : 3
+  }
+
+  // Competitive = our DP is below what the buyer would pay at WS (WS ex-duty + duty + VAT)
   function isCompetitive(w) {
-    if (!w.retail_price || !w.purchase_price_per_bottle) return false
-    return parseFloat(w.retail_price) > w.purchase_price_per_bottle * 1.10
+    if (!w.ws_lowest_per_bottle || !w.purchase_price_per_bottle) return false
+    const duty = dutyForWine(w)
+    const dp = (parseFloat(w.purchase_price_per_bottle) + duty) * 1.2
+    const wsDP = (parseFloat(w.ws_lowest_per_bottle) + duty) * 1.2
+    return dp < wsDP
   }
 
   async function updateWine(id, field, value) {
@@ -393,34 +408,72 @@ export default function AdminPage() {
 
   function PriceBreakdown({ w }) {
     const ib = w.purchase_price_per_bottle ? parseFloat(w.purchase_price_per_bottle) : null
-    const dp = ib ? ((ib + 3) * 1.2) : null
+    const duty = dutyForWine(w)
+    const mag = isMagnum(w)
+    const dp = ib ? ((ib + duty) * 1.2) : null
     const retail = w.retail_price ? parseFloat(w.retail_price) : null
     const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
     const livex = w.livex_market_price ? parseFloat(w.livex_market_price) : null
     const sale = w.sale_price ? parseFloat(w.sale_price) : null
-    const row = (label, val, color) => val != null ? (
+
+    // WS DP equivalents — always show both bottle rates when WS is present
+    const wsDP75 = ws ? (ws + 3) * 1.2 : null
+    const wsDP150 = ws ? (ws + 6) * 1.2 : null
+
+    const row = (label, val, color, dim) => val != null ? (
       <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <span style={{ fontSize: '10px', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{label}</span>
-        <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', fontWeight: color ? 600 : 400, color: color || 'rgba(253,250,245,0.9)' }}>£{val.toFixed(2)}</span>
+        <span style={{ fontSize: '10px', color: dim ? 'rgba(253,250,245,0.3)' : 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', fontWeight: color ? 600 : 400, color: color || (dim ? 'rgba(253,250,245,0.4)' : 'rgba(253,250,245,0.9)') }}>£{val.toFixed(2)}</span>
       </div>
     ) : null
-    const divider = () => <div style={{ height: '6px' }} />
+    const divider = (label) => (
+      <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '6px 0', display: 'flex', alignItems: 'center' }}>
+        {label && <span style={{ fontSize: '8px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.25)', fontFamily: 'DM Mono, monospace', paddingRight: '6px', background: '#1a1208' }}>{label}</span>}
+      </div>
+    )
+
     return (
-      <div style={{ position: 'absolute', left: 0, top: '100%', zIndex: 300, background: '#1a1208', border: '1px solid rgba(212,173,69,0.4)', padding: '14px 16px', minWidth: '240px', boxShadow: '0 6px 24px rgba(0,0,0,0.5)', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d4ad45', marginBottom: '10px', fontFamily: 'DM Mono, monospace' }}>Price breakdown</div>
+      <div style={{ position: 'absolute', left: 0, top: '100%', zIndex: 300, background: '#1a1208', border: '1px solid rgba(212,173,69,0.4)', padding: '14px 16px', minWidth: '260px', boxShadow: '0 6px 24px rgba(0,0,0,0.5)', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d4ad45', marginBottom: '10px', fontFamily: 'DM Mono, monospace' }}>
+          Price breakdown {mag ? '· Magnum (£6 duty)' : '· 75cl (£3 duty)'}
+        </div>
+
+        {/* IB cost + markups */}
         {row('Cost IB /btl', ib)}
-        {row('Duty Paid (DP) /btl', dp)}
-        {divider()}
         {row('+10% on IB', ib ? ib * 1.10 : null)}
         {row('+15% on IB', ib ? ib * 1.15 : null)}
+
+        {divider('Duty Paid')}
+
+        {/* DP + markups — uses correct duty for bottle size */}
+        {row(`DP /btl  (IB + £${duty} × 1.20)`, dp, '#d4ad45')}
         {row('+10% on DP', dp ? dp * 1.10 : null)}
         {row('+15% on DP', dp ? dp * 1.15 : null)}
-        {divider()}
-        {ws && row('WS Lowest IB', ws)}
-        {livex && row('Livex IB', livex)}
-        {retail && row('Retail IB (est.)', retail, '#86efac')}
+
+        {ws && divider('Wine Searcher')}
+
+        {/* WS section: raw ex-duty figure, then both DP equivalents */}
+        {ws && row('WS lowest (ex duty/VAT)', ws)}
+        {ws && row('WS + duty + VAT  75cl', wsDP75, wsDP75 && dp && dp < wsDP75 ? '#86efac' : null)}
+        {ws && row('WS + duty + VAT  150cl', wsDP150, null, !mag)}
+
+        {(livex || retail || sale) && divider()}
+
+        {livex && row('Livex (ex duty)', livex)}
+        {retail && row('Retail est. IB', retail)}
         {sale && row('Your sale price', sale, '#d4ad45')}
+
         {!ib && <div style={{ fontSize: '10px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace' }}>No cost data available</div>}
+
+        {/* Competitive verdict */}
+        {ws && dp && (
+          <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'DM Mono, monospace' }}>
+            {dp < (ws + duty) * 1.2
+              ? <span style={{ color: '#86efac' }}>✓ Competitive — your DP is below WS market rate</span>
+              : <span style={{ color: '#f87171' }}>✗ Not competitive vs WS at this duty-paid price</span>
+            }
+          </div>
+        )}
       </div>
     )
   }
@@ -629,7 +682,7 @@ export default function AdminPage() {
               {slice.map(w => {
                 const pp = w.purchase_price_per_bottle
                 const retail = w.retail_price ? parseFloat(w.retail_price) : null
-                const comp = retail && pp ? retail > pp * 1.10 : null
+                const comp = w.ws_lowest_per_bottle && pp ? isCompetitive(w) : null
                 const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
                 const isExpanded = expandedNote === w.id
                 const isPriceOpen = expandedPrice === w.id
