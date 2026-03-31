@@ -16,12 +16,36 @@ const colourDot = (colour) => {
   return '#aaa'
 }
 
+// ─── Price alert helpers ─────────────────────────────────────────────────────
+
+const GC_KEYWORDS = ['grand cru']
+const PREMIER_KEYWORDS = ['premier cru', '1er cru', '1er', 'premiere cru', 'premiers crus', 'premier crus']
+
+function classifyWine(nameA, nameB) {
+  const text = ((nameA || '') + ' ' + (nameB || '')).toLowerCase()
+  if (GC_KEYWORDS.some(k => text.includes(k))) return 'grandcru'
+  if (PREMIER_KEYWORDS.some(k => text.includes(k))) return 'premier'
+  return 'village'
+}
+
+function getPriceAlert(s) {
+  const dpPrice = s.dp_price
+    ? parseFloat(s.dp_price)
+    : s.wines?.purchase_price_per_bottle
+      ? (parseFloat(s.wines.purchase_price_per_bottle) + 3) * 1.2
+      : null
+  if (!dpPrice) return null
+  const classification = classifyWine(s.wines?.description || '', s.unlinked_description || '')
+  if (classification === 'grandcru' && dpPrice < 100) return { icon: '⚠️', tooltip: 'Grand Cru under £100 DP' }
+  if (classification === 'village' && dpPrice > 100) return { icon: '⚠️', tooltip: 'Village wine over £100 DP' }
+  return null
+}
+
 // Editable cell that holds its own local state so re-renders don't clobber typed values
 function EditableCell({ value, onSave, type = 'text', step, min, placeholder, style, width }) {
   const [local, setLocal] = useState(value ?? '')
   const [focused, setFocused] = useState(false)
 
-  // Only sync from parent when not focused (i.e. after a save round-trip)
   useEffect(() => {
     if (!focused) setLocal(value ?? '')
   }, [value, focused])
@@ -55,6 +79,7 @@ export default function StudioPage() {
   const [sortField, setSortField] = useState('date_moved')
   const [sortDir, setSortDir] = useState('desc')
   const [expandedNote, setExpandedNote] = useState(null)
+  const [showDPTotal, setShowDPTotal] = useState(false)
 
   // Move to studio modal
   const [showMoveModal, setShowMoveModal] = useState(false)
@@ -141,8 +166,6 @@ export default function StudioPage() {
     if (!error) setStudioWines(prev => prev.filter(s => s.id !== id))
   }
 
-  // ─── Sort helper ────────────────────────────────────────────────────────────
-
   function cycleSort(field) {
     if (sortField === field) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -156,8 +179,6 @@ export default function StudioPage() {
     if (sortField !== field) return <span style={{ opacity: 0.3, fontSize: '9px' }}>⇅</span>
     return <span style={{ fontSize: '9px', color: '#d4ad45' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
-
-  // ─── Move to Studio (manual search) ────────────────────────────────────────
 
   async function searchWines(q) {
     setMoveSearch(q)
@@ -198,8 +219,6 @@ export default function StudioPage() {
     setMoveDate(new Date().toISOString().split('T')[0])
   }
 
-  // ─── Add Wine manually ──────────────────────────────────────────────────────
-
   function generateWineId(vintage, producer, description, colour, bottleSize) {
     const yy = vintage ? String(vintage).slice(-2) : 'XX'
     const mm = producer ? producer.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() : 'XX'
@@ -229,7 +248,6 @@ export default function StudioPage() {
     setShowAddModal(false)
   }
 
-  // Regenerate wine ID whenever key fields change
   function updateAddField(field, value) {
     const fields = { addDescription, addProducer, addVintage, addColour, addBottleSize, [field]: value }
     if (['addDescription', 'addProducer', 'addVintage', 'addColour', 'addBottleSize'].includes(field)) {
@@ -262,7 +280,6 @@ export default function StudioPage() {
       const ibPrice = addIBPrice ? parseFloat(addIBPrice) : null
       const dp = ibPrice ? ((ibPrice + 3) * 1.2).toFixed(2) : null
 
-      // 1. Insert into wines table
       const { data: newWine, error: wineError } = await supabase
         .from('wines')
         .insert({
@@ -284,7 +301,6 @@ export default function StudioPage() {
 
       if (wineError) throw wineError
 
-      // 2. Immediately create a studio entry
       const { error: studioError } = await supabase
         .from('studio')
         .insert({
@@ -310,8 +326,6 @@ export default function StudioPage() {
     }
     setAddSaving(false)
   }
-
-  // ─── Scan Flow ──────────────────────────────────────────────────────────────
 
   function openScanModal() {
     setShowScanModal(true)
@@ -515,14 +529,26 @@ export default function StudioPage() {
         av = parseFloat(a.dp_price) || 0; bv = parseFloat(b.dp_price) || 0
       } else if (sortField === 'sale_price') {
         av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0
+      } else if (sortField === 'colour') {
+        av = (a.wines?.colour || a.colour || '').toLowerCase()
+        bv = (b.wines?.colour || b.colour || '').toLowerCase()
       } else {
-        // date_moved default
         av = a.date_moved || ''; bv = b.date_moved || ''
       }
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
     })
+
+  // DP total across filtered rows
+  const dpTotal = filtered.reduce((sum, s) => {
+    const dp = s.dp_price
+      ? parseFloat(s.dp_price)
+      : s.wines?.purchase_price_per_bottle
+        ? (parseFloat(s.wines.purchase_price_per_bottle) + 3) * 1.2
+        : 0
+    return sum + dp * (s.quantity || 0)
+  }, 0)
 
   const availableCount = studioWines.filter(s => s.status === 'Available').length
   const localCount = studioWines.filter(s => s.include_in_local && s.status === 'Available').length
@@ -534,8 +560,6 @@ export default function StudioPage() {
       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', color: 'var(--wine)' }}>Loading studio…</div>
     </div>
   )
-
-  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)' }}>
@@ -601,11 +625,30 @@ export default function StudioPage() {
             <option value="quantity:desc">Qty: high → low</option>
             <option value="name:asc">Name A→Z</option>
             <option value="name:desc">Name Z→A</option>
+            <option value="colour:asc">Colour A→Z</option>
+            <option value="colour:desc">Colour Z→A</option>
             <option value="dp_price:asc">DP price ↑</option>
             <option value="dp_price:desc">DP price ↓</option>
             <option value="sale_price:asc">Sale price ↑</option>
             <option value="sale_price:desc">Sale price ↓</option>
           </select>
+
+          {/* DP Total — click to reveal */}
+          <button
+            onClick={() => setShowDPTotal(v => !v)}
+            style={{
+              background: showDPTotal ? 'var(--ink)' : 'none',
+              border: '1px solid var(--border)',
+              color: showDPTotal ? '#d4ad45' : 'var(--muted)',
+              padding: '9px 12px',
+              fontFamily: 'DM Mono, monospace',
+              fontSize: '11px',
+              letterSpacing: '0.08em',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}>
+            £ Total{showDPTotal ? `: £${dpTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+          </button>
         </div>
 
         {/* Active filter summary */}
@@ -642,6 +685,7 @@ export default function StudioPage() {
                   { label: 'Local Sales', field: null },
                   { label: 'Notes', field: null },
                   { label: '', field: null },
+                  { label: '!', field: null },
                 ].map(({ label, field }) => (
                   <th key={label}
                     onClick={field ? () => cycleSort(field) : undefined}
@@ -653,13 +697,14 @@ export default function StudioPage() {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={12} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No studio wines yet — scan or move something from bond to get started.</td></tr>
+                <tr><td colSpan={13} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No studio wines yet — scan or move something from bond to get started.</td></tr>
               )}
               {filtered.map(s => {
                 const w = s.wines
                 const colour = w?.colour || s.colour || ''
                 const isDetailOpen = expandedNote === s.id
                 const ibPrice = s.dp_price ? ((parseFloat(s.dp_price) / 1.2) - 3).toFixed(2) : null
+                const alert = getPriceAlert(s)
                 return (
                   <React.Fragment key={s.id}>
                   <tr style={{ borderBottom: isDetailOpen ? 'none' : '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
@@ -687,15 +732,11 @@ export default function StudioPage() {
                       )}
                     </td>
 
-                    {/* Colour — editable for all rows */}
+                    {/* Colour */}
                     <td style={{ padding: '9px 12px' }}>
                       <select
                         value={colour}
-                        onChange={e => {
-                          // For linked wines, update the studio record's colour override
-                          // For unlinked, update studio colour directly
-                          updateStudio(s.id, 'colour', e.target.value)
-                        }}
+                        onChange={e => { updateStudio(s.id, 'colour', e.target.value) }}
                         style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', minWidth: '82px' }}>
                         <option value="">—</option>
                         {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
@@ -713,7 +754,7 @@ export default function StudioPage() {
                       </select>
                     </td>
 
-                    {/* Qty — auto-selects on focus for easy mobile editing */}
+                    {/* Qty */}
                     <td style={{ padding: '9px 12px' }}>
                       <EditableCell type="number" min="0" value={s.quantity}
                         onSave={v => updateStudio(s.id, 'quantity', v === null ? 0 : parseInt(v))}
@@ -774,12 +815,17 @@ export default function StudioPage() {
                       <button onClick={() => deleteStudio(s.id)} title="Remove from studio"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 4px' }}>✕</button>
                     </td>
+
+                    {/* Alert column */}
+                    <td style={{ padding: '9px 12px', textAlign: 'center', width: '32px' }}>
+                      {alert && <span title={alert.tooltip} style={{ fontSize: '14px', cursor: 'help' }}>{alert.icon}</span>}
+                    </td>
                   </tr>
 
                   {/* Price detail row */}
                   {isDetailOpen && (
                     <tr key={s.id + '-detail'} style={{ borderBottom: '1px solid #ede6d6', background: 'rgba(107,30,46,0.03)' }}>
-                      <td colSpan={12} style={{ padding: '8px 20px 12px 36px' }}>
+                      <td colSpan={13} style={{ padding: '8px 20px 12px 36px' }}>
                         <div style={{ display: 'flex', gap: '28px', fontSize: '11px', fontFamily: 'DM Mono, monospace', flexWrap: 'wrap' }}>
                           {ibPrice && (
                             <div>
@@ -919,7 +965,6 @@ export default function StudioPage() {
               )}
             </div>
 
-            {/* Read Label button */}
             {scanPreview && !scanDone && (
               <button onClick={analyseLabel} disabled={scanAnalysing}
                 style={{ width: '100%', background: 'var(--ink)', color: '#d4ad45', border: 'none', padding: '12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: scanAnalysing ? 'wait' : 'pointer', marginBottom: '16px' }}>
@@ -1080,7 +1125,6 @@ export default function StudioPage() {
               Creates a new wine record + studio entry. Use for holiday finds, shop purchases, Corney &amp; Barrow, etc.
             </div>
 
-            {/* Wine name + producer */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Wine Name *</label>
@@ -1102,7 +1146,6 @@ export default function StudioPage() {
               </div>
             </div>
 
-            {/* Colour + region + country */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Colour</label>
@@ -1126,7 +1169,6 @@ export default function StudioPage() {
               </div>
             </div>
 
-            {/* Bottle + qty */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Bottle Size</label>
@@ -1146,7 +1188,6 @@ export default function StudioPage() {
               </div>
             </div>
 
-            {/* Pricing */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Purchase Price (£/btl)</label>
@@ -1171,7 +1212,6 @@ export default function StudioPage() {
               </div>
             </div>
 
-            {/* Notes */}
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Notes (optional)</label>
               <input value={addNotes} onChange={e => updateAddField('addNotes', e.target.value)}
@@ -1179,7 +1219,6 @@ export default function StudioPage() {
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
-            {/* Wine ID — auto-generated, editable */}
             <div style={{ marginBottom: '20px', background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.3)', padding: '12px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8a6f1e', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>
                 Wine ID (Xero ref) — auto-generated, edit if needed
