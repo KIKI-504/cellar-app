@@ -20,8 +20,8 @@ export default function AdminPage() {
   const [expandedPrice, setExpandedPrice] = useState(null)
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState('')
-  const [importConflicts, setImportConflicts] = useState([]) // wines with price conflicts
-  const [overrideModal, setOverrideModal] = useState(null)  // { wine, field, oldVal, newVal }
+  const [importConflicts, setImportConflicts] = useState([])
+  const [overrideModal, setOverrideModal] = useState(null)
   const [overrideNote, setOverrideNote] = useState('')
   const PAGE_SIZE = 50
 
@@ -128,8 +128,6 @@ export default function AdminPage() {
     else alert(`✓ ${qty} bottle${qty > 1 ? 's' : ''} moved to studio at DP £${dp}`)
   }
 
-  // ─── BBR CSV Import ────────────────────────────────────────────────────────
-
   function parseBBRCsv(text) {
     const lines = text.split('\n').filter(l => l.trim())
     if (lines.length < 2) return []
@@ -209,14 +207,11 @@ export default function AdminPage() {
           .select('id, include_in_buyer_view, sale_price, women_note, producer_note, purchase_price_per_bottle, manual_override_note')
           .eq('source_id', wine.source_id).eq('source', 'Berry Brothers').maybeSingle()
         if (existing) {
-          // If there's a manual override note AND the incoming price differs, flag as conflict
-          // and do NOT overwrite the purchase price
           const hasOverride = !!existing.manual_override_note
           const incomingPrice = wine.purchase_price_per_bottle
           const storedPrice = parseFloat(existing.purchase_price_per_bottle)
           const priceConflict = hasOverride && incomingPrice &&
             Math.abs(incomingPrice - storedPrice) > 0.01
-
           if (priceConflict) {
             conflicts.push({
               description: wine.description,
@@ -226,7 +221,6 @@ export default function AdminPage() {
               note: existing.manual_override_note
             })
           }
-
           const updateData = {
             quantity: wine.quantity,
             bbx_highest_bid: wine.bbx_highest_bid,
@@ -236,11 +230,9 @@ export default function AdminPage() {
             retail_price_date: wine.retail_price_date,
             livex_market_price: wine.livex_market_price,
           }
-          // Only update purchase price if no manual override exists
           if (!hasOverride) {
             updateData.purchase_price_per_bottle = wine.purchase_price_per_bottle
           }
-
           const { error } = await supabase.from('wines').update(updateData).eq('id', existing.id)
           if (error) throw error
           updated++
@@ -260,8 +252,6 @@ export default function AdminPage() {
     e.target.value = ''
     await fetchWines()
   }
-
-  // ─── Export ────────────────────────────────────────────────────────────────
 
   function exportCSV() {
     const headers = ['Source','ID','Description','Vintage','Colour','Country','Region','Format','Volume','Quantity','Cost IB/Btl','DP/Btl','+10% IB','+15% IB','+10% DP','+15% DP','WS Lowest/Btl','Retail Price IB','Retail Price Source','Retail Price Date','Livex/Btl','Sale Price','In Buyer View','Women Note','Producer Note']
@@ -290,8 +280,6 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
-  // ─── Price breakdown panel ─────────────────────────────────────────────────
-
   function PriceBreakdown({ w }) {
     const ib = w.purchase_price_per_bottle ? parseFloat(w.purchase_price_per_bottle) : null
     const dp = ib ? ((ib + 3) * 1.2) : null
@@ -299,16 +287,13 @@ export default function AdminPage() {
     const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
     const livex = w.livex_market_price ? parseFloat(w.livex_market_price) : null
     const sale = w.sale_price ? parseFloat(w.sale_price) : null
-
     const row = (label, val, color) => val != null ? (
       <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <span style={{ fontSize: '10px', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{label}</span>
         <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', fontWeight: color ? 600 : 400, color: color || 'rgba(253,250,245,0.9)' }}>£{val.toFixed(2)}</span>
       </div>
     ) : null
-
     const divider = () => <div style={{ height: '6px' }} />
-
     return (
       <div style={{ position: 'absolute', left: 0, top: '100%', zIndex: 300, background: '#1a1208', border: '1px solid rgba(212,173,69,0.4)', padding: '14px 16px', minWidth: '240px', boxShadow: '0 6px 24px rgba(0,0,0,0.5)', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d4ad45', marginBottom: '10px', fontFamily: 'DM Mono, monospace' }}>Price breakdown</div>
@@ -348,8 +333,10 @@ export default function AdminPage() {
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--cream)' }} onClick={() => { setExpandedPrice(null) }}>
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'sticky', top: 0, zIndex: 100 }}>
+    <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }} onClick={() => { setExpandedPrice(null) }}>
+
+      {/* Nav — fixed so it stays put when table scrolls horizontally */}
+      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => router.push('/admin')} style={{ background: 'rgba(107,30,46,0.6)', color: '#d4ad45', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Inventory</button>
@@ -360,7 +347,8 @@ export default function AdminPage() {
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
       </div>
 
-      <div style={{ padding: '24px 28px' }}>
+      {/* paddingTop: 76px = 52px nav + 24px original */}
+      <div style={{ padding: '76px 28px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '20px' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Wine Inventory</div>
           <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{filtered.length} wines</div>
@@ -453,6 +441,7 @@ export default function AdminPage() {
             <button onClick={() => setImportConflicts([])} style={{ marginTop: '10px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', cursor: 'pointer' }}>Dismiss</button>
           </div>
         )}
+
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
@@ -505,8 +494,6 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px' }}>{w.region}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{w.bottle_volume || (w.bottle_format === 'Magnum' ? '150cl' : w.bottle_format ? '75cl' : '—')}</td>
                     <td style={{ padding: '9px 12px' }}>{w.quantity || '—'}</td>
-
-                    {/* Cost IB — click to open price breakdown, double-click to edit */}
                     <td style={{ padding: '9px 12px', position: 'relative' }}
                       onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none' }}>
@@ -528,8 +515,6 @@ export default function AdminPage() {
                         </>
                       )}
                     </td>
-
-                    {/* Retail IB */}
                     <td style={{ padding: '9px 12px', minWidth: '200px' }}>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px' }}>
                         <input type="number" step="0.01" defaultValue={w.retail_price || ''} placeholder="0.00"
@@ -555,7 +540,6 @@ export default function AdminPage() {
                         {w.retail_price_date && <span style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), whiteSpace: 'nowrap' }}>{w.retail_price_date}</span>}
                       </div>
                     </td>
-
                     <td style={{ padding: '9px 12px', color: comp === null ? 'var(--muted)' : comp ? '#2d6a4f' : '#c0392b', fontWeight: comp ? 600 : 400 }}>
                       {comp === null ? '—' : comp ? '✓' : '✗'}
                     </td>
@@ -660,7 +644,6 @@ export default function AdminPage() {
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '440px', padding: '28px', border: '1px solid var(--border)' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, marginBottom: '6px' }}>Override Purchase Price</div>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--muted)', marginBottom: '20px' }}>{overrideModal.wine.description}, {overrideModal.wine.vintage}</div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>Current price</label>
@@ -674,7 +657,6 @@ export default function AdminPage() {
                   style={{ width: '100%', border: '2px solid var(--wine)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'var(--wine)' }} />
               </div>
             </div>
-
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
                 Reason for override <span style={{ color: 'var(--wine)' }}>*</span>
@@ -686,7 +668,6 @@ export default function AdminPage() {
                 This note will appear as a warning if the next import has a different price.
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => { setOverrideModal(null); setOverrideNote('') }}
                 style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
