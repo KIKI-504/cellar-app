@@ -80,8 +80,7 @@ export default function StudioPage() {
   const [sortDir, setSortDir] = useState('desc')
   const [expandedNote, setExpandedNote] = useState(null)
   const [showDPTotal, setShowDPTotal] = useState(false)
-
-  // Move to studio modal
+  const [editingRow, setEditingRow] = useState(null)
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [moveSearch, setMoveSearch] = useState('')
   const [moveResults, setMoveResults] = useState([])
