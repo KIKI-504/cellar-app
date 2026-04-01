@@ -159,6 +159,7 @@ function AddBottleModal({ onAdd, onClose }) {
   const [scanResult, setScanResult] = useState(null)
   const [saving, setSaving] = useState(false)
   const [justAdded, setJustAdded] = useState(null)
+  const scanJustMatched = useRef(false)
   const fileRef = useRef(null)
 
   async function searchStudio(q) {
@@ -227,7 +228,10 @@ function AddBottleModal({ onAdd, onClose }) {
           .eq('status', 'Available')
           .or(`unlinked_description.ilike.%${searchTerm}%,wines.description.ilike.%${searchTerm}%`)
           .limit(5)
-        if (data && data.length > 0) selectEntry(data[0])
+        if (data && data.length > 0) {
+          scanJustMatched.current = true
+          selectEntry(data[0])
+        }
         else setSearch([ex.wine_name, ex.producer].filter(Boolean).join(', '))
       }
     } catch (err) {
@@ -321,12 +325,28 @@ function AddBottleModal({ onAdd, onClose }) {
             )}
           </div>
 
-          {/* Search */}
+          {/* Scan match — show as prominent tappable card if scan matched but not yet confirmed */}
+          {scanResult && !selected && (
+            <div style={{ marginBottom:'12px', background:'rgba(45,106,79,0.08)', border:'1px solid rgba(45,106,79,0.4)', padding:'12px 14px' }}>
+              <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', letterSpacing:'0.1em', marginBottom:'6px' }}>LABEL READ — TAP TO USE</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>
+                {[scanResult.wine_name, scanResult.producer].filter(Boolean).join(', ')}
+                {scanResult.vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', color:'var(--muted)', marginLeft:'8px' }}>{scanResult.vintage}</span>}
+              </div>
+              <div style={{ display:'flex', gap:'8px', marginTop:'10px', flexWrap:'wrap' }}>
+                <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>Search results will appear below — or search manually</div>
+              </div>
+            </div>
+          )}
           <div style={{ marginBottom:'12px' }}>
             <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
               {justAdded ? 'Or search for next bottle' : 'Search studio inventory'}
             </label>
-            <input value={search} onChange={e => { searchStudio(e.target.value); if (selected) setSelected(null) }}
+            <input value={search} onChange={e => {
+                if (scanJustMatched.current) { scanJustMatched.current = false; return }
+                searchStudio(e.target.value)
+                if (selected) setSelected(null)
+              }}
               placeholder="Start typing a wine name…"
               style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
             {results.length > 0 && !selected && (
