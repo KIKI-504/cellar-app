@@ -706,8 +706,6 @@ export default function StudioPage() {
                 const ibPrice = s.dp_price ? ((parseFloat(s.dp_price) / 1.2) - 3).toFixed(2) : null
                 const alert = getPriceAlert(s)
 
-                // Inventory-style wine display
-                // Split wines.description on first comma: before = wine name, after = producer
                 const fullDesc = w?.description || s.unlinked_description || ''
                 const commaIdx = fullDesc.indexOf(',')
                 const winePart = commaIdx > -1 ? fullDesc.slice(0, commaIdx).trim() : fullDesc
@@ -719,7 +717,7 @@ export default function StudioPage() {
                   <React.Fragment key={s.id}>
                   <tr style={{ borderBottom: isDetailOpen ? 'none' : '1px solid #ede6d6', background: s.include_in_local ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
 
-                    {/* Wine — inventory-style: wine name / producer / location */}
+                    {/* Wine */}
                     <td style={{ padding: '9px 12px', maxWidth: '260px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                         <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: colourDot(colour), flexShrink: 0, marginTop: '5px' }}></span>
@@ -774,15 +772,25 @@ export default function StudioPage() {
                       )}
                     </td>
 
-                    {/* Qty */}
+                    {/* Qty — ALWAYS editable */}
                     <td style={{ padding: '9px 12px' }}>
-                      {isEditing ? (
-                        <EditableCell type="number" min="0" value={s.quantity}
-                          onSave={v => updateStudio(s.id, 'quantity', v === null ? 0 : parseInt(v))}
-                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} width="52px" />
-                      ) : (
-                        <span style={{ fontWeight: 600, fontFamily: 'DM Mono, monospace', fontSize: '13px' }}>{s.quantity}</span>
-                      )}
+                      <EditableCell
+                        type="number"
+                        min="0"
+                        value={s.quantity}
+                        onSave={v => updateStudio(s.id, 'quantity', v === null ? 0 : parseInt(v))}
+                        style={{
+                          border: '1px solid var(--border)',
+                          background: 'var(--cream)',
+                          padding: '3px 6px',
+                          fontFamily: 'DM Mono, monospace',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          outline: 'none',
+                          textAlign: 'center',
+                        }}
+                        width="52px"
+                      />
                     </td>
 
                     {/* Date moved */}
@@ -803,19 +811,26 @@ export default function StudioPage() {
                       )}
                     </td>
 
-                    {/* Sale price */}
+                    {/* Sale price — ALWAYS editable */}
                     <td style={{ padding: '9px 12px' }}>
-                      {isEditing ? (
-                        <EditableCell type="number" step="0.01"
-                          value={s.sale_price ? parseFloat(s.sale_price) : null}
-                          onSave={v => updateStudio(s.id, 'sale_price', v)}
-                          placeholder="0.00"
-                          style={{ border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: 'var(--wine)' }} width="72px" />
-                      ) : (
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, color: s.sale_price ? 'var(--wine)' : 'var(--muted)' }}>
-                          {s.sale_price ? `£${parseFloat(s.sale_price).toFixed(2)}` : '—'}
-                        </span>
-                      )}
+                      <EditableCell
+                        type="number"
+                        step="0.01"
+                        value={s.sale_price ? parseFloat(s.sale_price) : null}
+                        onSave={v => updateStudio(s.id, 'sale_price', v)}
+                        placeholder="—"
+                        style={{
+                          border: '2px solid rgba(107,30,46,0.25)',
+                          background: 'rgba(107,30,46,0.03)',
+                          padding: '3px 6px',
+                          fontFamily: 'DM Mono, monospace',
+                          fontSize: '12px',
+                          outline: 'none',
+                          fontWeight: 600,
+                          color: s.sale_price ? 'var(--wine)' : 'var(--muted)',
+                        }}
+                        width="72px"
+                      />
                     </td>
 
                     {/* Status */}
@@ -849,7 +864,7 @@ export default function StudioPage() {
                       )}
                     </td>
 
-                    {/* Actions — price detail + edit/done + delete */}
+                    {/* Actions */}
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => setExpandedNote(isDetailOpen ? null : s.id)}
                         title="View price details"
