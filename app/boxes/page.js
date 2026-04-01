@@ -15,7 +15,7 @@ const colourDot = (colour) => {
 }
 
 // ─── Parent ID generation ─────────────────────────────────────────────────────
-function generateParentId(description, vintage, colour, bottleSize) {
+function generateSourceId(description, vintage, colour, bottleSize) {
   const yy = vintage ? String(vintage).slice(-2) : 'XX'
   const words = (description || '').replace(/[^a-zA-Z\s]/g, '').trim().split(/\s+/)
   const mm = words[0] ? words[0].slice(0, 2).toUpperCase() : 'XX'
@@ -25,8 +25,8 @@ function generateParentId(description, vintage, colour, bottleSize) {
   return `${yy} ${mm} ${ww} ${c} ${s}`
 }
 
-async function ensureParentId(studioId, entry) {
-  if (entry.parent_id) return entry.parent_id
+async function ensureSourceId(studioId, entry) {
+  if (entry.source_id) return entry.source_id
   const w = entry.wines
   let pid
   if (w?.source_id) {
@@ -36,9 +36,9 @@ async function ensureParentId(studioId, entry) {
     const vintage = w?.vintage     || entry.unlinked_vintage     || ''
     const colour  = w?.colour      || entry.colour               || ''
     const size    = entry.bottle_size || '75'
-    pid = generateParentId(desc, vintage, colour, size)
+    pid = generateSourceId(desc, vintage, colour, size)
   }
-  await supabase.from('studio').update({ parent_id: pid }).eq('id', studioId)
+  await supabase.from('studio').update({ source_id: pid }).eq('id', studioId)
   return pid
 }
 
@@ -167,7 +167,7 @@ function AddBottleModal({ onAdd, onClose }) {
     if (q.length < 2) { setResults([]); return }
     const { data } = await supabase
       .from('studio')
-      .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, parent_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
+      .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, source_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
       .eq('status', 'Available')
       .or(`unlinked_description.ilike.%${q}%,wines.description.ilike.%${q}%`)
       .order('unlinked_description')
@@ -228,15 +228,24 @@ function AddBottleModal({ onAdd, onClose }) {
       if (searchTerm) {
         const { data } = await supabase
           .from('studio')
-          .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, parent_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
+          .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, source_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
           .eq('status', 'Available')
           .or(`unlinked_description.ilike.%${searchTerm}%,wines.description.ilike.%${searchTerm}%`)
           .limit(5)
         if (data && data.length > 0) {
           setScanMatch(data[0])  // store match separately — user must tap to confirm
         } else {
-          // No match — pre-fill search so user can find manually
-          setSearch([ex.wine_name, ex.producer].filter(Boolean).join(', '))
+          // Not in studio — pre-fill search AND trigger results so user can search manually
+          const q = [ex.wine_name, ex.producer].filter(Boolean).join(', ')
+          setSearch(q)
+          // Also search so dropdown appears if partial match exists
+          const { data: broader } = await supabase
+            .from('studio')
+            .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, source_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
+            .eq('status', 'Available')
+            .or(`unlinked_description.ilike.%${ex.wine_name?.split(' ')[0] || searchTerm}%,wines.description.ilike.%${ex.wine_name?.split(' ')[0] || searchTerm}%`)
+            .limit(8)
+          setResults(broader || [])
         }
       }
     } catch (err) {
@@ -248,9 +257,12 @@ function AddBottleModal({ onAdd, onClose }) {
   async function confirm() {
     if (!selected) return
     setSaving(true)
-    const parentId = await ensureParentId(selected.id, selected)
+    // Only call ensureSourceId if we have an actual studio entry
+    const parentId = selected.id
+      ? await ensureSourceId(selected.id, selected)
+      : generateSourceId(selected._desc, selected._vintage, selected._colour, selected.bottle_size || '75')
     await onAdd({
-      studio_id:        selected.id,
+      studio_id:        selected.id || null,
       wine_description: selected._desc,
       wine_vintage:     selected._vintage,
       wine_colour:      selected._colour,
@@ -260,7 +272,7 @@ function AddBottleModal({ onAdd, onClose }) {
       quantity:         qty,
       tasting_note:     tastingNote  || null,
       producer_note:    producerNote || null,
-      parent_id:        parentId,
+      source_id:        parentId,
     })
     setJustAdded(selected._desc)
     // Reset for next bottle — modal stays open
@@ -365,6 +377,34 @@ function AddBottleModal({ onAdd, onClose }) {
                 {scanMatch.dp_price && ` · DP £${parseFloat(scanMatch.dp_price).toFixed(2)}`}
                 {` · ${scanMatch.quantity} in studio`}
               </div>
+            </div>
+          )}
+
+          {/* Not in studio notice — scan ran, no match, no results */}
+          {scanLabel && !scanMatch && !selected && results.length === 0 && (
+            <div style={{ marginBottom:'12px', background:'rgba(192,57,43,0.05)', border:'1px solid rgba(192,57,43,0.2)', padding:'12px 14px' }}>
+              <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b', letterSpacing:'0.1em', marginBottom:'4px' }}>NOT FOUND IN STUDIO</div>
+              <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginBottom:'10px' }}>
+                {[scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')} {scanLabel.vintage || ''} isn't in your studio inventory. Search below, or add it directly to the box.
+              </div>
+              <button onClick={() => {
+                const desc = [scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')
+                applyEntry({
+                  id: null,
+                  quantity: 0,
+                  dp_price: null,
+                  sale_price: null,
+                  bottle_size: '75',
+                  colour: scanLabel.colour || '',
+                  unlinked_description: desc,
+                  unlinked_vintage: scanLabel.vintage || '',
+                  source_id: null,
+                  wines: null,
+                })
+              }}
+                style={{ background:'var(--ink)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                Add to box anyway →
+              </button>
             </div>
           )}
 
