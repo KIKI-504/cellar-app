@@ -149,6 +149,7 @@ function AddBottleModal({ onAdd, onClose }) {
   const [search, setSearch] = useState('')
   const [results, setResults] = useState([])
   const [selected, setSelected] = useState(null)
+  const [scanMatch, setScanMatch] = useState(null)   // studio entry matched by scan
   const [qty, setQty] = useState(1)
   const [tastingNote, setTastingNote] = useState('')
   const [producerNote, setProducerNote] = useState('')
@@ -156,10 +157,9 @@ function AddBottleModal({ onAdd, onClose }) {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [scanning, setScanning] = useState(false)
-  const [scanResult, setScanResult] = useState(null)
+  const [scanLabel, setScanLabel] = useState(null)   // raw label data from vision
   const [saving, setSaving] = useState(false)
   const [justAdded, setJustAdded] = useState(null)
-  const scanJustMatched = useRef(false)
   const fileRef = useRef(null)
 
   async function searchStudio(q) {
@@ -175,21 +175,23 @@ function AddBottleModal({ onAdd, onClose }) {
     setResults(data || [])
   }
 
-  function selectEntry(entry) {
+  function applyEntry(entry) {
     const w = entry.wines
-    setSelected({
+    const built = {
       ...entry,
       _desc:    w?.description || entry.unlinked_description || '',
       _vintage: w?.vintage     || entry.unlinked_vintage     || '',
       _colour:  w?.colour      || entry.colour               || '',
       _region:  w?.region      || '',
       _dp:      entry.dp_price ? parseFloat(entry.dp_price)  : null,
-    })
+    }
+    setSelected(built)
     setSalePrice(entry.sale_price ? String(parseFloat(entry.sale_price)) : '')
     setTastingNote(w?.women_note    || '')
     setProducerNote(w?.producer_note || '')
-    setSearch(w?.description || entry.unlinked_description || '')
+    setSearch('')
     setResults([])
+    setScanMatch(null)
   }
 
   function handleImageSelect(e) {
@@ -204,6 +206,8 @@ function AddBottleModal({ onAdd, onClose }) {
   async function analyseImage() {
     if (!imageFile) return
     setScanning(true)
+    setScanLabel(null)
+    setScanMatch(null)
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader()
@@ -219,7 +223,7 @@ function AddBottleModal({ onAdd, onClose }) {
       const result = await resp.json()
       if (!result.success) throw new Error(result.error)
       const ex = result.data
-      setScanResult(ex)
+      setScanLabel(ex)
       const searchTerm = ex.producer || ex.wine_name
       if (searchTerm) {
         const { data } = await supabase
@@ -229,10 +233,11 @@ function AddBottleModal({ onAdd, onClose }) {
           .or(`unlinked_description.ilike.%${searchTerm}%,wines.description.ilike.%${searchTerm}%`)
           .limit(5)
         if (data && data.length > 0) {
-          scanJustMatched.current = true
-          selectEntry(data[0])
+          setScanMatch(data[0])  // store match separately — user must tap to confirm
+        } else {
+          // No match — pre-fill search so user can find manually
+          setSearch([ex.wine_name, ex.producer].filter(Boolean).join(', '))
         }
-        else setSearch([ex.wine_name, ex.producer].filter(Boolean).join(', '))
       }
     } catch (err) {
       alert('Label read failed: ' + err.message)
@@ -268,13 +273,18 @@ function AddBottleModal({ onAdd, onClose }) {
     setProducerNote('')
     setImageFile(null)
     setImagePreview(null)
-    setScanResult(null)
+    setScanLabel(null)
+    setScanMatch(null)
     setSaving(false)
   }
 
+  const scanMatchDesc = scanMatch
+    ? (scanMatch.wines?.description || scanMatch.unlinked_description || '')
+    : ''
+
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
-      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'540px', border:'1px solid var(--border)', maxHeight:'92vh', overflowY:'auto' }}>
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:250, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'540px', border:'1px solid var(--border)', marginTop:'8px' }}>
 
         <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', padding:'18px 18px 0' }}>
           <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300 }}>Add a Bottle</div>
@@ -283,7 +293,7 @@ function AddBottleModal({ onAdd, onClose }) {
 
         <div style={{ padding:'14px 18px 22px' }}>
 
-          {/* ✓ Just added banner — stays visible while adding more */}
+          {/* ✓ Just added banner */}
           {justAdded && (
             <div style={{ background:'rgba(45,106,79,0.1)', border:'1px solid rgba(45,106,79,0.3)', padding:'10px 14px', marginBottom:'14px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', flexWrap:'wrap' }}>
               <span style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#2d6a4f' }}>
@@ -291,106 +301,124 @@ function AddBottleModal({ onAdd, onClose }) {
               </span>
               <button onClick={onClose}
                 style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'5px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>
-                Done — close ✓
+                Done ✓
               </button>
             </div>
           )}
 
-          {/* Photo */}
-          <div style={{ marginBottom:'12px' }}>
-            <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
-              {justAdded ? 'Add another by photo' : 'Identify by photo'}
-            </label>
-            {!imagePreview ? (
-              <div onClick={() => fileRef.current?.click()}
-                style={{ border:'1px dashed var(--border)', padding:'11px', textAlign:'center', cursor:'pointer', background:'var(--white)', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'}
-                onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
-                <span style={{ fontSize:'16px' }}>📷</span>
-                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', letterSpacing:'0.08em' }}>PHOTO FROM CAMERA ROLL</span>
-                <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} />
-              </div>
-            ) : (
-              <div style={{ display:'flex', gap:'12px', alignItems:'center' }}>
-                <img src={imagePreview} alt="Label" style={{ width:'52px', height:'66px', objectFit:'cover', border:'1px solid var(--border)' }} />
-                <div style={{ flex:1 }}>
-                  {scanResult
-                    ? <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#2d6a4f' }}>✓ {[scanResult.wine_name, scanResult.producer, scanResult.vintage].filter(Boolean).join(' · ')}</div>
-                    : <button onClick={analyseImage} disabled={scanning} style={{ background:'var(--ink)', color:'#d4ad45', border:'none', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:scanning?'wait':'pointer' }}>{scanning ? '🔍 Reading…' : '🔍 Read Label'}</button>
-                  }
-                  <button onClick={() => { setImageFile(null); setImagePreview(null); setScanResult(null) }}
-                    style={{ display:'block', marginTop:'4px', background:'none', border:'none', fontSize:'10px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace' }}>✕ Remove</button>
+          {/* Photo section */}
+          {!selected && (
+            <div style={{ marginBottom:'12px' }}>
+              <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
+                Identify by photo
+              </label>
+              {!imagePreview ? (
+                <div onClick={() => fileRef.current?.click()}
+                  style={{ border:'1px dashed var(--border)', padding:'11px', textAlign:'center', cursor:'pointer', background:'var(--white)', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
+                  <span style={{ fontSize:'16px' }}>📷</span>
+                  <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', letterSpacing:'0.08em' }}>PHOTO FROM CAMERA ROLL</span>
+                  <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} />
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Scan match — show as prominent tappable card if scan matched but not yet confirmed */}
-          {scanResult && !selected && (
-            <div style={{ marginBottom:'12px', background:'rgba(45,106,79,0.08)', border:'1px solid rgba(45,106,79,0.4)', padding:'12px 14px' }}>
-              <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', letterSpacing:'0.1em', marginBottom:'6px' }}>LABEL READ — TAP TO USE</div>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>
-                {[scanResult.wine_name, scanResult.producer].filter(Boolean).join(', ')}
-                {scanResult.vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', color:'var(--muted)', marginLeft:'8px' }}>{scanResult.vintage}</span>}
-              </div>
-              <div style={{ display:'flex', gap:'8px', marginTop:'10px', flexWrap:'wrap' }}>
-                <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>Search results will appear below — or search manually</div>
-              </div>
-            </div>
-          )}
-          <div style={{ marginBottom:'12px' }}>
-            <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
-              {justAdded ? 'Or search for next bottle' : 'Search studio inventory'}
-            </label>
-            <input value={search} onChange={e => {
-                if (scanJustMatched.current) { scanJustMatched.current = false; return }
-                searchStudio(e.target.value)
-                if (selected) setSelected(null)
-              }}
-              placeholder="Start typing a wine name…"
-              style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
-            {results.length > 0 && !selected && (
-              <div style={{ border:'1px solid var(--border)', borderTop:'none', background:'var(--white)', maxHeight:'180px', overflowY:'auto' }}>
-                {results.map(entry => {
-                  const w = entry.wines
-                  const desc = w?.description || entry.unlinked_description || ''
-                  const vintage = w?.vintage || entry.unlinked_vintage || ''
-                  const colour = w?.colour || entry.colour || ''
-                  return (
-                    <div key={entry.id} onClick={() => selectEntry(entry)}
-                      style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid #ede6d6', display:'flex', alignItems:'center', gap:'8px' }}
-                      onMouseEnter={e => e.currentTarget.style.background='#f5f0e8'}
-                      onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                      <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:colourDot(colour), flexShrink:0, display:'inline-block' }}></span>
-                      <div>
-                        <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px' }}>{desc}</div>
-                        <div style={{ fontSize:'10px', color:'var(--muted)', fontFamily:'DM Mono,monospace' }}>{vintage} · DP {entry.dp_price ? `£${parseFloat(entry.dp_price).toFixed(2)}` : '—'} · {entry.quantity} avail</div>
+              ) : (
+                <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
+                  <img src={imagePreview} alt="Label" style={{ width:'52px', height:'66px', objectFit:'cover', border:'1px solid var(--border)', flexShrink:0 }} />
+                  <div style={{ flex:1 }}>
+                    {!scanLabel && !scanning && (
+                      <button onClick={analyseImage}
+                        style={{ background:'var(--ink)', color:'#d4ad45', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer', width:'100%' }}>
+                        🔍 Read Label
+                      </button>
+                    )}
+                    {scanning && (
+                      <div style={{ padding:'8px 0', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)' }}>🔍 Reading label…</div>
+                    )}
+                    {scanLabel && !scanning && (
+                      <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#2d6a4f' }}>
+                        ✓ {[scanLabel.wine_name, scanLabel.producer, scanLabel.vintage].filter(Boolean).join(' · ')}
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Selected */}
-          {selected && (
-            <div style={{ background:'rgba(107,30,46,0.06)', border:'1px solid rgba(107,30,46,0.2)', padding:'10px 12px', marginBottom:'12px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                <div>
-                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{selected._desc}</div>
-                  <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>
-                    {selected._vintage}{selected._region && ` · ${selected._region}`} · {selected.quantity} in studio · DP {selected._dp ? `£${selected._dp.toFixed(2)}` : '—'}
+                    )}
+                    <button onClick={() => { setImageFile(null); setImagePreview(null); setScanLabel(null); setScanMatch(null) }}
+                      style={{ display:'block', marginTop:'5px', background:'none', border:'none', fontSize:'10px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace' }}>✕ Remove</button>
                   </div>
                 </div>
-                <button onClick={() => { setSelected(null); setSearch('') }}
-                  style={{ background:'none', border:'none', fontSize:'12px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace', flexShrink:0 }}>✕</button>
+              )}
+            </div>
+          )}
+
+          {/* Scan matched — big tappable card */}
+          {scanMatch && !selected && (
+            <div onClick={() => applyEntry(scanMatch)}
+              style={{ marginBottom:'12px', background:'rgba(45,106,79,0.08)', border:'2px solid rgba(45,106,79,0.5)', padding:'14px 16px', cursor:'pointer', borderRadius:'2px' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(45,106,79,0.15)'}
+              onMouseLeave={e => e.currentTarget.style.background='rgba(45,106,79,0.08)'}>
+              <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', letterSpacing:'0.1em', marginBottom:'6px' }}>✓ MATCHED IN STUDIO — TAP TO SELECT</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'16px', fontWeight:500 }}>
+                {scanMatchDesc.split(',')[0]}
+              </div>
+              {scanMatchDesc.includes(',') && (
+                <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px' }}>{scanMatchDesc.split(',').slice(1).join(',').trim()}</div>
+              )}
+              <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'4px' }}>
+                {scanMatch.wines?.vintage || scanMatch.unlinked_vintage || ''}
+                {scanMatch.dp_price && ` · DP £${parseFloat(scanMatch.dp_price).toFixed(2)}`}
+                {` · ${scanMatch.quantity} in studio`}
               </div>
             </div>
           )}
 
+          {/* Manual search — only show if no scan match pending and nothing selected */}
+          {!selected && (
+            <div style={{ marginBottom:'12px' }}>
+              <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
+                {scanMatch ? 'Or search manually' : justAdded ? 'Search for next bottle' : 'Search studio inventory'}
+              </label>
+              <input value={search} onChange={e => { setSearch(e.target.value); searchStudio(e.target.value) }}
+                placeholder="Start typing a wine name…"
+                style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
+              {results.length > 0 && (
+                <div style={{ border:'1px solid var(--border)', borderTop:'none', background:'var(--white)', maxHeight:'180px', overflowY:'auto' }}>
+                  {results.map(entry => {
+                    const w = entry.wines
+                    const desc = w?.description || entry.unlinked_description || ''
+                    const vintage = w?.vintage || entry.unlinked_vintage || ''
+                    const colour = w?.colour || entry.colour || ''
+                    return (
+                      <div key={entry.id} onClick={() => applyEntry(entry)}
+                        style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid #ede6d6', display:'flex', alignItems:'center', gap:'8px' }}
+                        onMouseEnter={e => e.currentTarget.style.background='#f5f0e8'}
+                        onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                        <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:colourDot(colour), flexShrink:0, display:'inline-block' }}></span>
+                        <div>
+                          <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px' }}>{desc}</div>
+                          <div style={{ fontSize:'10px', color:'var(--muted)', fontFamily:'DM Mono,monospace' }}>{vintage} · DP {entry.dp_price ? `£${parseFloat(entry.dp_price).toFixed(2)}` : '—'} · {entry.quantity} avail</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected wine + form */}
           {selected && (
             <>
+              <div style={{ background:'rgba(107,30,46,0.06)', border:'1px solid rgba(107,30,46,0.2)', padding:'10px 12px', marginBottom:'12px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{selected._desc.split(',')[0]}</div>
+                    {selected._desc.includes(',') && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px' }}>{selected._desc.split(',').slice(1).join(',').trim()}</div>}
+                    <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px' }}>
+                      {selected._vintage}{selected._region && ` · ${selected._region}`} · {selected.quantity} in studio · DP {selected._dp ? `£${selected._dp.toFixed(2)}` : '—'}
+                    </div>
+                  </div>
+                  <button onClick={() => { setSelected(null); setScanMatch(null) }}
+                    style={{ background:'none', border:'none', fontSize:'12px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace', flexShrink:0 }}>✕ change</button>
+                </div>
+              </div>
+
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }}>
                 <div>
                   <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Quantity</label>
@@ -427,7 +455,7 @@ function AddBottleModal({ onAdd, onClose }) {
               </div>
 
               <button onClick={confirm} disabled={saving}
-                style={{ width:'100%', background:'var(--wine)', color:'var(--white)', border:'none', padding:'13px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.15em', textTransform:'uppercase', cursor:saving?'wait':'pointer', fontWeight:600 }}>
+                style={{ width:'100%', background:'var(--wine)', color:'var(--white)', border:'none', padding:'14px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.15em', textTransform:'uppercase', cursor:saving?'wait':'pointer', fontWeight:600 }}>
                 {saving ? 'Adding…' : '✓ Add to Box — add another?'}
               </button>
             </>
@@ -682,11 +710,7 @@ export default function BoxPage() {
               {/* Items */}
               {activeItems.length === 0 ? (
                 <div style={{ padding:'36px', textAlign:'center', border:'1px dashed var(--border)', background:'var(--white)' }}>
-                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', color:'var(--muted)', marginBottom:'14px' }}>No bottles yet</div>
-                  <button onClick={() => setShowAddBottle(true)}
-                    style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                    + Add your first bottle
-                  </button>
+                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', color:'var(--muted)' }}>No bottles yet — tap + Add Bottle to start</div>
                 </div>
               ) : (
                 <div style={{ border:'1px solid var(--border)', background:'var(--white)' }}>
