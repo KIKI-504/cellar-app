@@ -567,7 +567,7 @@ export default function StudioPage() {
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
-          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Labels', '/labels'], ['Buyer View', '/buyer'], ['Local Sales', '/local']].map(([label, path]) => (
+          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Box Builder', '/boxes'], ['Labels', '/labels'], ['Buyer View', '/buyer'], ['Local Sales', '/local']].map(([label, path]) => (
             <button key={path} onClick={() => router.push(path)} style={{ background: path === '/studio' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/studio' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>{label}</button>
           ))}
         </div>
@@ -586,6 +586,7 @@ export default function StudioPage() {
             <button onClick={openScanModal} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📷 Scan Bottle</button>
             <button onClick={() => setShowMoveModal(true)} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Move to Studio</button>
             <button onClick={openAddModal} style={{ background: 'none', border: '1px solid var(--ink)', color: 'var(--ink)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>✎ Add Wine</button>
+            <button onClick={() => router.push('/boxes')} style={{ background: 'none', border: '1px solid #2d6a4f', color: '#2d6a4f', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📦 Box Builder</button>
           </div>
         </div>
 
@@ -1015,7 +1016,6 @@ export default function StudioPage() {
               <button onClick={() => setShowScanModal(false)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
             </div>
 
-            {/* Step 1 — Photo */}
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>1. Photograph the label</label>
               {!scanPreview ? (
@@ -1043,11 +1043,9 @@ export default function StudioPage() {
               </button>
             )}
 
-            {/* Step 2 — Match */}
             {scanDone && (
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>2. Confirm wine</label>
-
                 {scanRaw && (
                   <div style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 12px', marginBottom: '10px' }}>
                     <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>READ FROM LABEL</div>
@@ -1058,7 +1056,6 @@ export default function StudioPage() {
                     {scanRaw.region && <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{scanRaw.region}</div>}
                   </div>
                 )}
-
                 {scanWine ? (
                   <div style={{ background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.3)', padding: '12px' }}>
                     <div style={{ fontSize: '10px', color: '#2d6a4f', fontFamily: 'DM Mono, monospace', marginBottom: '6px' }}>✓ MATCHED IN CELLAR DATABASE</div>
@@ -1090,11 +1087,9 @@ export default function StudioPage() {
               </div>
             )}
 
-            {/* Step 3 — Details */}
             {scanDone && (
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>3. Enter details</label>
-
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>QUANTITY</label>
@@ -1117,7 +1112,6 @@ export default function StudioPage() {
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 </div>
-
                 {!scanWine && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                     <div>
@@ -1135,7 +1129,6 @@ export default function StudioPage() {
                     </div>
                   </div>
                 )}
-
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>PURCHASE PRICE IB (£/btl)</label>
@@ -1151,7 +1144,6 @@ export default function StudioPage() {
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 </div>
-
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>YOUR SALE PRICE incl. Duty &amp; VAT (£/btl)</label>
                   <input type="number" step="0.01" value={scanSalePrice} onChange={e => setScanSalePrice(e.target.value)} placeholder="0.00"
@@ -1165,20 +1157,17 @@ export default function StudioPage() {
                     </div>
                   })()}
                 </div>
-
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>NOTES (optional)</label>
                   <input type="text" value={scanNotes} onChange={e => setScanNotes(e.target.value)} placeholder="optional notes…"
                     style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
-
                 <button onClick={saveScanEntry} disabled={scanSaving}
                   style={{ width: '100%', background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: scanSaving ? 'wait' : 'pointer', fontWeight: 600 }}>
                   {scanSaving ? 'Saving…' : `✓ Add ${scanQty} bottle${scanQty !== 1 ? 's' : ''} to Studio`}
                 </button>
               </div>
             )}
-
           </div>
         </div>
       )}
@@ -1187,7 +1176,6 @@ export default function StudioPage() {
       {showAddModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '580px', padding: '28px', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
-
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '6px' }}>
               <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300 }}>Add Wine Manually</div>
               <button onClick={closeAddModal} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
@@ -1195,7 +1183,6 @@ export default function StudioPage() {
             <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginBottom: '24px' }}>
               Creates a new wine record + studio entry. Use for holiday finds, shop purchases, Corney &amp; Barrow, etc.
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Wine Name *</label>
@@ -1216,7 +1203,6 @@ export default function StudioPage() {
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Colour</label>
@@ -1239,7 +1225,6 @@ export default function StudioPage() {
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Bottle Size</label>
@@ -1258,7 +1243,6 @@ export default function StudioPage() {
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Purchase Price (£/btl)</label>
@@ -1282,14 +1266,12 @@ export default function StudioPage() {
                   style={{ width: '100%', border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box', color: 'var(--wine)', fontWeight: 600 }} />
               </div>
             </div>
-
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Notes (optional)</label>
               <input value={addNotes} onChange={e => updateAddField('addNotes', e.target.value)}
                 placeholder="e.g. Bought at Justerini & Brooks, Dec 2025"
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
-
             <div style={{ marginBottom: '20px', background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.3)', padding: '12px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8a6f1e', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>
                 Wine ID (Xero ref) — auto-generated, edit if needed
@@ -1301,7 +1283,6 @@ export default function StudioPage() {
                 Format: YY · MM (maker) · WWWW (wine) · C (colour) · S (size)
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={closeAddModal} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={saveNewWine} disabled={!addDescription || addSaving}
