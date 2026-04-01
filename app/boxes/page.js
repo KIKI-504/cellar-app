@@ -517,6 +517,303 @@ function AddBottleModal({ onAdd, onClose }) {
   )
 }
 
+// ─── Multi Bottle Modal ───────────────────────────────────────────────────────
+function MultiBottleModal({ onAddAll, onClose }) {
+  const [imageFile, setImageFile]     = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [scanning, setScanning]       = useState(false)
+  const [bottles, setBottles]         = useState([])  // { label, match, status, salePrice, qty }
+  const [saving, setSaving]           = useState(false)
+  const fileRef = useRef(null)
+
+  function handleImageSelect(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setImageFile(file)
+    setBottles([])
+    const reader = new FileReader()
+    reader.onload = ev => setImagePreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  async function analyseMulti() {
+    if (!imageFile) return
+    setScanning(true)
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(r.result.split(',')[1])
+        r.onerror = rej
+        r.readAsDataURL(imageFile)
+      })
+      const resp = await fetch('/api/analyse-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mediaType: imageFile.type, mode: 'multi' })
+      })
+      const result = await resp.json()
+      if (!result.success) throw new Error(result.error)
+
+      const labels = Array.isArray(result.data) ? result.data : [result.data]
+
+      // For each detected bottle, search studio inventory
+      const enriched = await Promise.all(labels.map(async (label) => {
+        const terms = [label.wine_name, label.producer, label.wine_name?.split(' ')[0]].filter(Boolean)
+        let match = null
+        for (const term of terms) {
+          const { data } = await supabase.rpc('search_studio', { search_term: term })
+          if (data && data.length > 0) {
+            // Normalise flat RPC row
+            const row = data[0]
+            match = {
+              ...row,
+              wines: row.wine_description ? {
+                id: row.wine_id, description: row.wine_description, vintage: row.wine_vintage,
+                colour: row.wine_colour, region: row.wine_region,
+                purchase_price_per_bottle: row.wine_purchase_price,
+                women_note: row.wine_women_note, producer_note: row.wine_producer_note,
+                source_id: row.wine_source_id,
+              } : null
+            }
+            break
+          }
+        }
+        return {
+          label,
+          match,
+          status: 'pending',    // pending | confirmed | skipped
+          salePrice: match?.sale_price ? String(parseFloat(match.sale_price)) : '',
+          qty: 1,
+        }
+      }))
+
+      setBottles(enriched)
+    } catch (err) {
+      alert('Multi-label read failed: ' + err.message)
+    }
+    setScanning(false)
+  }
+
+  function updateBottle(idx, patch) {
+    setBottles(prev => prev.map((b, i) => i === idx ? { ...b, ...patch } : b))
+  }
+
+  async function confirmAll() {
+    const toAdd = bottles.filter(b => b.status === 'confirmed')
+    if (!toAdd.length) return
+    setSaving(true)
+    const items = await Promise.all(toAdd.map(async (b) => {
+      const entry = b.match
+      const w = entry?.wines
+      const desc    = w?.description || entry?.unlinked_description || [b.label.wine_name, b.label.producer].filter(Boolean).join(', ')
+      const vintage = w?.vintage     || entry?.unlinked_vintage     || b.label.vintage || ''
+      const colour  = w?.colour      || entry?.colour               || b.label.colour  || ''
+      const region  = w?.region      || b.label.region              || ''
+      const dp      = entry?.dp_price ? parseFloat(entry.dp_price)  : null
+      const sid     = entry?.id
+        ? await ensureSourceId(entry.id, entry)
+        : generateSourceId(desc, vintage, colour, '75')
+      return {
+        studio_id:        entry?.id || null,
+        wine_description: desc,
+        wine_vintage:     vintage,
+        wine_colour:      colour,
+        wine_region:      region,
+        dp_price:         dp,
+        sale_price:       b.salePrice ? parseFloat(b.salePrice) : null,
+        quantity:         b.qty,
+        tasting_note:     null,
+        producer_note:    null,
+        source_id:        sid,
+      }
+    }))
+    await onAddAll(items)
+    setSaving(false)
+    onClose()
+  }
+
+  const confirmedCount = bottles.filter(b => b.status === 'confirmed').length
+  const pendingCount   = bottles.filter(b => b.status === 'pending').length
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:250, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'560px', border:'1px solid var(--border)', marginTop:'8px' }}>
+
+        <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', padding:'18px 18px 0' }}>
+          <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300 }}>Multiple Bottles</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--muted)' }}>✕</button>
+        </div>
+
+        <div style={{ padding:'14px 18px 22px' }}>
+
+          {/* Photo picker */}
+          <div style={{ marginBottom:'14px' }}>
+            <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
+              Photograph all the bottles together
+            </label>
+            {!imagePreview ? (
+              <div onClick={() => fileRef.current?.click()}
+                style={{ border:'1px dashed var(--border)', padding:'20px', textAlign:'center', cursor:'pointer', background:'var(--white)', display:'flex', flexDirection:'column', alignItems:'center', gap:'6px' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
+                <span style={{ fontSize:'28px' }}>📷</span>
+                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', letterSpacing:'0.08em' }}>PHOTO FROM CAMERA ROLL</span>
+                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)' }}>Labels can be at any angle</span>
+                <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} />
+              </div>
+            ) : (
+              <div>
+                <img src={imagePreview} alt="Bottles" style={{ width:'100%', maxHeight:'220px', objectFit:'contain', border:'1px solid var(--border)', background:'var(--white)' }} />
+                <div style={{ display:'flex', gap:'8px', marginTop:'8px', alignItems:'center' }}>
+                  {!bottles.length && !scanning && (
+                    <button onClick={analyseMulti}
+                      style={{ background:'var(--ink)', color:'#d4ad45', border:'none', padding:'9px 16px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.12em', textTransform:'uppercase', cursor:'pointer', flex:1 }}>
+                      🔍 Read All Labels
+                    </button>
+                  )}
+                  {scanning && (
+                    <div style={{ flex:1, padding:'9px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', textAlign:'center' }}>
+                      🔍 Reading labels…
+                    </div>
+                  )}
+                  <button onClick={() => { setImageFile(null); setImagePreview(null); setBottles([]) }}
+                    style={{ background:'none', border:'1px solid var(--border)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>
+                    ✕ Retake
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottle cards */}
+          {bottles.length > 0 && (
+            <div>
+              <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'10px' }}>
+                {bottles.length} bottle{bottles.length !== 1 ? 's' : ''} detected — confirm each to add to box
+              </div>
+
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'16px' }}>
+                {bottles.map((b, idx) => {
+                  const entry = b.match
+                  const w = entry?.wines
+                  const desc    = w?.description || entry?.unlinked_description || [b.label.wine_name, b.label.producer].filter(Boolean).join(', ')
+                  const vintage = w?.vintage     || entry?.unlinked_vintage     || b.label.vintage || ''
+                  const colour  = w?.colour      || entry?.colour               || b.label.colour  || ''
+                  const dp      = entry?.dp_price ? parseFloat(entry.dp_price) : null
+                  const isConfirmed = b.status === 'confirmed'
+                  const isSkipped   = b.status === 'skipped'
+
+                  const fd = desc || ''
+                  const ci = fd.indexOf(',')
+                  const wp = ci > -1 ? fd.slice(0, ci).trim() : fd
+                  const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
+
+                  return (
+                    <div key={idx} style={{
+                      border: `2px solid ${isConfirmed ? 'rgba(45,106,79,0.5)' : isSkipped ? 'rgba(0,0,0,0.1)' : 'var(--border)'}`,
+                      background: isConfirmed ? 'rgba(45,106,79,0.06)' : isSkipped ? 'rgba(0,0,0,0.03)' : 'var(--white)',
+                      padding:'12px 14px',
+                      opacity: isSkipped ? 0.5 : 1,
+                    }}>
+                      {/* Header row */}
+                      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'8px', marginBottom:'8px' }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
+                            <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:colourDot(colour), display:'inline-block', flexShrink:0 }}></span>
+                            <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{wp || '—'}</span>
+                            {vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)' }}>{vintage}</span>}
+                            {b.label.confidence === 'low' && <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b' }}>⚠ low confidence</span>}
+                          </div>
+                          {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginLeft:'15px', marginTop:'1px' }}>{pp}</div>}
+
+                          {/* Match status */}
+                          {entry ? (
+                            <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', marginLeft:'15px', marginTop:'4px' }}>
+                              ✓ in studio · {entry.quantity} avail{dp ? ` · DP £${dp.toFixed(2)}` : ''}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b', marginLeft:'15px', marginTop:'4px' }}>
+                              Not found in studio
+                            </div>
+                          )}
+
+                          {/* Label read details (collapsed) */}
+                          <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginLeft:'15px', marginTop:'2px' }}>
+                            Read: {[b.label.wine_name, b.label.producer].filter(Boolean).join(', ')} {b.label.vintage || ''}
+                          </div>
+                        </div>
+
+                        {/* Skip / undo */}
+                        {!isConfirmed && (
+                          <button onClick={() => updateBottle(idx, { status: isSkipped ? 'pending' : 'skipped' })}
+                            style={{ background:'none', border:'none', fontSize:'11px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace', flexShrink:0, padding:'2px 4px' }}>
+                            {isSkipped ? 'undo' : '✕'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Price + qty + confirm row — only show if not skipped */}
+                      {!isSkipped && (
+                        <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                            <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Qty</label>
+                            <input type="number" min="1" value={b.qty}
+                              onChange={e => updateBottle(idx, { qty: parseInt(e.target.value) || 1 })}
+                              onFocus={e => e.target.select()}
+                              style={{ width:'48px', border:'1px solid var(--border)', background:'var(--cream)', padding:'5px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center' }} />
+                          </div>
+                          <div style={{ display:'flex', alignItems:'center', gap:'4px', flex:1 }}>
+                            <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>Sale £</label>
+                            <input type="number" step="0.01" value={b.salePrice}
+                              onChange={e => updateBottle(idx, { salePrice: e.target.value })}
+                              onFocus={e => e.target.select()}
+                              placeholder="0.00"
+                              style={{ width:'80px', border:'2px solid rgba(107,30,46,0.2)', background:'rgba(107,30,46,0.03)', padding:'5px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', color:'var(--wine)' }} />
+                            {b.salePrice && dp && (() => {
+                              const m = ((parseFloat(b.salePrice) - dp) / dp * 100)
+                              return <span style={{ fontSize:'10px', color: m >= 0 ? '#2d6a4f' : '#c0392b', fontFamily:'DM Mono,monospace' }}>{m >= 0 ? '+' : ''}{m.toFixed(0)}%</span>
+                            })()}
+                          </div>
+                          {isConfirmed ? (
+                            <button onClick={() => updateBottle(idx, { status: 'pending' })}
+                              style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>
+                              ✓ confirmed
+                            </button>
+                          ) : (
+                            <button onClick={() => updateBottle(idx, { status: 'confirmed' })}
+                              style={{ background:'none', border:'2px solid rgba(45,106,79,0.5)', color:'#2d6a4f', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>
+                              ✓ confirm
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Add all confirmed */}
+              <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
+                {pendingCount > 0 && confirmedCount === 0 && (
+                  <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', flex:1 }}>
+                    Confirm at least one bottle above
+                  </div>
+                )}
+                {confirmedCount > 0 && (
+                  <button onClick={confirmAll} disabled={saving}
+                    style={{ flex:1, background:'var(--wine)', color:'var(--white)', border:'none', padding:'13px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.15em', textTransform:'uppercase', cursor:saving?'wait':'pointer', fontWeight:600 }}>
+                    {saving ? 'Adding…' : `✓ Add ${confirmedCount} bottle${confirmedCount !== 1 ? 's' : ''} to Box`}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Box Builder ─────────────────────────────────────────────────────────
 export default function BoxPage() {
   const router = useRouter()
@@ -526,6 +823,7 @@ export default function BoxPage() {
   const [activeItems, setActiveItems] = useState([])
   const [showNewBoxModal, setShowNewBoxModal] = useState(false)
   const [showAddBottle, setShowAddBottle] = useState(false)
+  const [showMultiBottle, setShowMultiBottle] = useState(false)
   const [showPullList, setShowPullList] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -581,6 +879,14 @@ export default function BoxPage() {
     await fetchBoxItems(activeBox.id)
     await updateBoxTotals(activeBox.id)
     // Modal stays open for next bottle
+  }
+
+  async function addMultipleToBox(items) {
+    if (!activeBox || !items.length) return
+    const rows = items.map((item, i) => ({ box_id: activeBox.id, ...item, sort_order: activeItems.length + i }))
+    await supabase.from('box_items').insert(rows)
+    await fetchBoxItems(activeBox.id)
+    await updateBoxTotals(activeBox.id)
   }
 
   async function removeItem(itemId) {
@@ -724,10 +1030,16 @@ export default function BoxPage() {
                 </div>
                 <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
                   {activeBox.status === 'Draft' && (
-                    <button onClick={() => setShowAddBottle(true)}
-                      style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                      + Add Bottle
-                    </button>
+                    <>
+                      <button onClick={() => setShowAddBottle(true)}
+                        style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                        + One Bottle
+                      </button>
+                      <button onClick={() => setShowMultiBottle(true)}
+                        style={{ background:'none', border:'1px solid var(--wine)', color:'var(--wine)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                        📷 Multi
+                      </button>
+                    </>
                   )}
                   {activeItems.length > 0 && (
                     <button onClick={() => setShowPullList(true)}
@@ -838,6 +1150,7 @@ export default function BoxPage() {
       )}
 
       {showAddBottle && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
+      {showMultiBottle && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
       {showPullList && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
     </div>
   )
