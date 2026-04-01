@@ -165,17 +165,33 @@ function AddBottleModal({ onAdd, onClose }) {
   async function searchStudio(q) {
     setSearch(q)
     if (q.length < 2) { setResults([]); return }
-    const { data } = await supabase
-      .from('studio')
-      .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, source_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
-      .eq('status', 'Available')
-      .or(`unlinked_description.ilike.%${q}%,wines.description.ilike.%${q}%`)
-      .order('unlinked_description')
-      .limit(10)
+    const { data } = await supabase.rpc('search_studio', { search_term: q })
     setResults(data || [])
   }
 
-  function applyEntry(entry) {
+  function normaliseRow(row) {
+    if (!row) return row
+    if (row.wine_description !== undefined) {
+      return {
+        ...row,
+        wines: row.wine_description ? {
+          id: row.wine_id,
+          description: row.wine_description,
+          vintage: row.wine_vintage,
+          colour: row.wine_colour,
+          region: row.wine_region,
+          purchase_price_per_bottle: row.wine_purchase_price,
+          women_note: row.wine_women_note,
+          producer_note: row.wine_producer_note,
+          source_id: row.wine_source_id,
+        } : null
+      }
+    }
+    return row
+  }
+
+  function applyEntry(rawEntry) {
+    const entry = normaliseRow(rawEntry)
     const w = entry.wines
     const built = {
       ...entry,
@@ -224,27 +240,22 @@ function AddBottleModal({ onAdd, onClose }) {
       if (!result.success) throw new Error(result.error)
       const ex = result.data
       setScanLabel(ex)
-      const searchTerm = ex.producer || ex.wine_name
-      if (searchTerm) {
-        const { data } = await supabase
-          .from('studio')
-          .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, source_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
-          .eq('status', 'Available')
-          .or(`unlinked_description.ilike.%${searchTerm}%,wines.description.ilike.%${searchTerm}%`)
-          .limit(5)
-        if (data && data.length > 0) {
-          setScanMatch(data[0])  // store match separately — user must tap to confirm
-        } else {
-          // Not in studio — pre-fill search AND trigger results so user can search manually
-          const q = [ex.wine_name, ex.producer].filter(Boolean).join(', ')
-          setSearch(q)
-          // Also search so dropdown appears if partial match exists
-          const { data: broader } = await supabase
-            .from('studio')
-            .select('id, quantity, dp_price, sale_price, bottle_size, colour, unlinked_description, unlinked_vintage, source_id, wines(id, description, vintage, colour, region, purchase_price_per_bottle, women_note, producer_note, source_id)')
-            .eq('status', 'Available')
-            .or(`unlinked_description.ilike.%${ex.wine_name?.split(' ')[0] || searchTerm}%,wines.description.ilike.%${ex.wine_name?.split(' ')[0] || searchTerm}%`)
-            .limit(8)
+      // Try wine name first, then producer, then first word of wine name
+      const terms = [ex.wine_name, ex.producer, ex.wine_name?.split(' ')[0]].filter(Boolean)
+      let matchData = null
+      for (const term of terms) {
+        const { data } = await supabase.rpc('search_studio', { search_term: term })
+        if (data && data.length > 0) { matchData = data; break }
+      }
+      if (matchData && matchData.length > 0) {
+        setScanMatch(normaliseRow(matchData[0]))
+      } else {
+        // Not found — pre-fill search box and show broader results
+        const q = [ex.wine_name, ex.producer].filter(Boolean).join(', ')
+        setSearch(q)
+        const firstWord = ex.wine_name?.split(' ')[0] || ex.producer?.split(' ')[0] || ''
+        if (firstWord.length > 2) {
+          const { data: broader } = await supabase.rpc('search_studio', { search_term: firstWord })
           setResults(broader || [])
         }
       }
