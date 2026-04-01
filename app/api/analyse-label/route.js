@@ -1,8 +1,38 @@
 export const runtime = 'nodejs'
 
+const SINGLE_PROMPT = `You are reading a wine bottle label. Extract the following information and respond ONLY with a JSON object, no other text, no markdown:
+{
+  "producer": "producer or domaine name",
+  "wine_name": "the wine or appellation name",
+  "vintage": "4-digit year as string",
+  "region": "region if visible"
+}
+If you cannot determine a field, use null. Be precise — extract exactly what is on the label.`
+
+const MULTI_PROMPT = `This image contains multiple wine bottles. Identify EACH bottle separately. Labels may be upside down or at angles — read them regardless of orientation.
+
+First count the bottles, then read each label carefully. Return ONLY a JSON array with one object per bottle, no other text, no markdown:
+[
+  {
+    "position": "left",
+    "producer": "producer or domaine name",
+    "wine_name": "the wine or appellation name",
+    "vintage": "4-digit year as string",
+    "region": "region if visible",
+    "colour": "Red, White, Rosé, Sparkling, or Sweet",
+    "confidence": "high, medium, or low"
+  }
+]
+
+Use position values like "left", "centre", "right", or "1", "2", "3" if arranged differently.
+If a label is partially obscured, still include the bottle but set confidence to "low".
+Do NOT mix up data between bottles — each object must describe exactly one physical bottle.`
+
 export async function POST(request) {
   try {
-    const { imageBase64, mediaType } = await request.json()
+    const { imageBase64, mediaType, mode = 'single' } = await request.json()
+
+    const prompt = mode === 'multi' ? MULTI_PROMPT : SINGLE_PROMPT
 
     const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -13,7 +43,7 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
+        max_tokens: mode === 'multi' ? 2000 : 1000,
         messages: [{
           role: 'user',
           content: [
@@ -21,23 +51,12 @@ export async function POST(request) {
               type: 'image',
               source: { type: 'base64', media_type: mediaType, data: imageBase64 }
             },
-            {
-              type: 'text',
-              text: `You are reading a wine bottle label. Extract the following information and respond ONLY with a JSON object, no other text, no markdown:
-{
-  "producer": "producer or domaine name",
-  "wine_name": "the wine or appellation name",
-  "vintage": "4-digit year as string",
-  "region": "region if visible"
-}
-If you cannot determine a field, use null. Be precise — extract exactly what is on the label.`
-            }
+            { type: 'text', text: prompt }
           ]
         }]
       })
     })
 
-    // Log raw response for debugging
     const rawText = await anthropicResponse.text()
     console.log('Anthropic raw response:', rawText.substring(0, 500))
 
@@ -50,7 +69,7 @@ If you cannot determine a field, use null. Be precise — extract exactly what i
     const clean = text.replace(/```json|```/g, '').trim()
     const extracted = JSON.parse(clean)
 
-    return Response.json({ success: true, data: extracted })
+    return Response.json({ success: true, data: extracted, mode })
   } catch (err) {
     console.error('Label analysis error:', err.message)
     return Response.json({ success: false, error: err.message }, { status: 500 })
