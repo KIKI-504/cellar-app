@@ -1,7 +1,3 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/realtime-js'],
-  },
-}
+const nextConfig = {}
 module.exports = nextConfig
