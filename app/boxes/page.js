@@ -14,7 +14,7 @@ const colourDot = (colour) => {
   return '#aaa'
 }
 
-// ─── Parent ID generation ─────────────────────────────────────────────────────
+// ─── Source ID generation ─────────────────────────────────────────────────────
 function generateSourceId(description, vintage, colour, bottleSize) {
   const yy = vintage ? String(vintage).slice(-2) : 'XX'
   const words = (description || '').replace(/[^a-zA-Z\s]/g, '').trim().split(/\s+/)
@@ -40,6 +40,30 @@ async function ensureSourceId(studioId, entry) {
   }
   await supabase.from('studio').update({ source_id: pid }).eq('id', studioId)
   return pid
+}
+
+// ─── Shared normaliser — converts flat RPC rows to nested {wines:{}} shape ───
+// search_studio returns flat columns (wine_description, wine_vintage, etc.)
+// All components must use this before reading entry.wines
+function normaliseRow(row) {
+  if (!row) return row
+  if (row.wine_description !== undefined) {
+    return {
+      ...row,
+      wines: row.wine_description ? {
+        id:                        row.wine_id,
+        description:               row.wine_description,
+        vintage:                   row.wine_vintage,
+        colour:                    row.wine_colour,
+        region:                    row.wine_region,
+        purchase_price_per_bottle: row.wine_purchase_price,
+        women_note:                row.wine_women_note,
+        producer_note:             row.wine_producer_note,
+        source_id:                 row.wine_source_id,
+      } : null,
+    }
+  }
+  return row
 }
 
 // ─── Pull List print view ─────────────────────────────────────────────────────
@@ -146,48 +170,30 @@ function PullListView({ box, items, onClose }) {
 
 // ─── Add Bottle Modal ─────────────────────────────────────────────────────────
 function AddBottleModal({ onAdd, onClose }) {
-  const [search, setSearch] = useState('')
-  const [results, setResults] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [scanMatch, setScanMatch] = useState(null)   // studio entry matched by scan
-  const [qty, setQty] = useState(1)
+  const [search, setSearch]           = useState('')
+  const [results, setResults]         = useState([])
+  const [selected, setSelected]       = useState(null)
+  const [scanMatch, setScanMatch]     = useState(null)
+  const [qty, setQty]                 = useState(1)
   const [tastingNote, setTastingNote] = useState('')
   const [producerNote, setProducerNote] = useState('')
-  const [salePrice, setSalePrice] = useState('')
-  const [imageFile, setImageFile] = useState(null)
+  const [salePrice, setSalePrice]     = useState('')
+  const [imageFile, setImageFile]     = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [scanning, setScanning] = useState(false)
-  const [scanLabel, setScanLabel] = useState(null)   // raw label data from vision
-  const [saving, setSaving] = useState(false)
-  const [justAdded, setJustAdded] = useState(null)
+  const [scanning, setScanning]       = useState(false)
+  const [scanLabel, setScanLabel]     = useState(null)
+  const [saving, setSaving]           = useState(false)
+  const [justAdded, setJustAdded]     = useState(null)
   const fileRef = useRef(null)
 
+  // FIX 1: normalise each RPC row before rendering in dropdown
+  // Previously, entry.wines was undefined on flat RPC rows, so wine names
+  // for linked wines showed blank. Now every result is normalised first.
   async function searchStudio(q) {
     setSearch(q)
     if (q.length < 2) { setResults([]); return }
     const { data } = await supabase.rpc('search_studio', { search_term: q })
-    setResults(data || [])
-  }
-
-  function normaliseRow(row) {
-    if (!row) return row
-    if (row.wine_description !== undefined) {
-      return {
-        ...row,
-        wines: row.wine_description ? {
-          id: row.wine_id,
-          description: row.wine_description,
-          vintage: row.wine_vintage,
-          colour: row.wine_colour,
-          region: row.wine_region,
-          purchase_price_per_bottle: row.wine_purchase_price,
-          women_note: row.wine_women_note,
-          producer_note: row.wine_producer_note,
-          source_id: row.wine_source_id,
-        } : null
-      }
-    }
-    return row
+    setResults((data || []).map(normaliseRow))
   }
 
   function applyEntry(rawEntry) {
@@ -240,7 +246,6 @@ function AddBottleModal({ onAdd, onClose }) {
       if (!result.success) throw new Error(result.error)
       const ex = result.data
       setScanLabel(ex)
-      // Try wine name first, then producer, then first word of wine name
       const terms = [ex.wine_name, ex.producer, ex.wine_name?.split(' ')[0]].filter(Boolean)
       let matchData = null
       for (const term of terms) {
@@ -250,13 +255,12 @@ function AddBottleModal({ onAdd, onClose }) {
       if (matchData && matchData.length > 0) {
         setScanMatch(normaliseRow(matchData[0]))
       } else {
-        // Not found — pre-fill search box and show broader results
         const q = [ex.wine_name, ex.producer].filter(Boolean).join(', ')
         setSearch(q)
         const firstWord = ex.wine_name?.split(' ')[0] || ex.producer?.split(' ')[0] || ''
         if (firstWord.length > 2) {
           const { data: broader } = await supabase.rpc('search_studio', { search_term: firstWord })
-          setResults(broader || [])
+          setResults((broader || []).map(normaliseRow))
         }
       }
     } catch (err) {
@@ -268,11 +272,10 @@ function AddBottleModal({ onAdd, onClose }) {
   async function confirm() {
     if (!selected) return
     setSaving(true)
-    // Only call ensureSourceId if we have an actual studio entry
     const parentId = selected.id
       ? await ensureSourceId(selected.id, selected)
       : generateSourceId(selected._desc, selected._vintage, selected._colour, selected.bottle_size || '75')
-    await onAdd({
+    const { error } = await onAdd({
       studio_id:        selected.id || null,
       wine_description: selected._desc,
       wine_vintage:     selected._vintage,
@@ -285,8 +288,13 @@ function AddBottleModal({ onAdd, onClose }) {
       producer_note:    producerNote || null,
       source_id:        parentId,
     })
+    // FIX 3: onAdd now returns {error} — surface failures inline
+    if (error) {
+      alert('Failed to add bottle: ' + error.message)
+      setSaving(false)
+      return
+    }
     setJustAdded(selected._desc)
-    // Reset for next bottle — modal stays open
     setSelected(null)
     setSearch('')
     setResults([])
@@ -316,7 +324,6 @@ function AddBottleModal({ onAdd, onClose }) {
 
         <div style={{ padding:'14px 18px 22px' }}>
 
-          {/* ✓ Just added banner */}
           {justAdded && (
             <div style={{ background:'rgba(45,106,79,0.1)', border:'1px solid rgba(45,106,79,0.3)', padding:'10px 14px', marginBottom:'14px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', flexWrap:'wrap' }}>
               <span style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#2d6a4f' }}>
@@ -370,7 +377,7 @@ function AddBottleModal({ onAdd, onClose }) {
             </div>
           )}
 
-          {/* Scan matched — big tappable card */}
+          {/* Scan match card */}
           {scanMatch && !selected && (
             <div onClick={() => applyEntry(scanMatch)}
               style={{ marginBottom:'12px', background:'rgba(45,106,79,0.08)', border:'2px solid rgba(45,106,79,0.5)', padding:'14px 16px', cursor:'pointer', borderRadius:'2px' }}
@@ -391,7 +398,7 @@ function AddBottleModal({ onAdd, onClose }) {
             </div>
           )}
 
-          {/* Not in studio notice — scan ran, no match, no results */}
+          {/* Not in studio notice */}
           {scanLabel && !scanMatch && !selected && results.length === 0 && (
             <div style={{ marginBottom:'12px', background:'rgba(192,57,43,0.05)', border:'1px solid rgba(192,57,43,0.2)', padding:'12px 14px' }}>
               <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b', letterSpacing:'0.1em', marginBottom:'4px' }}>NOT FOUND IN STUDIO</div>
@@ -401,16 +408,10 @@ function AddBottleModal({ onAdd, onClose }) {
               <button onClick={() => {
                 const desc = [scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')
                 applyEntry({
-                  id: null,
-                  quantity: 0,
-                  dp_price: null,
-                  sale_price: null,
-                  bottle_size: '75',
-                  colour: scanLabel.colour || '',
-                  unlinked_description: desc,
-                  unlinked_vintage: scanLabel.vintage || '',
-                  source_id: null,
-                  wines: null,
+                  id: null, quantity: 0, dp_price: null, sale_price: null,
+                  bottle_size: '75', colour: scanLabel.colour || '',
+                  unlinked_description: desc, unlinked_vintage: scanLabel.vintage || '',
+                  source_id: null, wines: null,
                 })
               }}
                 style={{ background:'var(--ink)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
@@ -419,7 +420,7 @@ function AddBottleModal({ onAdd, onClose }) {
             </div>
           )}
 
-          {/* Manual search — only show if no scan match pending and nothing selected */}
+          {/* Manual search */}
           {!selected && (
             <div style={{ marginBottom:'12px' }}>
               <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
@@ -431,10 +432,11 @@ function AddBottleModal({ onAdd, onClose }) {
               {results.length > 0 && (
                 <div style={{ border:'1px solid var(--border)', borderTop:'none', background:'var(--white)', maxHeight:'180px', overflowY:'auto' }}>
                   {results.map(entry => {
+                    // entry is already normalised — wines shape is safe to read
                     const w = entry.wines
-                    const desc = w?.description || entry.unlinked_description || ''
-                    const vintage = w?.vintage || entry.unlinked_vintage || ''
-                    const colour = w?.colour || entry.colour || ''
+                    const desc    = w?.description || entry.unlinked_description || ''
+                    const vintage = w?.vintage     || entry.unlinked_vintage     || ''
+                    const colour  = w?.colour      || entry.colour               || ''
                     return (
                       <div key={entry.id} onClick={() => applyEntry(entry)}
                         style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid #ede6d6', display:'flex', alignItems:'center', gap:'8px' }}
@@ -519,11 +521,11 @@ function AddBottleModal({ onAdd, onClose }) {
 
 // ─── Multi Bottle Modal ───────────────────────────────────────────────────────
 function MultiBottleModal({ onAddAll, onClose }) {
-  const [imageFile, setImageFile]     = useState(null)
+  const [imageFile, setImageFile]       = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [scanning, setScanning]       = useState(false)
-  const [bottles, setBottles]         = useState([])  // { label, match, status, salePrice, qty }
-  const [saving, setSaving]           = useState(false)
+  const [scanning, setScanning]         = useState(false)
+  const [bottles, setBottles]           = useState([])
+  const [saving, setSaving]             = useState(false)
   const fileRef = useRef(null)
 
   function handleImageSelect(e) {
@@ -556,32 +558,21 @@ function MultiBottleModal({ onAddAll, onClose }) {
 
       const labels = Array.isArray(result.data) ? result.data : [result.data]
 
-      // For each detected bottle, search studio inventory
+      // FIX 2: use shared normaliseRow instead of duplicating the inline logic
       const enriched = await Promise.all(labels.map(async (label) => {
         const terms = [label.wine_name, label.producer, label.wine_name?.split(' ')[0]].filter(Boolean)
         let match = null
         for (const term of terms) {
           const { data } = await supabase.rpc('search_studio', { search_term: term })
           if (data && data.length > 0) {
-            // Normalise flat RPC row
-            const row = data[0]
-            match = {
-              ...row,
-              wines: row.wine_description ? {
-                id: row.wine_id, description: row.wine_description, vintage: row.wine_vintage,
-                colour: row.wine_colour, region: row.wine_region,
-                purchase_price_per_bottle: row.wine_purchase_price,
-                women_note: row.wine_women_note, producer_note: row.wine_producer_note,
-                source_id: row.wine_source_id,
-              } : null
-            }
+            match = normaliseRow(data[0])
             break
           }
         }
         return {
           label,
           match,
-          status: 'pending',    // pending | confirmed | skipped
+          status: 'pending',
           salePrice: match?.sale_price ? String(parseFloat(match.sale_price)) : '',
           qty: 1,
         }
@@ -627,7 +618,13 @@ function MultiBottleModal({ onAddAll, onClose }) {
         source_id:        sid,
       }
     }))
-    await onAddAll(items)
+    const { error } = await onAddAll(items)
+    // FIX 3: surface insert failures inline rather than silently failing
+    if (error) {
+      alert('Failed to add bottles: ' + error.message)
+      setSaving(false)
+      return
+    }
     setSaving(false)
     onClose()
   }
@@ -646,7 +643,6 @@ function MultiBottleModal({ onAddAll, onClose }) {
 
         <div style={{ padding:'14px 18px 22px' }}>
 
-          {/* Photo picker */}
           <div style={{ marginBottom:'14px' }}>
             <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
               Photograph all the bottles together
@@ -685,7 +681,6 @@ function MultiBottleModal({ onAddAll, onClose }) {
             )}
           </div>
 
-          {/* Bottle cards */}
           {bottles.length > 0 && (
             <div>
               <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'10px' }}>
@@ -715,7 +710,6 @@ function MultiBottleModal({ onAddAll, onClose }) {
                       padding:'12px 14px',
                       opacity: isSkipped ? 0.5 : 1,
                     }}>
-                      {/* Header row */}
                       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'8px', marginBottom:'8px' }}>
                         <div style={{ flex:1 }}>
                           <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
@@ -725,8 +719,6 @@ function MultiBottleModal({ onAddAll, onClose }) {
                             {b.label.confidence === 'low' && <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b' }}>⚠ low confidence</span>}
                           </div>
                           {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginLeft:'15px', marginTop:'1px' }}>{pp}</div>}
-
-                          {/* Match status */}
                           {entry ? (
                             <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', marginLeft:'15px', marginTop:'4px' }}>
                               ✓ in studio · {entry.quantity} avail{dp ? ` · DP £${dp.toFixed(2)}` : ''}
@@ -736,14 +728,10 @@ function MultiBottleModal({ onAddAll, onClose }) {
                               Not found in studio
                             </div>
                           )}
-
-                          {/* Label read details (collapsed) */}
                           <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginLeft:'15px', marginTop:'2px' }}>
                             Read: {[b.label.wine_name, b.label.producer].filter(Boolean).join(', ')} {b.label.vintage || ''}
                           </div>
                         </div>
-
-                        {/* Skip / undo */}
                         {!isConfirmed && (
                           <button onClick={() => updateBottle(idx, { status: isSkipped ? 'pending' : 'skipped' })}
                             style={{ background:'none', border:'none', fontSize:'11px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace', flexShrink:0, padding:'2px 4px' }}>
@@ -752,7 +740,6 @@ function MultiBottleModal({ onAddAll, onClose }) {
                         )}
                       </div>
 
-                      {/* Price + qty + confirm row — only show if not skipped */}
                       {!isSkipped && (
                         <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
@@ -792,7 +779,6 @@ function MultiBottleModal({ onAddAll, onClose }) {
                 })}
               </div>
 
-              {/* Add all confirmed */}
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                 {pendingCount > 0 && confirmedCount === 0 && (
                   <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', flex:1 }}>
@@ -817,18 +803,20 @@ function MultiBottleModal({ onAddAll, onClose }) {
 // ─── Main Box Builder ─────────────────────────────────────────────────────────
 export default function BoxPage() {
   const router = useRouter()
-  const [boxes, setBoxes] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [activeBox, setActiveBox] = useState(null)
+  const [boxes, setBoxes]             = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [activeBox, setActiveBox]     = useState(null)
   const [activeItems, setActiveItems] = useState([])
   const [showNewBoxModal, setShowNewBoxModal] = useState(false)
-  const [showAddBottle, setShowAddBottle] = useState(false)
+  const [showAddBottle, setShowAddBottle]     = useState(false)
   const [showMultiBottle, setShowMultiBottle] = useState(false)
-  const [showPullList, setShowPullList] = useState(false)
+  const [showPullList, setShowPullList]       = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving]           = useState(false)
+  // FIX 3: inline status message replaces alert() for confirm/delete feedback
+  const [statusMsg, setStatusMsg]     = useState(null)  // { type: 'success'|'error', text: string }
 
-  const [newName, setNewName] = useState('')
+  const [newName, setNewName]   = useState('')
   const [newBuyer, setNewBuyer] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [newNotes, setNewNotes] = useState('')
@@ -839,15 +827,22 @@ export default function BoxPage() {
     else fetchBoxes()
   }, [])
 
+  function showStatus(type, text, durationMs = 4000) {
+    setStatusMsg({ type, text })
+    setTimeout(() => setStatusMsg(null), durationMs)
+  }
+
   async function fetchBoxes() {
     setLoading(true)
-    const { data } = await supabase.from('boxes').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('boxes').select('*').order('created_at', { ascending: false })
+    if (error) showStatus('error', 'Failed to load boxes: ' + error.message)
     setBoxes(data || [])
     setLoading(false)
   }
 
   async function fetchBoxItems(boxId) {
-    const { data } = await supabase.from('box_items').select('*').eq('box_id', boxId).order('sort_order', { ascending: true })
+    const { data, error } = await supabase.from('box_items').select('*').eq('box_id', boxId).order('sort_order', { ascending: true })
+    if (error) showStatus('error', 'Failed to load items: ' + error.message)
     setActiveItems(data || [])
   }
 
@@ -864,34 +859,44 @@ export default function BoxPage() {
       name: newName, buyer_name: newBuyer,
       buyer_email: newEmail || null, notes: newNotes || null, status: 'Draft'
     }).select().single()
-    if (!error) {
-      await fetchBoxes()
-      setShowNewBoxModal(false)
-      setNewName(''); setNewBuyer(''); setNewEmail(''); setNewNotes('')
-      openBox(data)
+    if (error) {
+      showStatus('error', 'Failed to create box: ' + error.message)
+      setSaving(false)
+      return
     }
+    await fetchBoxes()
+    setShowNewBoxModal(false)
+    setNewName(''); setNewBuyer(''); setNewEmail(''); setNewNotes('')
+    openBox(data)
     setSaving(false)
   }
 
+  // FIX 3: return {error} so modals can surface failures inline
   async function addItemToBox(item) {
-    if (!activeBox) return
-    await supabase.from('box_items').insert({ box_id: activeBox.id, ...item, sort_order: activeItems.length })
-    await fetchBoxItems(activeBox.id)
-    await updateBoxTotals(activeBox.id)
-    // Modal stays open for next bottle
+    if (!activeBox) return { error: new Error('No active box') }
+    const { error } = await supabase.from('box_items').insert({ box_id: activeBox.id, ...item, sort_order: activeItems.length })
+    if (!error) {
+      await fetchBoxItems(activeBox.id)
+      await updateBoxTotals(activeBox.id)
+    }
+    return { error }
   }
 
   async function addMultipleToBox(items) {
-    if (!activeBox || !items.length) return
+    if (!activeBox || !items.length) return { error: null }
     const rows = items.map((item, i) => ({ box_id: activeBox.id, ...item, sort_order: activeItems.length + i }))
-    await supabase.from('box_items').insert(rows)
-    await fetchBoxItems(activeBox.id)
-    await updateBoxTotals(activeBox.id)
+    const { error } = await supabase.from('box_items').insert(rows)
+    if (!error) {
+      await fetchBoxItems(activeBox.id)
+      await updateBoxTotals(activeBox.id)
+    }
+    return { error }
   }
 
   async function removeItem(itemId) {
     if (!confirm('Remove this bottle?')) return
-    await supabase.from('box_items').delete().eq('id', itemId)
+    const { error } = await supabase.from('box_items').delete().eq('id', itemId)
+    if (error) { showStatus('error', 'Failed to remove item: ' + error.message); return }
     await fetchBoxItems(activeBox.id)
     await updateBoxTotals(activeBox.id)
   }
@@ -905,6 +910,7 @@ export default function BoxPage() {
     setActiveBox(prev => prev ? { ...prev, total_dp: totalDP, total_sale: totalSale } : prev)
   }
 
+  // FIX 3: confirmBox now uses inline statusMsg instead of alert()
   async function confirmBox() {
     if (!activeBox) return
     if (!confirm(`Mark "${activeBox.name}" as Confirmed and deduct quantities from studio?`)) return
@@ -918,16 +924,22 @@ export default function BoxPage() {
         }
       }
     }
-    await supabase.from('boxes').update({ status: 'Confirmed' }).eq('id', activeBox.id)
+    const { error } = await supabase.from('boxes').update({ status: 'Confirmed' }).eq('id', activeBox.id)
+    if (error) {
+      showStatus('error', 'Failed to confirm box: ' + error.message)
+      setSaving(false)
+      return
+    }
     setActiveBox(prev => ({ ...prev, status: 'Confirmed' }))
     await fetchBoxes()
     setSaving(false)
-    alert('Box confirmed — studio quantities updated.')
+    showStatus('success', `"${activeBox.name}" confirmed — studio quantities updated.`)
   }
 
   async function deleteBox(boxId) {
     if (!confirm('Delete this box?')) return
-    await supabase.from('boxes').delete().eq('id', boxId)
+    const { error } = await supabase.from('boxes').delete().eq('id', boxId)
+    if (error) { showStatus('error', 'Failed to delete box: ' + error.message); return }
     if (activeBox?.id === boxId) { setActiveBox(null); setActiveItems([]) }
     await fetchBoxes()
     if (typeof window !== 'undefined' && window.innerWidth < 700) setShowSidebar(true)
@@ -964,7 +976,20 @@ export default function BoxPage() {
           style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono,monospace', fontSize:'9px', cursor:'pointer', padding:'4px 8px', flexShrink:0, marginLeft:'6px' }}>Out</button>
       </div>
 
-      {/* Body: sidebar + main, collapses on mobile */}
+      {/* Inline status toast */}
+      {statusMsg && (
+        <div style={{
+          position:'fixed', top:'60px', left:'50%', transform:'translateX(-50%)', zIndex:400,
+          background: statusMsg.type === 'success' ? 'rgba(45,106,79,0.95)' : 'rgba(192,57,43,0.95)',
+          color:'var(--white)', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'12px',
+          letterSpacing:'0.05em', border:'1px solid rgba(255,255,255,0.15)', whiteSpace:'nowrap',
+          pointerEvents:'none',
+        }}>
+          {statusMsg.type === 'success' ? '✓ ' : '✕ '}{statusMsg.text}
+        </div>
+      )}
+
+      {/* Body */}
       <div style={{ paddingTop:'52px', display:'grid', gridTemplateColumns: showSidebar && !activeBox ? '1fr' : showSidebar ? 'minmax(220px,260px) 1fr' : '1fr', minHeight:'calc(100vh - 52px)' }}>
 
         {/* Sidebar */}
@@ -1002,7 +1027,6 @@ export default function BoxPage() {
         {/* Main */}
         <div style={{ padding:'16px' }}>
 
-          {/* Mobile back button */}
           {!showSidebar && (
             <button onClick={() => { setShowSidebar(true); setActiveBox(null) }}
               style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', marginBottom:'14px' }}>
@@ -1058,7 +1082,7 @@ export default function BoxPage() {
                 </div>
               </div>
 
-              {/* Stats */}
+              {/* Stats bar */}
               {activeItems.length > 0 && (
                 <div style={{ display:'flex', gap:'16px', padding:'10px 14px', background:'var(--white)', border:'1px solid var(--border)', marginBottom:'12px', fontSize:'11px', flexWrap:'wrap' }}>
                   {[['bottles', totalBottles], ['cost', `£${totalDP.toFixed(2)}`], ['sale', `£${totalSale.toFixed(2)}`], ['margin', `£${(totalSale-totalDP).toFixed(2)}`]].map(([label, val]) => (
@@ -1070,10 +1094,10 @@ export default function BoxPage() {
                 </div>
               )}
 
-              {/* Items */}
+              {/* Items list */}
               {activeItems.length === 0 ? (
                 <div style={{ padding:'36px', textAlign:'center', border:'1px dashed var(--border)', background:'var(--white)' }}>
-                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', color:'var(--muted)' }}>No bottles yet — tap + Add Bottle to start</div>
+                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', color:'var(--muted)' }}>No bottles yet — tap + One Bottle to start</div>
                 </div>
               ) : (
                 <div style={{ border:'1px solid var(--border)', background:'var(--white)' }}>
@@ -1149,9 +1173,9 @@ export default function BoxPage() {
         </div>
       )}
 
-      {showAddBottle && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
+      {showAddBottle   && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
       {showMultiBottle && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
-      {showPullList && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
+      {showPullList    && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
     </div>
   )
 }
