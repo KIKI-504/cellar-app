@@ -20,32 +20,7 @@ function abbreviateName(description) {
   return { wineName, producer }
 }
 
-function calcDP(ib) {
-  return ((parseFloat(ib) + 3) * 1.2).toFixed(2)
-}
-
-function isMagnum(w) {
-  return w.bottle_format?.toLowerCase().includes('magnum') || w.bottle_volume?.includes('150')
-}
-
-function BondLabelContent({ wine, wineName, producer, isMag }) {
-  const source = wine.source === 'Berry Brothers' ? 'BBR' : 'FLINT'
-  const ib = parseFloat(wine.purchase_price_per_bottle).toFixed(2)
-  const dp = calcDP(wine.purchase_price_per_bottle)
-  return (
-    <div style={{ width: '100%', padding: '14px 18px', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box' }}>
-      {isMag && (
-        <div style={{ fontSize: '22px', fontWeight: 'bold', letterSpacing: '0.15em', marginBottom: '8px', textTransform: 'uppercase' }}>MAGNUM</div>
-      )}
-      <div style={{ fontSize: '15px', fontWeight: 'bold', lineHeight: 1.3, marginBottom: '2px' }}>{wine.vintage} {wineName}</div>
-      {producer && <div style={{ fontSize: '14px', lineHeight: 1.3, marginBottom: '6px' }}>{producer}</div>}
-      <div style={{ fontSize: '14px', marginTop: '4px' }}>£{ib} IB — {source}</div>
-      <div style={{ fontSize: '14px' }}>£{dp} DP</div>
-    </div>
-  )
-}
-
-function StudioLabelContent({ entry, wineName, producer, isMag }) {
+function StudioLabelContent({ entry, wineName, producer }) {
   const bottleSize = entry.bottle_size || (entry.wines?.bottle_volume?.includes('150') ? '150' : '75')
   const dp = entry.dp_price ? parseFloat(entry.dp_price).toFixed(2) : null
   const sale = entry.sale_price ? parseFloat(entry.sale_price).toFixed(2) : null
@@ -71,8 +46,6 @@ function StudioLabelContent({ entry, wineName, producer, isMag }) {
 
 export default function LabelPage() {
   const router = useRouter()
-  const [tab, setTab] = useState('bond')
-  const [wines, setWines] = useState([])
   const [studioEntries, setStudioEntries] = useState([])
   const [filtered, setFiltered] = useState([])
   const [loading, setLoading] = useState(true)
@@ -85,81 +58,50 @@ export default function LabelPage() {
   useEffect(() => {
     const role = sessionStorage.getItem('role')
     if (role !== 'admin') router.push('/')
-    else { fetchWines(); fetchStudio() }
+    else fetchStudio()
   }, [])
 
-  async function fetchWines() {
-    setLoading(true)
-    const { data } = await supabase
-      .from('wines')
-      .select('id, source, description, vintage, bottle_format, bottle_volume, purchase_price_per_bottle, quantity')
-      .order('description')
-    setWines(data || [])
-    setLoading(false)
-  }
-
   async function fetchStudio() {
+    setLoading(true)
     const { data } = await supabase
       .from('studio')
       .select('*, wines(description, vintage, region, colour, bottle_format, bottle_volume, purchase_price_per_bottle)')
       .eq('status', 'Available')
       .order('created_at', { ascending: false })
     setStudioEntries(data || [])
+    setLoading(false)
   }
 
   useEffect(() => {
-    if (tab === 'bond') {
-      if (!search) { setFiltered(wines); return }
-      const q = search.toLowerCase()
-      setFiltered(wines.filter(w => [w.description, w.vintage, w.source].join(' ').toLowerCase().includes(q)))
-    } else {
-      const q = search.toLowerCase()
-      setFiltered(studioEntries.filter(s => {
-        const name = s.wines?.description || s.unlinked_description || ''
-        const vintage = s.wines?.vintage || s.unlinked_vintage || ''
-        return !q || [name, vintage].join(' ').toLowerCase().includes(q)
-      }))
-    }
+    const q = search.toLowerCase()
+    setFiltered(studioEntries.filter(s => {
+      const name = s.wines?.description || s.unlinked_description || ''
+      const vintage = s.wines?.vintage || s.unlinked_vintage || ''
+      return !q || [name, vintage].join(' ').toLowerCase().includes(q)
+    }))
     setSelected(null)
     setWineName('')
     setProducer('')
-  }, [tab, search, wines, studioEntries])
-
-  function selectBondWine(w) {
-    const { wineName: wn, producer: pr } = abbreviateName(w.description)
-    setSelected({ type: 'bond', data: w })
-    setWineName(wn)
-    setProducer(pr)
-  }
+  }, [search, studioEntries])
 
   function selectStudioEntry(s) {
     const desc = s.wines?.description || s.unlinked_description || ''
     const { wineName: wn, producer: pr } = desc ? abbreviateName(desc) : { wineName: '', producer: '' }
-    setSelected({ type: 'studio', data: s })
+    setSelected(s)
     setWineName(wn)
     setProducer(pr)
   }
 
   function printLabel() {
     if (!selected) return
-    const isBond = selected.type === 'bond'
-    const w = selected.data
-    const mag = isBond ? isMagnum(w) : (w.bottle_size === '150' || w.wines?.bottle_volume?.includes('150'))
-    const bottleSize = isBond ? null : (w.bottle_size || '75')
-    const vintage = isBond ? w.vintage : (w.wines?.vintage || w.unlinked_vintage || '')
-    const dp = isBond ? calcDP(w.purchase_price_per_bottle) : (w.dp_price ? parseFloat(w.dp_price).toFixed(2) : null)
-    const sale = !isBond && w.sale_price ? parseFloat(w.sale_price).toFixed(2) : null
-    const ib = isBond ? parseFloat(w.purchase_price_per_bottle).toFixed(2) : null
-    const source = isBond ? (w.source === 'Berry Brothers' ? 'BBR' : 'FLINT') : null
+    const w = selected
+    const bottleSize = w.bottle_size || '75'
+    const vintage = w.wines?.vintage || w.unlinked_vintage || ''
+    const dp = w.dp_price ? parseFloat(w.dp_price).toFixed(2) : null
+    const sale = w.sale_price ? parseFloat(w.sale_price).toFixed(2) : null
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '.')
 
-    const labelHTML = isBond ? `
-      ${mag ? '<div class="magnum">MAGNUM</div>' : ''}
-      <div class="wine-name">${vintage} ${wineName}</div>
-      ${producer ? `<div class="producer">${producer}</div>` : ''}
-      <div class="price">£${ib} IB — ${source}</div>
-      <div class="price">£${dp} DP</div>
-    ` : `
+    const labelHTML = `
       ${bottleSize === '150' ? '<div class="magnum">MAGNUM</div>' : ''}
       ${bottleSize === '37.5' ? '<div class="half">HALF BOTTLE</div>' : ''}
       <div class="wine-name">${vintage} ${wineName}</div>
@@ -191,11 +133,9 @@ export default function LabelPage() {
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;'
     document.body.appendChild(iframe)
     iframe.onload = () => {
-      setTimeout(() => {
-        iframe.contentWindow.focus()
-        iframe.contentWindow.print()
-        setTimeout(() => document.body.removeChild(iframe), 1000)
-      }, 100)
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+      setTimeout(() => document.body.removeChild(iframe), 1000)
     }
     const doc = iframe.contentDocument || iframe.contentWindow.document
     doc.open()
@@ -213,7 +153,6 @@ export default function LabelPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
-      {/* Topbar — Inventory link removed */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
@@ -230,36 +169,15 @@ export default function LabelPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '16px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Print Labels</div>
-            <div style={{ display: 'flex', gap: '0', border: '1px solid var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
-              <button onClick={() => setTab('bond')} style={{ padding: '5px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', cursor: 'pointer', background: tab === 'bond' ? 'var(--wine)' : 'var(--white)', color: tab === 'bond' ? 'var(--white)' : 'var(--muted)' }}>Bond</button>
-              <button onClick={() => setTab('studio')} style={{ padding: '5px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', background: tab === 'studio' ? 'var(--wine)' : 'var(--white)', color: tab === 'studio' ? 'var(--white)' : 'var(--muted)' }}>Studio</button>
-            </div>
           </div>
 
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder={tab === 'bond' ? 'Search bond wines…' : 'Search studio wines…'}
+            placeholder="Search studio wines…"
             style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 14px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', marginBottom: '12px' }} />
 
           <div style={{ border: '1px solid var(--border)', background: 'var(--white)', maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' }}>
-            {tab === 'bond' && filtered.map(w => {
-              const isSel = selected?.data?.id === w.id
-              const mag = isMagnum(w)
-              return (
-                <div key={w.id} onClick={() => selectBondWine(w)}
-                  style={{ padding: '10px 14px', borderBottom: '1px solid var(--parchment)', cursor: 'pointer', background: isSel ? 'rgba(107,30,46,0.06)' : 'transparent', borderLeft: isSel ? '3px solid var(--wine)' : '3px solid transparent' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <div>
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px' }}>{w.vintage} {w.description.split(',')[0]}</span>
-                      {mag && <span style={{ marginLeft: '6px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(184,148,42,0.15)', color: '#7a5e10', padding: '1px 5px', borderRadius: '2px' }}>Magnum</span>}
-                    </div>
-                    <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '12px', whiteSpace: 'nowrap' }}>£{parseFloat(w.purchase_price_per_bottle).toFixed(2)}</span>
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w.source === 'Berry Brothers' ? 'BBR' : 'Flint'} · {w.quantity} btls</div>
-                </div>
-              )
-            })}
-            {tab === 'studio' && filtered.map(s => {
-              const isSel = selected?.data?.id === s.id
+            {filtered.map(s => {
+              const isSel = selected?.id === s.id
               const name = s.wines?.description || s.unlinked_description || 'Unknown wine'
               const vintage = s.wines?.vintage || s.unlinked_vintage || ''
               const bottleSize = s.bottle_size || '75'
@@ -304,46 +222,27 @@ export default function LabelPage() {
 
             <div ref={printRef} style={{ border: '1px solid var(--border)', background: 'var(--white)', width: '288px', margin: '0 auto 20px' }}>
               <div style={{ borderBottom: '1px dashed #ccc' }}>
-                {selected.type === 'bond'
-                  ? <BondLabelContent wine={selected.data} wineName={wineName} producer={producer} isMag={isMagnum(selected.data)} />
-                  : <StudioLabelContent entry={selected.data} wineName={wineName} producer={producer} isMag={false} />
-                }
+                <StudioLabelContent entry={selected} wineName={wineName} producer={producer} />
               </div>
               <div>
-                {selected.type === 'bond'
-                  ? <BondLabelContent wine={selected.data} wineName={wineName} producer={producer} isMag={isMagnum(selected.data)} />
-                  : <StudioLabelContent entry={selected.data} wineName={wineName} producer={producer} isMag={false} />
-                }
+                <StudioLabelContent entry={selected} wineName={wineName} producer={producer} />
               </div>
             </div>
 
-            {selected.type === 'bond' ? (
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>IB Price</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px' }}>£{parseFloat(selected.data.purchase_price_per_bottle).toFixed(2)}</div>
-                </div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+              {selected.dp_price && (
                 <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
                   <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>DP Price</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--wine)' }}>£{calcDP(selected.data.purchase_price_per_bottle)}</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px' }}>£{parseFloat(selected.dp_price).toFixed(2)}</div>
                 </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                {selected.data.dp_price && (
-                  <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>DP Price</div>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px' }}>£{parseFloat(selected.data.dp_price).toFixed(2)}</div>
-                  </div>
-                )}
-                {selected.data.sale_price && (
-                  <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Sale Price</div>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--wine)' }}>£{parseFloat(selected.data.sale_price).toFixed(2)}</div>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+              {selected.sale_price && (
+                <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Sale Price</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--wine)' }}>£{parseFloat(selected.sale_price).toFixed(2)}</div>
+                </div>
+              )}
+            </div>
 
             <button onClick={printLabel}
               style={{ width: '100%', background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer' }}>
@@ -356,7 +255,7 @@ export default function LabelPage() {
         ) : (
           <div style={{ position: 'sticky', top: '88px', border: '2px dashed var(--border)', padding: '40px', textAlign: 'center', color: 'var(--muted)' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', marginBottom: '8px', color: 'var(--ink)' }}>Select a wine</div>
-            <div style={{ fontSize: '12px' }}>Choose from Bond or Studio inventory to preview and print</div>
+            <div style={{ fontSize: '12px' }}>Choose from your studio inventory to preview and print</div>
           </div>
         )}
       </div>
