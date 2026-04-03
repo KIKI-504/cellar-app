@@ -1025,8 +1025,8 @@ export default function StudioPage() {
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
                   <div style={{ fontSize: '28px', marginBottom: '8px' }}>📷</div>
                   <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', letterSpacing: '0.1em' }}>TAP TO TAKE PHOTO OR UPLOAD</div>
-                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleScanFileSelect} style={{ display: 'none' }} />
-                </div>
+<input ref={fileInputRef} type="file" accept="image/*" onChange={handleScanFileSelect} style={{ display: 'none' }} />
+                    </div>
               ) : (
                 <div>
                   <img src={scanPreview} alt="Label" style={{ width: '100%', maxHeight: '220px', objectFit: 'contain', border: '1px solid var(--border)', background: 'var(--white)' }} />
