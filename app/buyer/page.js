@@ -3,6 +3,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
+function dutyForWine(w) {
+  const vol = String(w.bottle_volume || '').replace(/[^0-9]/g, '')
+  const fmt = (w.bottle_format || '').toLowerCase()
+  return (vol === '150' || vol === '1500' || fmt.includes('magnum')) ? 6 : 3
+}
+
 export default function BuyerPage() {
   const router = useRouter()
   const [wines, setWines] = useState([])
@@ -28,7 +34,7 @@ export default function BuyerPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('wines')
-      .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note')
+      .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, ws_lowest_per_bottle, retail_price_date')
       .order('description')
     if (error) { console.error(error) }
     else {
@@ -175,6 +181,10 @@ export default function BuyerPage() {
               const maxQty = parseInt(w.quantity) || 1
               const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
 
+              // WS retail (duty-paid equivalent) — only shown if ws_lowest_per_bottle is set
+              const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
+              const wsDP = ws ? ((ws + dutyForWine(w)) * 1.2).toFixed(2) : null
+
               return (
                 <div key={w.id} style={{ background: 'var(--white)', border: `1px solid ${hearted ? 'var(--wine)' : 'var(--border)'}`, padding: '20px', position: 'relative', transition: 'box-shadow 0.2s, transform 0.15s' }}
                   onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 32px rgba(26,20,16,0.14)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
@@ -211,6 +221,14 @@ export default function BuyerPage() {
                     <div>
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', fontWeight: 500, color: 'var(--ink)' }}>£{parseFloat(w.sale_price).toFixed(2)}</div>
                       <div style={{ fontSize: '10px', color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '2px' }}>per bottle · in bond</div>
+                      {wsDP && (
+                        <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '4px' }}>
+                          WS est. retail £{wsDP}
+                          {w.retail_price_date && (
+                            <span style={{ marginLeft: '4px', opacity: 0.6 }}>· {w.retail_price_date}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {hearted && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
