@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
@@ -25,9 +25,32 @@ export default function AdminPage() {
   const [overrideNote, setOverrideNote] = useState('')
   const [otherSourceName, setOtherSourceName] = useState('')
   const [showOtherSourceInput, setShowOtherSourceInput] = useState(false)
-  // ─── Controlled price type per wine (fixes page-jump + wrong-type bugs) ────
-  const [priceTypes, setPriceTypes] = useState({}) // { [wineId]: 'ex-duty' | 'duty-paid' }
   const otherFileRef = useRef(null)
+
+  // ─── WS focus retention ────────────────────────────────────────────────────
+  // Stores the wine id whose WS button was last clicked.
+  // When you return from the WS tab, we focus that row's price input.
+  const wsActiveWineId = useRef(null)
+  const wsInputRefs = useRef({}) // wineId → input DOM element
+
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible' && wsActiveWineId.current) {
+        const input = wsInputRefs.current[wsActiveWineId.current]
+        if (input) {
+          // Small delay to let the tab fully re-render
+          setTimeout(() => {
+            input.focus()
+            input.select()
+          }, 150)
+        }
+        wsActiveWineId.current = null
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
+
   const PAGE_SIZE = 50
 
   useEffect(() => {
@@ -57,21 +80,6 @@ export default function AdminPage() {
       result = result.filter(w => [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase().includes(q))
     }
     result.sort((a, b) => {
-      // Special boolean columns
-      if (sortCol === 'include_in_buyer_view') {
-        const av = a.include_in_buyer_view ? 1 : 0
-        const bv = b.include_in_buyer_view ? 1 : 0
-        return (bv - av) * sortDir
-      }
-      // Numeric columns — nulls always last regardless of sort direction
-      if (sortCol === 'ws_lowest_per_bottle' || sortCol === 'sale_price') {
-        const av = a[sortCol] != null ? parseFloat(a[sortCol]) : null
-        const bv = b[sortCol] != null ? parseFloat(b[sortCol]) : null
-        if (av === null && bv === null) return 0
-        if (av === null) return 1   // nulls always go to bottom
-        if (bv === null) return -1
-        return (av - bv) * sortDir
-      }
       let av = a[sortCol] ?? '', bv = b[sortCol] ?? ''
       if (typeof av === 'number') return (av - bv) * sortDir
       return String(av).localeCompare(String(bv)) * sortDir
@@ -86,7 +94,9 @@ export default function AdminPage() {
     return vol === '150' || vol === '1500' || fmt.includes('magnum')
   }
 
-  function dutyForWine(w) { return isMagnum(w) ? 6 : 3 }
+  function dutyForWine(w) {
+    return isMagnum(w) ? 6 : 3
+  }
 
   function isCompetitive(w) {
     if (!w.ws_lowest_per_bottle || !w.purchase_price_per_bottle) return false
@@ -96,23 +106,29 @@ export default function AdminPage() {
     return dp < wsDP
   }
 
-  // Returns the controlled price type for a wine, defaulting based on stored data
-  function getPriceType(w) {
-    if (priceTypes[w.id] !== undefined) return priceTypes[w.id]
-    const isExDuty = w.retail_price_source === 'WS avg (ex duty)'
-      || w.retail_price_source === 'Wine Searcher avg'
-      || w.retail_price_source === 'Wine Searcher lowest +duty+VAT'
-      || (!w.retail_price && w.ws_lowest_per_bottle)
-    return isExDuty ? 'ex-duty' : 'duty-paid'
-  }
-
-  function setPriceType(wineId, type) {
-    setPriceTypes(prev => ({ ...prev, [wineId]: type }))
+  // ─── Suggested sell price ──────────────────────────────────────────────────
+  // Target:  (WS avg ex-tax + duty) × 1.20 − £3  (≈ £2-3 under London average DP)
+  // Floor:   (IB + duty) × 1.20 × 1.10            (minimum 10% margin on DP)
+  // Returns { price, isFloor } or null if data missing
+  function suggestedPrice(w) {
+    const ib = w.purchase_price_per_bottle ? parseFloat(w.purchase_price_per_bottle) : null
+    const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
+    if (!ib || !ws) return null
+    const duty = dutyForWine(w)
+    const target = (ws + duty) * 1.2 - 3
+    const floor = (ib + duty) * 1.2 * 1.1
+    if (target >= floor) {
+      return { price: Math.round(target * 100) / 100, isFloor: false }
+    } else {
+      // Target is below floor — show floor price but flag it
+      return { price: Math.round(floor * 100) / 100, isFloor: true }
+    }
   }
 
   async function updateWine(id, field, value) {
     const update = { [field]: value }
     if (field === 'retail_price') update.retail_price_date = new Date().toISOString().split('T')[0]
+    if (field === 'ws_lowest_per_bottle') update.retail_price_date = new Date().toISOString().split('T')[0]
     const { error } = await supabase.from('wines').update(update).eq('id', id)
     if (!error) setWines(prev => prev.map(w => w.id === id ? { ...w, ...update } : w))
   }
@@ -152,7 +168,8 @@ export default function AdminPage() {
     return '#c0392b'
   }
 
-  function openWineSearcher(description, vintage) {
+  function openWineSearcher(wineId, description, vintage) {
+    wsActiveWineId.current = wineId
     const keywords = description.toLowerCase().replace(/,/g, '').replace(/\s+/g, '+')
     window.open(`https://www.wine-searcher.com/find/${keywords}/${vintage}/uk/gbp`, '_blank')
   }
@@ -172,6 +189,8 @@ export default function AdminPage() {
     if (error) alert('Error moving to studio: ' + error.message)
     else alert(`✓ ${qty} bottle${qty > 1 ? 's' : ''} moved to studio at DP £${dp}`)
   }
+
+  // ─── CSV parser (shared) ────────────────────────────────────────────────────
 
   function parseCsv(text) {
     const lines = text.split('\n').filter(l => l.trim())
@@ -200,6 +219,8 @@ export default function AdminPage() {
     }
     return rows
   }
+
+  // ─── BBR import ─────────────────────────────────────────────────────────────
 
   function transformBBRRow(row) {
     const description = (row['Description'] || '').replace(/^[\s,]+/, '').trim()
@@ -235,6 +256,8 @@ export default function AdminPage() {
     }
   }
 
+  // ─── Flint import ────────────────────────────────────────────────────────────
+
   function transformFlintRow(row) {
     const description = (row['Wine'] || row['Description'] || row['Name'] || '').replace(/^[\s,]+/, '').trim()
     const vintage = (row['Vintage'] || row['Year'] || '').trim()
@@ -263,48 +286,7 @@ export default function AdminPage() {
     }
   }
 
-  function transformJeroboamsRow(row) {
-    const description = (row['Description'] || '').replace(/^[\s,]+/, '').trim()
-    const vintage = (row['Vintage'] || '').trim()
-    const caseSizeStr = row['Case Size'] || ''
-    const caseSizeMatch = caseSizeStr.match(/^(\d+)/)
-    const caseSize = caseSizeMatch ? parseInt(caseSizeMatch[1]) : 1
-    const cases = parseInt(row['Cases'] || '0') || 0
-    const looseBottles = parseInt(row['Bottles'] || '0') || 0
-    const totalBottles = cases * caseSize + looseBottles
-    const purchaseCaseValue = parseFloat(row['Purchase Value'] || '') || null
-    const purchase_price_per_bottle = purchaseCaseValue && caseSize
-      ? Math.round((purchaseCaseValue / caseSize) * 100) / 100 : null
-    const estMarketCaseValue = parseFloat(row['Est. Market Value'] || '') || null
-    const ws_lowest_per_bottle = estMarketCaseValue && caseSize
-      ? Math.round((estMarketCaseValue / caseSize) * 100) / 100 : null
-    const source_id = row['ItemCode'] || ''
-    const region = (row['Region'] || '').trim()
-    const country = (row['Country'] || '').trim()
-    const subRegion = (row['Sub-Region'] || '').trim()
-    const type = (row['Type'] || '').toLowerCase()
-    const colour = type.includes('spark') ? 'Sparkling' : ''
-    const status = row['Status'] || ''
-    const isAwaiting = status === 'Awaiting Shipment'
-    return {
-      source: 'Jeroboams',
-      source_id,
-      country,
-      region: subRegion || region,
-      vintage,
-      description,
-      colour,
-      bottle_format: 'Bottle',
-      bottle_volume: '75cl',
-      quantity: String(totalBottles),
-      case_size: String(caseSize),
-      purchase_price_per_bottle,
-      ws_lowest_per_bottle,
-      include_in_buyer_view: false,
-      flagged: isAwaiting,
-      flag_note: isAwaiting ? 'Awaiting shipment — EP not yet at Jeroboams warehouse' : null,
-    }
-  }
+  // ─── Generic upsert (shared by all importers) ───────────────────────────────
 
   async function upsertWines(wineRows, sourceLabel) {
     let inserted = 0, updated = 0, errors = 0
@@ -349,8 +331,10 @@ export default function AdminPage() {
   }
 
   async function handleBBRImport(e) {
-    const file = e.target.files[0]; if (!file) return
-    setImporting(true); setImportStatus('Reading BBR file…')
+    const file = e.target.files[0]
+    if (!file) return
+    setImporting(true)
+    setImportStatus('Reading BBR file…')
     const text = await file.text()
     const rows = parseCsv(text)
     const wineRows = rows.map(transformBBRRow).filter(r => r.description && r.source_id)
@@ -358,12 +342,16 @@ export default function AdminPage() {
     const { inserted, updated, errors, conflicts } = await upsertWines(wineRows, 'BBR')
     setImportConflicts(conflicts)
     setImportStatus(`✓ BBR done — ${inserted} inserted, ${updated} updated${errors ? `, ${errors} errors` : ''}${conflicts.length ? ` · ⚠️ ${conflicts.length} price conflict${conflicts.length > 1 ? 's' : ''}` : ''}`)
-    setImporting(false); e.target.value = ''; await fetchWines()
+    setImporting(false)
+    e.target.value = ''
+    await fetchWines()
   }
 
   async function handleFlintImport(e) {
-    const file = e.target.files[0]; if (!file) return
-    setImporting(true); setImportStatus('Reading Flint file…')
+    const file = e.target.files[0]
+    if (!file) return
+    setImporting(true)
+    setImportStatus('Reading Flint file…')
     const text = await file.text()
     const rows = parseCsv(text)
     const wineRows = rows.map(transformFlintRow).filter(r => r.description)
@@ -373,36 +361,20 @@ export default function AdminPage() {
     const has2024 = wineRows.some(w => w.vintage === '2024')
     const suffix = has2024 ? ' · ⚠️ 2024 vintage detected — verify Unit Prices against invoice (case price bug)' : ''
     setImportStatus(`✓ Flint done — ${inserted} inserted, ${updated} updated${errors ? `, ${errors} errors` : ''}${conflicts.length ? ` · ⚠️ ${conflicts.length} price conflicts` : ''}${suffix}`)
-    setImporting(false); e.target.value = ''; await fetchWines()
-  }
-
-  async function handleJeroboamsImport(e) {
-    const file = e.target.files[0]; if (!file) return
-    setImporting(true); setImportStatus('Reading Jeroboams file…')
-    try {
-      const isXlsx = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')
-      if (isXlsx) {
-        setImportStatus('⚠️ Please export your Jeroboams stock as CSV and re-upload')
-        setImporting(false); e.target.value = ''; return
-      }
-      const text = await file.text()
-      const rows = parseCsv(text)
-      const wineRows = rows.map(transformJeroboamsRow).filter(r => r.description && r.source_id)
-      const awaitingCount = wineRows.filter(r => r.flagged).length
-      setImportStatus(`Parsed ${wineRows.length} Jeroboams wines — importing…`)
-      const { inserted, updated, errors, conflicts } = await upsertWines(wineRows, 'Jeroboams')
-      setImportConflicts(conflicts)
-      setImportStatus(`✓ Jeroboams done — ${inserted} inserted, ${updated} updated${errors ? `, ${errors} errors` : ''}${awaitingCount ? ` · 🚩 ${awaitingCount} EP wines flagged` : ''}`)
-    } catch (err) {
-      setImportStatus('⚠️ Import failed: ' + err.message)
-    }
-    setImporting(false); e.target.value = ''; await fetchWines()
+    setImporting(false)
+    e.target.value = ''
+    await fetchWines()
   }
 
   async function handleOtherImport(e) {
-    const file = e.target.files[0]; if (!file) return
-    if (!otherSourceName.trim()) { alert('Please enter a source name first'); return }
-    setImporting(true); setImportStatus(`Reading ${otherSourceName} file…`)
+    const file = e.target.files[0]
+    if (!file) return
+    if (!otherSourceName.trim()) {
+      alert('Please enter a source name first')
+      return
+    }
+    setImporting(true)
+    setImportStatus(`Reading ${otherSourceName} file…`)
     const text = await file.text()
     const rows = parseCsv(text)
     const wineRows = rows.map(row => {
@@ -430,8 +402,13 @@ export default function AdminPage() {
     const { inserted, updated, errors, conflicts } = await upsertWines(wineRows, otherSourceName)
     setImportConflicts(conflicts)
     setImportStatus(`✓ ${otherSourceName} done — ${inserted} inserted, ${updated} updated${errors ? `, ${errors} errors` : ''}`)
-    setImporting(false); e.target.value = ''; setShowOtherSourceInput(false); await fetchWines()
+    setImporting(false)
+    e.target.value = ''
+    setShowOtherSourceInput(false)
+    await fetchWines()
   }
+
+  // ─── Export ────────────────────────────────────────────────────────────────
 
   function exportCSV() {
     const headers = ['Source','ID','Description','Vintage','Colour','Country','Region','Format','Volume','Quantity','Cost IB/Btl','DP/Btl','+10% IB','+15% IB','+10% DP','+15% DP','WS Lowest/Btl','Retail Price IB','Retail Price Source','Retail Price Date','Livex/Btl','Sale Price','In Buyer View','Women Note','Producer Note']
@@ -454,9 +431,13 @@ export default function AdminPage() {
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url; a.download = `cellar-export-${new Date().toISOString().split('T')[0]}.csv`
-    a.click(); URL.revokeObjectURL(url)
+    a.href = url
+    a.download = `cellar-export-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
+
+  // ─── Price breakdown panel ─────────────────────────────────────────────────
 
   function PriceBreakdown({ w }) {
     const ib = w.purchase_price_per_bottle ? parseFloat(w.purchase_price_per_bottle) : null
@@ -495,14 +476,17 @@ export default function AdminPage() {
         {row('+10% on DP', dp ? dp * 1.10 : null)}
         {row('+15% on DP', dp ? dp * 1.15 : null)}
         {ws && divider('Wine Searcher')}
-        {ws && row('WS lowest (ex duty/VAT)', ws)}
+        {ws && row('WS avg (ex duty/VAT)', ws)}
         {ws && row('WS + duty + VAT  75cl', wsDP75, wsDP75 && dp && dp < wsDP75 ? '#86efac' : null)}
         {ws && row('WS + duty + VAT  150cl', wsDP150, null, !mag)}
         {(livex || retail || sale) && divider()}
         {livex && row('Livex (ex duty)', livex)}
         {retail && row(
           w.retail_price_source === 'WS avg (ex duty)' || w.retail_price_source === 'Wine Searcher avg' || w.retail_price_source === 'Wine Searcher lowest +duty+VAT'
-            ? 'WS avg (duty paid)' : w.retail_price_source === 'Duty paid retail' ? 'Retail (duty paid, manual)' : 'Retail est. (duty paid)',
+            ? 'WS avg (duty paid)'
+            : w.retail_price_source === 'Duty paid retail'
+              ? 'Retail (duty paid, manual)'
+              : 'Retail est. (duty paid)',
           retail
         )}
         {sale && row('Your sale price', sale, '#d4ad45')}
@@ -511,7 +495,8 @@ export default function AdminPage() {
           <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'DM Mono, monospace' }}>
             {dp < (ws + duty) * 1.2
               ? <span style={{ color: '#86efac' }}>✓ Competitive — your DP is below WS market rate</span>
-              : <span style={{ color: '#f87171' }}>✗ Not competitive vs WS at this duty-paid price</span>}
+              : <span style={{ color: '#f87171' }}>✗ Not competitive vs WS at this duty-paid price</span>
+            }
           </div>
         )}
       </div>
@@ -522,12 +507,10 @@ export default function AdminPage() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const bbCount = wines.filter(w => w.source === 'Berry Brothers').length
   const flintCount = wines.filter(w => w.source === 'Flint').length
-  const jeroboamsCount = wines.filter(w => w.source === 'Jeroboams').length
   const inBuyerCount = wines.filter(w => w.include_in_buyer_view).length
   const competitiveCount = wines.filter(w => isCompetitive(w)).length
   const missingRetailCount = wines.filter(w => !w.retail_price).length
   const womenCount = wines.filter(w => w.women_note).length
-  const flaggedCount = wines.filter(w => w.flagged).length
   const totalCostValue = wines.reduce((sum, w) => sum + ((parseInt(w.quantity) || 0) * (parseFloat(w.purchase_price_per_bottle) || 0)), 0)
   const totalRetailValue = wines.reduce((sum, w) => sum + ((parseInt(w.quantity) || 0) * (parseFloat(w.retail_price) || 0)), 0)
   const winesWithRetail = wines.filter(w => w.retail_price).length
@@ -562,21 +545,9 @@ export default function AdminPage() {
 
         {/* Stats bar */}
         <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '12px', fontSize: '11px', flexWrap: 'wrap' }}>
-          {[
-            ['wines total', wines.length, ''],
-            ['Berry Brothers', bbCount, ''],
-            ['Flint', flintCount, ''],
-            ['Jeroboams', jeroboamsCount, ''],
-            ['in buyer view', inBuyerCount, ''],
-            ['competitive', competitiveCount, ''],
-            ['need retail price', missingRetailCount, ''],
-            ['women-led', womenCount, 'women'],
-            ['flagged', flaggedCount, 'flag'],
-          ].map(([label, n, type]) => (
+          {[['wines total', wines.length], ['Berry Brothers', bbCount], ['Flint', flintCount], ['in buyer view', inBuyerCount], ['competitive', competitiveCount], ['need retail price', missingRetailCount], ['women-led', womenCount]].map(([label, n]) => (
             <div key={label} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
-              <span style={{ fontWeight: 500, color: type === 'women' ? '#9b3a4a' : type === 'flag' ? '#b8942a' : 'var(--wine)', fontSize: '14px' }}>
-                {type === 'women' ? '♀ ' : type === 'flag' ? '🚩 ' : ''}{n}
-              </span>
+              <span style={{ fontWeight: 500, color: label === 'women-led' ? '#9b3a4a' : 'var(--wine)', fontSize: '14px' }}>{label === 'women-led' ? '♀ ' : ''}{n}</span>
               <span style={{ color: 'var(--muted)' }}>{label}</span>
             </div>
           ))}
@@ -615,7 +586,6 @@ export default function AdminPage() {
             <option value="">All Sources</option>
             <option value="Berry Brothers">Berry Brothers</option>
             <option value="Flint">Flint</option>
-            <option value="Jeroboams">Jeroboams</option>
           </select>
           <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Colours</option>
@@ -626,7 +596,6 @@ export default function AdminPage() {
           <select value={filterBuyer} onChange={e => setFilterBuyer(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Wines</option>
             <option value="included">In Buyer View</option>
-            <option value="flagged">🚩 Flagged for Review</option>
             <option value="missing-retail">Missing Retail Price</option>
             <option value="competitive">Competitive Only</option>
             <option value="women">Women-Led</option>
@@ -634,19 +603,19 @@ export default function AdminPage() {
           <button onClick={exportCSV} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--ink)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>↓ Export</button>
         </div>
 
-        {/* Import buttons */}
+        {/* Import buttons row */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <label style={{ position: 'relative', cursor: 'pointer' }}>
             <input type="file" accept=".csv" onChange={handleBBRImport} disabled={importing} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
-            <span style={{ display: 'inline-block', background: importing ? 'rgba(107,30,46,0.4)' : 'rgba(107,30,46,0.08)', border: '1px solid rgba(107,30,46,0.3)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: importing ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>↑ Import BBR</span>
+            <span style={{ display: 'inline-block', background: importing ? 'rgba(107,30,46,0.4)' : 'rgba(107,30,46,0.08)', border: '1px solid rgba(107,30,46,0.3)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: importing ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+              ↑ Import BBR
+            </span>
           </label>
           <label style={{ position: 'relative', cursor: 'pointer' }}>
             <input type="file" accept=".csv" onChange={handleFlintImport} disabled={importing} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
-            <span style={{ display: 'inline-block', background: importing ? 'rgba(184,148,42,0.4)' : 'rgba(184,148,42,0.08)', border: '1px solid rgba(184,148,42,0.3)', color: '#7a5e10', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: importing ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>↑ Import Flint</span>
-          </label>
-          <label style={{ position: 'relative', cursor: 'pointer' }}>
-            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleJeroboamsImport} disabled={importing} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
-            <span style={{ display: 'inline-block', background: importing ? 'rgba(45,106,79,0.4)' : 'rgba(45,106,79,0.08)', border: '1px solid rgba(45,106,79,0.3)', color: '#2d6a4f', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: importing ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>↑ Import Jeroboams</span>
+            <span style={{ display: 'inline-block', background: importing ? 'rgba(184,148,42,0.4)' : 'rgba(184,148,42,0.08)', border: '1px solid rgba(184,148,42,0.3)', color: '#7a5e10', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: importing ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+              ↑ Import Flint
+            </span>
           </label>
           {!showOtherSourceInput ? (
             <button onClick={() => setShowOtherSourceInput(true)} disabled={importing}
@@ -659,7 +628,9 @@ export default function AdminPage() {
                 style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', minWidth: '220px' }} />
               <label style={{ position: 'relative', cursor: 'pointer' }}>
                 <input ref={otherFileRef} type="file" accept=".csv" onChange={handleOtherImport} disabled={importing || !otherSourceName.trim()} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
-                <span style={{ display: 'inline-block', background: otherSourceName.trim() ? 'rgba(45,106,79,0.08)' : '#eee', border: '1px solid rgba(45,106,79,0.3)', color: otherSourceName.trim() ? '#2d6a4f' : '#999', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: otherSourceName.trim() ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>↑ Choose CSV</span>
+                <span style={{ display: 'inline-block', background: otherSourceName.trim() ? 'rgba(45,106,79,0.08)' : '#eee', border: '1px solid rgba(45,106,79,0.3)', color: otherSourceName.trim() ? '#2d6a4f' : '#999', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: otherSourceName.trim() ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                  ↑ Choose CSV
+                </span>
               </label>
               <button onClick={() => { setShowOtherSourceInput(false); setOtherSourceName('') }}
                 style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '14px', padding: '6px' }}>✕</button>
@@ -667,18 +638,22 @@ export default function AdminPage() {
           )}
           {importing && <span style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', padding: '9px 0' }}>⏳ Importing…</span>}
           {importStatus && !importing && (
-            <span style={{ fontSize: '11px', color: importStatus.startsWith('✓') ? '#2d6a4f' : importStatus.startsWith('⚠') ? '#b8942a' : 'var(--muted)', fontFamily: 'DM Mono, monospace', padding: '9px 0' }}>{importStatus}</span>
+            <span style={{ fontSize: '11px', color: importStatus.startsWith('✓') ? '#2d6a4f' : 'var(--muted)', fontFamily: 'DM Mono, monospace', padding: '9px 0' }}>{importStatus}</span>
           )}
         </div>
 
         {/* Import conflict warnings */}
         {importConflicts.length > 0 && (
           <div style={{ background: 'rgba(184,148,42,0.08)', border: '1px solid rgba(184,148,42,0.4)', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>⚠️ Price conflicts — your manual overrides were preserved</div>
+            <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
+              ⚠️ Price conflicts — your manual overrides were preserved
+            </div>
             {importConflicts.map((c, i) => (
               <div key={i} style={{ fontSize: '12px', padding: '8px 0', borderTop: i > 0 ? '1px solid rgba(184,148,42,0.2)' : 'none' }}>
                 <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', marginBottom: '3px' }}>{c.description} {c.vintage}</div>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>Your price: <strong>£{parseFloat(c.storedPrice).toFixed(2)}</strong> · Incoming: <strong>£{parseFloat(c.incomingPrice).toFixed(2)}</strong></div>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>
+                  Your price: <strong>£{parseFloat(c.storedPrice).toFixed(2)}</strong> · Incoming: <strong>£{parseFloat(c.incomingPrice).toFixed(2)}</strong>
+                </div>
                 <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#7a5e10', marginTop: '2px' }}>Note: {c.note}</div>
               </div>
             ))}
@@ -704,25 +679,17 @@ export default function AdminPage() {
                   DP {sortCol === 'purchase_price_per_bottle' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                   <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>▼ click for IB ladder</span>
                 </th>
-                {/* DP Retail — now sortable, nulls last */}
-                <th onClick={() => handleSort('ws_lowest_per_bottle')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'ws_lowest_per_bottle' ? '#d4ad45' : 'var(--white)', minWidth: '160px' }}>
-                  DP Retail {sortCol === 'ws_lowest_per_bottle' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
-                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>WS ex-tax below</span>
+                <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '160px' }}>
+                  WS Market
+                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>avg ex-tax below</span>
                 </th>
-                {/* Sell Price — now sortable, nulls last */}
-                <th onClick={() => handleSort('sale_price')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'sale_price' ? '#d4ad45' : 'var(--white)' }}>
-                  Sell Price {sortCol === 'sale_price' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
+                <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '130px' }}>
+                  Sell Price
+                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>suggested below</span>
                 </th>
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Notes</th>
-                <th onClick={() => handleSort('include_in_buyer_view')}
-                  style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'include_in_buyer_view' ? '#d4ad45' : 'var(--white)' }}>
-                  Buyer {sortCol === 'include_in_buyer_view' ? (sortDir === 1 ? '↑' : '↓') : ''}
-                </th>
+                <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Buyer</th>
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
-                <th onClick={() => handleSort('flagged')}
-                  style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'flagged' ? '#d4ad45' : 'var(--white)' }}>
-                  🚩 {sortCol === 'flagged' ? (sortDir === 1 ? '↑' : '↓') : ''}
-                </th>
                 <th onClick={() => handleSort('source')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'source' ? '#d4ad45' : 'var(--white)' }}>
                   Src {sortCol === 'source' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
@@ -731,22 +698,17 @@ export default function AdminPage() {
             <tbody>
               {slice.map(w => {
                 const pp = w.purchase_price_per_bottle
+                const comp = w.ws_lowest_per_bottle && pp ? isCompetitive(w) : null
                 const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
                 const isExpanded = expandedNote === w.id
                 const isPriceOpen = expandedPrice === w.id
-                // Controlled price type for this wine
-                const priceType = getPriceType(w)
-                const duty = dutyForWine(w)
-                const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
-                const wsDP = ws ? ((ws + duty) * 1.2) : null
-                const myDP = pp ? ((parseFloat(pp) + duty) * 1.2) : null
-                const isComp = wsDP && myDP ? myDP < wsDP : null
-                const displayVal = priceType === 'ex-duty' ? (w.ws_lowest_per_bottle || '') : (w.retail_price || '')
+                const suggestion = suggestedPrice(w)
 
                 return (
-                  <tr key={w.id} style={{ borderBottom: '1px solid #ede6d6', background: w.flagged ? 'rgba(184,148,42,0.06)' : w.include_in_buyer_view ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
+                  <tr key={w.id} style={{ borderBottom: '1px solid #ede6d6', background: w.include_in_buyer_view ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
 
-                    <td style={{ padding: '9px 12px', maxWidth: '260px', position: 'sticky', left: 0, background: w.flagged ? '#fdf8ee' : w.include_in_buyer_view ? '#f0f7f4' : 'var(--white)', zIndex: 5, borderRight: '1px solid #ede6d6' }}>
+                    {/* Sticky wine name */}
+                    <td style={{ padding: '9px 12px', maxWidth: '260px', position: 'sticky', left: 0, background: w.include_in_buyer_view ? '#f0f7f4' : 'var(--white)', zIndex: 5, borderRight: '1px solid #ede6d6' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                         {w.women_note && <span title={w.women_note} style={{ fontSize: '12px', flexShrink: 0, cursor: 'help' }}>♀</span>}
                         <div>
@@ -765,13 +727,13 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{w.bottle_volume || (w.bottle_format === 'Magnum' ? '150cl' : w.bottle_format ? '75cl' : '—')}</td>
                     <td style={{ padding: '9px 12px' }}>{w.quantity || '—'}</td>
 
-                    {/* DP cell */}
+                    {/* DP */}
                     <td style={{ padding: '9px 12px', position: 'relative' }}
                       onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
                       <div style={{ cursor: 'pointer', userSelect: 'none' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <span style={{ fontWeight: 700, color: isPriceOpen ? 'var(--wine)' : 'var(--ink)', fontFamily: 'DM Mono, monospace', fontSize: '13px' }}>
-                            {pp ? `£${((parseFloat(pp) + duty) * 1.2).toFixed(2)}` : '—'}
+                            {pp ? `£${((parseFloat(pp) + dutyForWine(w)) * 1.2).toFixed(2)}` : '—'}
                           </span>
                           <span style={{ fontSize: '9px', color: isPriceOpen ? 'var(--wine)' : '#bbb' }}>{isPriceOpen ? '▲' : '▼'}</span>
                           {w.manual_override_note && <span title={`Override: ${w.manual_override_note}`} style={{ fontSize: '9px', color: '#b8942a', cursor: 'help' }}>✎</span>}
@@ -791,67 +753,135 @@ export default function AdminPage() {
                       )}
                     </td>
 
-                    {/* DP Retail — fully controlled, no page-jump, correct save on any order */}
-                    <td style={{ padding: '9px 12px', minWidth: '160px' }}>
-                      {wsDP ? (
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: isComp ? '#2d6a4f' : 'var(--ink)' }}>£{wsDP.toFixed(2)}</span>
-                            {isComp !== null && <span style={{ fontSize: '10px', fontWeight: 600, color: isComp ? '#2d6a4f' : '#c0392b' }}>{isComp ? '✓' : '✗'}</span>}
-                          </div>
-                          <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>WS £{ws.toFixed(2)} ex-tax</div>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>—</div>
-                      )}
-                      <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginTop: '5px' }}>
-                        <input type="number" step="0.01"
-                          key={`${w.id}-price`}
-                          defaultValue={displayVal}
-                          placeholder="WS price"
-                          onBlur={e => {
-                            const val = e.target.value ? parseFloat(e.target.value) : null
-                            // Read from controlled React state — not the DOM
-                            const currentType = getPriceType(w)
-                            if (currentType === 'ex-duty') {
-                              updateWine(w.id, 'ws_lowest_per_bottle', val)
-                              if (val) updateWine(w.id, 'retail_price', Math.round((val + duty) * 1.2 * 100) / 100)
-                              updateWine(w.id, 'retail_price_source', 'WS avg (ex duty)')
-                            } else {
-                              updateWine(w.id, 'retail_price', val)
-                              updateWine(w.id, 'retail_price_source', 'Duty paid retail')
-                            }
-                          }}
-                          onClick={e => e.stopPropagation()}
-                          style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
-                        {/* Controlled select — no defaultValue, uses React state, no page jump */}
-                        <select
-                          value={priceType}
-                          onChange={e => {
-                            e.stopPropagation()
-                            setPriceType(w.id, e.target.value)
-                            updateWine(w.id, 'retail_price_source', e.target.value === 'ex-duty' ? 'WS avg (ex duty)' : 'Duty paid retail')
-                          }}
-                          onClick={e => e.stopPropagation()}
-                          style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '1px 2px', fontFamily: 'DM Mono, monospace', fontSize: '9px', outline: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
-                          <option value="ex-duty">ex</option>
-                          <option value="duty-paid">dp</option>
-                        </select>
-                        <button onClick={e => { e.stopPropagation(); openWineSearcher(w.description, w.vintage) }}
-                          style={{ background: 'none', border: '1px solid var(--border)', padding: '1px 4px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>🔍</button>
-                      </div>
-                      {w.retail_price_date && (
-                        <div style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>{w.retail_price_date}</div>
-                      )}
-                    </td>
+                    {/* WS Market */}
+                    {(() => {
+                      const duty = dutyForWine(w)
+                      const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
+                      const wsDP = ws ? ((ws + duty) * 1.2) : null
+                      const myDP = pp ? ((parseFloat(pp) + duty) * 1.2) : null
+                      const isComp = wsDP && myDP ? myDP < wsDP : null
+                      const isExDuty = w.retail_price_source === 'WS avg (ex duty)'
+                        || w.retail_price_source === 'Wine Searcher avg'
+                        || w.retail_price_source === 'Wine Searcher lowest +duty+VAT'
+                        || (!w.retail_price && w.ws_lowest_per_bottle)
+                      const displayVal = isExDuty ? (w.ws_lowest_per_bottle || '') : (w.retail_price || '')
 
-                    {/* Sell Price */}
-                    <td style={{ padding: '9px 12px' }}>
-                      {w.sale_price && <div style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: 'var(--wine)', marginBottom: '3px' }}>£{parseFloat(w.sale_price).toFixed(2)}</div>}
-                      <input type="number" step="0.01" defaultValue={w.sale_price || ''} placeholder="0.00"
+                      function handlePriceBlur(e) {
+                        const raw = e.target.value
+                        const val = raw ? parseFloat(raw) : null
+                        const type = e.target.closest('td').querySelector('select')?.value || 'ex-duty'
+                        if (type === 'ex-duty') {
+                          updateWine(w.id, 'ws_lowest_per_bottle', val)
+                          if (val) updateWine(w.id, 'retail_price', Math.round((val + duty) * 1.2 * 100) / 100)
+                          updateWine(w.id, 'retail_price_source', 'WS avg (ex duty)')
+                        } else {
+                          updateWine(w.id, 'retail_price', val)
+                          updateWine(w.id, 'retail_price_source', 'Duty paid retail')
+                        }
+                      }
+
+                      function handleTypeChange(e) {
+                        updateWine(w.id, 'retail_price_source', e.target.value === 'ex-duty' ? 'WS avg (ex duty)' : 'Duty paid retail')
+                      }
+
+                      return (
+                        <td style={{ padding: '9px 12px', minWidth: '160px' }}>
+                          {wsDP ? (
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: isComp ? '#2d6a4f' : 'var(--ink)' }}>
+                                  £{wsDP.toFixed(2)}
+                                </span>
+                                {isComp !== null && (
+                                  <span style={{ fontSize: '10px', fontWeight: 600, color: isComp ? '#2d6a4f' : '#c0392b' }}>
+                                    {isComp ? '✓' : '✗'}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>
+                                WS £{ws.toFixed(2)} ex-tax
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>—</div>
+                          )}
+                          <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginTop: '5px' }}>
+                            <input
+                              type="number" step="0.01"
+                              key={`${w.id}-price`}
+                              defaultValue={displayVal}
+                              placeholder="WS avg"
+                              ref={el => { if (el) wsInputRefs.current[w.id] = el }}
+                              onBlur={handlePriceBlur}
+                              onClick={e => e.stopPropagation()}
+                              style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
+                            <select
+                              key={`${w.id}-type`}
+                              defaultValue={isExDuty ? 'ex-duty' : 'duty-paid'}
+                              onChange={handleTypeChange}
+                              onClick={e => e.stopPropagation()}
+                              style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '1px 2px', fontFamily: 'DM Mono, monospace', fontSize: '9px', outline: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
+                              <option value="ex-duty">ex</option>
+                              <option value="duty-paid">dp</option>
+                            </select>
+                            <button
+                              onClick={e => { e.stopPropagation(); openWineSearcher(w.id, w.description, w.vintage) }}
+                              title="Look up on Wine Searcher — returns here focused"
+                              style={{ background: 'none', border: '1px solid var(--border)', padding: '1px 4px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>🔍</button>
+                          </div>
+                          {w.retail_price_date && (
+                            <div style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>
+                              {w.retail_price_date}
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })()}
+
+                    {/* Sell Price + Suggested */}
+                    <td style={{ padding: '9px 12px', minWidth: '130px' }}>
+                      {w.sale_price && (
+                        <div style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: 'var(--wine)', marginBottom: '3px' }}>
+                          £{parseFloat(w.sale_price).toFixed(2)}
+                        </div>
+                      )}
+                      <input type="number" step="0.01"
+                        key={`${w.id}-sale`}
+                        defaultValue={w.sale_price || ''}
+                        placeholder="0.00"
                         onBlur={e => { if (e.target.value !== String(w.sale_price || '')) updateWine(w.id, 'sale_price', e.target.value ? parseFloat(e.target.value) : null) }}
                         onClick={e => e.stopPropagation()}
                         style={{ width: '68px', border: '1px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: 'var(--wine)' }} />
+
+                      {/* Suggested price — shown when WS price is available */}
+                      {suggestion && (
+                        <div style={{ marginTop: '4px' }}>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation()
+                              updateWine(w.id, 'sale_price', suggestion.price)
+                            }}
+                            title={suggestion.isFloor
+                              ? 'At 10% margin floor — WS price leaves little room'
+                              : 'Suggested: WS market DP − £3 (approx £2–3 under London average)'}
+                            style={{
+                              background: 'none',
+                              border: `1px solid ${suggestion.isFloor ? 'rgba(184,148,42,0.4)' : 'rgba(45,106,79,0.3)'}`,
+                              color: suggestion.isFloor ? '#b8942a' : '#2d6a4f',
+                              padding: '2px 6px',
+                              fontFamily: 'DM Mono, monospace',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '3px'
+                            }}>
+                            {suggestion.isFloor ? '⚠' : '→'} £{suggestion.price.toFixed(2)}
+                            <span style={{ fontSize: '8px', opacity: 0.7 }}>{suggestion.isFloor ? 'floor' : 'use'}</span>
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     {/* Notes */}
@@ -885,20 +915,22 @@ export default function AdminPage() {
                                     style={{ width: '100%', minHeight: '40px', border: '1px solid #9b3a4a', background: 'rgba(155,58,74,0.03)', padding: '4px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', resize: 'vertical' }} />
                                 </div>
                               )}
-                              {!w.producer_note && (
-                                <div style={{ marginTop: '6px' }}>
-                                  <div style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '3px' }}>📋 Add producer note</div>
-                                  <textarea placeholder="Add producer note…" onBlur={e => { if (e.target.value) updateWine(w.id, 'producer_note', e.target.value) }}
-                                    style={{ width: '100%', minHeight: '40px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '4px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', resize: 'vertical' }} />
-                                </div>
-                              )}
+                            </div>
+                          )}
+                          {!w.producer_note && isExpanded && (
+                            <div style={{ marginTop: '6px' }}>
+                              <div style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '3px' }}>📋 Add producer note</div>
+                              <textarea placeholder="Add producer note…" onBlur={e => { if (e.target.value) updateWine(w.id, 'producer_note', e.target.value) }}
+                                style={{ width: '100%', minHeight: '40px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '4px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', resize: 'vertical' }} />
                             </div>
                           )}
                         </div>
                       )}
                       {!w.women_note && !w.producer_note && (
                         <button onClick={e => { e.stopPropagation(); setExpandedNote(isExpanded ? null : w.id) }}
-                          style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 8px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>+ note</button>
+                          style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 8px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                          + note
+                        </button>
                       )}
                       {isExpanded && !w.women_note && !w.producer_note && (
                         <div style={{ marginTop: '6px' }}>
@@ -912,53 +944,19 @@ export default function AdminPage() {
                       )}
                     </td>
 
-                    {/* Buyer */}
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
                       <input type="checkbox" checked={!!w.include_in_buyer_view}
                         onChange={e => updateWine(w.id, 'include_in_buyer_view', e.target.checked)}
                         onClick={e => e.stopPropagation()}
                         style={{ width: '16px', height: '16px', accentColor: 'var(--wine)', cursor: 'pointer' }} />
-                      {w.include_in_buyer_view && !w.sale_price && (
-                        <div style={{ fontSize: '9px', color: '#c0392b', fontFamily: 'DM Mono, monospace', marginTop: '2px', whiteSpace: 'nowrap' }}>no price</div>
-                      )}
                     </td>
-
                     <td style={{ padding: '9px 12px' }}>
                       <button onClick={e => { e.stopPropagation(); moveToStudio(w) }}
                         style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 8px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>→ Studio</button>
                     </td>
-
-                    {/* Flag */}
-                    <td style={{ padding: '9px 12px', textAlign: 'center' }}>
-                      <button
-                        onClick={async e => {
-                          e.stopPropagation()
-                          if (w.flagged) {
-                            await updateWine(w.id, 'flagged', false)
-                            await updateWine(w.id, 'flag_note', null)
-                          } else {
-                            const note = prompt('Flag reason (optional — press Enter to skip):') ?? null
-                            await supabase.from('wines').update({ flagged: true, flag_note: note || null }).eq('id', w.id)
-                            setWines(prev => prev.map(x => x.id === w.id ? { ...x, flagged: true, flag_note: note || null } : x))
-                          }
-                        }}
-                        title={w.flagged ? (w.flag_note ? `Flagged: ${w.flag_note}\nClick to clear` : 'Flagged — click to clear') : 'Flag for review'}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', opacity: w.flagged ? 1 : 0.15, padding: '2px 4px', lineHeight: 1 }}>
-                        🚩
-                      </button>
-                      {w.flagged && w.flag_note && (
-                        <div style={{ fontSize: '9px', color: '#b8942a', fontFamily: 'DM Mono, monospace', marginTop: '2px', maxWidth: '80px', lineHeight: 1.3, textAlign: 'center' }}>
-                          {w.flag_note.length > 30 ? w.flag_note.slice(0, 30) + '…' : w.flag_note}
-                        </div>
-                      )}
-                    </td>
-
                     <td style={{ padding: '9px 12px' }}>
-                      <span style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: '2px',
-                        background: w.source === 'Berry Brothers' ? 'rgba(107,30,46,0.1)' : w.source === 'Flint' ? 'rgba(184,148,42,0.12)' : w.source === 'Jeroboams' ? 'rgba(45,106,79,0.1)' : 'rgba(100,100,100,0.1)',
-                        color: w.source === 'Berry Brothers' ? 'var(--wine)' : w.source === 'Flint' ? '#7a5e10' : w.source === 'Jeroboams' ? '#2d6a4f' : '#555',
-                        whiteSpace: 'nowrap' }}>
-                        {w.source === 'Berry Brothers' ? 'BB' : w.source === 'Jeroboams' ? 'JB' : w.source}
+                      <span style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: '2px', background: w.source === 'Berry Brothers' ? 'rgba(107,30,46,0.1)' : w.source === 'Flint' ? 'rgba(184,148,42,0.12)' : 'rgba(45,106,79,0.1)', color: w.source === 'Berry Brothers' ? 'var(--wine)' : w.source === 'Flint' ? '#7a5e10' : '#2d6a4f', whiteSpace: 'nowrap' }}>
+                        {w.source === 'Berry Brothers' ? 'BB' : w.source}
                       </span>
                     </td>
                   </tr>
@@ -1008,7 +1006,9 @@ export default function AdminPage() {
               <input type="text" value={overrideNote} onChange={e => setOverrideNote(e.target.value)}
                 placeholder="e.g. Supplier corrected invoice price"
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-              <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px', fontFamily: 'DM Mono, monospace' }}>This note will appear as a warning if the next import has a different price.</div>
+              <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px', fontFamily: 'DM Mono, monospace' }}>
+                This note will appear as a warning if the next import has a different price.
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => { setOverrideModal(null); setOverrideNote('') }}
