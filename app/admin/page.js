@@ -55,7 +55,7 @@ export default function AdminPage() {
 
   async function fetchWines() {
     setLoading(true)
-    const { data, error } = await supabase.from('wines').select('*').order('description')
+    const { data, error } = await supabase.from('wines').select('*').gt('quantity', '0').order('description')
     if (error) console.error(error)
     else { setWines(data); setFiltered(data) }
     setLoading(false)
