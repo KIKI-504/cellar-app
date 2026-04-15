@@ -16,6 +16,46 @@ const colourDot = (colour) => {
   return '#aaa'
 }
 
+// ─── Label helpers ───────────────────────────────────────────────────────────
+
+function abbreviateName(description) {
+  const parts = description.split(',').map(p => p.trim())
+  const wineName = parts[0] || description
+  const rawProducer = parts.slice(1).join(', ')
+  const producer = rawProducer
+    .replace(/^Domaine de la\s+/i, '')
+    .replace(/^Domaine de\s+/i, '')
+    .replace(/^Domaine du\s+/i, '')
+    .replace(/^Domaine des\s+/i, '')
+    .replace(/^Domaine\s+/i, '')
+    .replace(/^Château\s+/i, '')
+    .replace(/^Chateau\s+/i, '')
+    .replace(/,.*$/, '')
+    .trim()
+  return { wineName, producer }
+}
+
+function StudioLabelContent({ entry, wineName, producer }) {
+  const bottleSize = entry.bottle_size || (entry.wines?.bottle_volume?.includes('150') ? '150' : '75')
+  const dp = entry.dp_price ? parseFloat(entry.dp_price).toFixed(2) : null
+  const sale = entry.sale_price ? parseFloat(entry.sale_price).toFixed(2) : null
+  const vintage = entry.wines?.vintage || entry.unlinked_vintage || ''
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '.')
+  return (
+    <div style={{ width: '100%', padding: '18px', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '144px' }}>
+      {bottleSize === '150' && <div style={{ fontSize: '32px', fontWeight: 'bold', letterSpacing: '0.15em', marginBottom: '10px', textTransform: 'uppercase' }}>MAGNUM</div>}
+      {bottleSize === '37.5' && <div style={{ fontSize: '24px', fontWeight: 'bold', letterSpacing: '0.1em', marginBottom: '10px', textTransform: 'uppercase' }}>HALF BOTTLE</div>}
+      <div style={{ fontSize: '22px', fontWeight: 'bold', lineHeight: 1.3, marginBottom: '2px' }}>{vintage} {wineName}</div>
+      {producer && <div style={{ fontSize: '20px', lineHeight: 1.3, marginBottom: '10px' }}>{producer}</div>}
+      {dp && <div style={{ fontSize: '20px', marginTop: '8px' }}>£{dp} DP</div>}
+      {sale && <div style={{ fontSize: '20px' }}>£{sale} Retail</div>}
+      <div style={{ fontSize: '18px', marginTop: '4px', color: '#444' }}>({today})</div>
+    </div>
+  )
+}
+
+// ─── Price alert helpers ─────────────────────────────────────────────────────
+
 const GC_KEYWORDS = ['grand cru']
 const PREMIER_KEYWORDS = ['premier cru', '1er cru', '1er', 'premiere cru', 'premiers crus', 'premier crus']
 
@@ -42,18 +82,10 @@ function getPriceAlert(s) {
 function EditableCell({ value, onSave, type = 'text', step, min, placeholder, style, width }) {
   const [local, setLocal] = useState(value ?? '')
   const [focused, setFocused] = useState(false)
-
-  useEffect(() => {
-    if (!focused) setLocal(value ?? '')
-  }, [value, focused])
-
+  useEffect(() => { if (!focused) setLocal(value ?? '') }, [value, focused])
   return (
     <input
-      type={type}
-      step={step}
-      min={min}
-      value={local}
-      placeholder={placeholder}
+      type={type} step={step} min={min} value={local} placeholder={placeholder}
       onChange={e => setLocal(e.target.value)}
       onFocus={e => { setFocused(true); e.target.select() }}
       onBlur={e => {
@@ -87,6 +119,13 @@ export default function StudioPage() {
   const [moveNotes, setMoveNotes] = useState('')
   const [moveSaving, setMoveSaving] = useState(false)
 
+  // Label print modal
+  const [showLabelModal, setShowLabelModal] = useState(false)
+  const [labelEntry, setLabelEntry] = useState(null)
+  const [labelWineName, setLabelWineName] = useState('')
+  const [labelProducer, setLabelProducer] = useState('')
+
+  // Scan modal
   const [showScanModal, setShowScanModal] = useState(false)
   const [scanFile, setScanFile] = useState(null)
   const [scanPreview, setScanPreview] = useState(null)
@@ -107,9 +146,9 @@ export default function StudioPage() {
   const [scanSalePrice, setScanSalePrice] = useState('')
   const [scanColour, setScanColour] = useState('')
   const [scanSaving, setScanSaving] = useState(false)
-
   const fileInputRef = useRef(null)
 
+  // Add Wine modal
   const [showAddModal, setShowAddModal] = useState(false)
   const [addDescription, setAddDescription] = useState('')
   const [addProducer, setAddProducer] = useState('')
@@ -158,9 +197,79 @@ export default function StudioPage() {
     if (!error) setStudioWines(prev => prev.filter(s => s.id !== id))
   }
 
+  // ─── Label print ────────────────────────────────────────────────────────────
+
+  function openLabelModal(s) {
+    const desc = s.wines?.description || s.unlinked_description || ''
+    const { wineName, producer } = desc ? abbreviateName(desc) : { wineName: '', producer: '' }
+    setLabelEntry(s)
+    setLabelWineName(wineName)
+    setLabelProducer(producer)
+    setShowLabelModal(true)
+  }
+
+  function printLabel() {
+    if (!labelEntry) return
+    const w = labelEntry
+    const bottleSize = w.bottle_size || '75'
+    const vintage = w.wines?.vintage || w.unlinked_vintage || ''
+    const dp = w.dp_price ? parseFloat(w.dp_price).toFixed(2) : null
+    const sale = w.sale_price ? parseFloat(w.sale_price).toFixed(2) : null
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '.')
+
+    const labelHTML = `
+      ${bottleSize === '150' ? '<div class="magnum">MAGNUM</div>' : ''}
+      ${bottleSize === '37.5' ? '<div class="half">HALF BOTTLE</div>' : ''}
+      <div class="wine-name">${vintage} ${labelWineName}</div>
+      ${labelProducer ? `<div class="producer">${labelProducer}</div>` : ''}
+      ${dp ? `<div class="price">£${dp} DP</div>` : ''}
+      ${sale ? `<div class="price">£${sale} Retail</div>` : ''}
+      <div class="date">(${today})</div>
+    `
+
+    const css = `
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { width: 4in; font-family: Arial, sans-serif; }
+      @page { size: 4in 6in; margin: 0; }
+      .label-half {
+        width: 4in; height: 3in; padding: 18px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        border-bottom: 1px dashed #ccc; text-align: center;
+      }
+      .label-half:last-child { border-bottom: none; }
+      .magnum { font-size: 36px; font-weight: bold; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; }
+      .half { font-size: 26px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
+      .wine-name { font-size: 24px; font-weight: bold; line-height: 1.3; margin-bottom: 2px; }
+      .producer { font-size: 22px; line-height: 1.3; margin-bottom: 10px; }
+      .price { font-size: 22px; line-height: 1.6; }
+      .date { font-size: 20px; color: #444; margin-top: 4px; }
+    `
+
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;'
+    document.body.appendChild(iframe)
+    // iOS Safari fix: write content then wait 300ms before calling print()
+    // Without this delay, iOS renders a blank page
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          if (document.body.contains(iframe)) document.body.removeChild(iframe)
+        }, 1000)
+      }, 300)
+    }
+    const doc = iframe.contentDocument || iframe.contentWindow.document
+    doc.open()
+    doc.write(`<html><head><style>${css}</style></head><body>
+      ${[1, 2].map(() => `<div class="label-half">${labelHTML}</div>`).join('')}
+    </body></html>`)
+    doc.close()
+  }
+
   function cycleSort(field) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortField(field); setSortDir(field === 'quantity' ? 'asc' : 'asc') }
+    else { setSortField(field); setSortDir('asc') }
   }
 
   function sortIcon(field) {
@@ -182,13 +291,8 @@ export default function StudioPage() {
     setMoveSaving(true)
     const dp = calcDP(selectedWine.purchase_price_per_bottle)
     const { error } = await supabase.from('studio').insert({
-      wine_id: selectedWine.id,
-      quantity: moveQty,
-      date_moved: moveDate,
-      dp_price: dp,
-      status: 'Available',
-      notes: moveNotes || null,
-      include_in_local: false
+      wine_id: selectedWine.id, quantity: moveQty, date_moved: moveDate,
+      dp_price: dp, status: 'Available', notes: moveNotes || null, include_in_local: false
     })
     if (!error) { await fetchStudio(); closeMoveModal() }
     setMoveSaving(false)
@@ -214,19 +318,16 @@ export default function StudioPage() {
     setAddQuantity(1); setAddIBPrice(''); setAddSalePrice(''); setAddNotes(''); setAddWineId('')
   }
 
-  function closeAddModal() { setShowAddModal(false) }
-
   function updateAddField(field, value) {
     const fields = { addDescription, addProducer, addVintage, addColour, addBottleSize, [field]: value }
     if (['addDescription', 'addProducer', 'addVintage', 'addColour', 'addBottleSize'].includes(field)) {
-      const newId = generateWineId(
+      setAddWineId(generateWineId(
         field === 'addVintage' ? value : fields.addVintage,
         field === 'addProducer' ? value : fields.addProducer,
         field === 'addDescription' ? value : fields.addDescription,
         field === 'addColour' ? value : fields.addColour,
         field === 'addBottleSize' ? value : fields.addBottleSize,
-      )
-      setAddWineId(newId)
+      ))
     }
     if (field === 'addDescription') setAddDescription(value)
     if (field === 'addProducer') setAddProducer(value)
@@ -248,34 +349,22 @@ export default function StudioPage() {
       const ibPrice = addIBPrice ? parseFloat(addIBPrice) : null
       const dp = ibPrice ? ((ibPrice + 3) * 1.2).toFixed(2) : null
       const { data: newWine, error: wineError } = await supabase.from('wines').insert({
-        source: 'Manual',
-        source_id: addWineId || null,
-        description: addDescription,
-        vintage: addVintage || null,
-        colour: addColour || null,
-        region: addRegion || null,
+        source: 'Manual', source_id: addWineId || null, description: addDescription,
+        vintage: addVintage || null, colour: addColour || null, region: addRegion || null,
         country: addCountry || null,
         bottle_format: addBottleSize === '150' ? 'Magnum' : addBottleSize === '37.5' ? 'Half Bottle' : 'Bottle',
-        bottle_volume: addBottleSize,
-        quantity: String(addQuantity),
-        purchase_price_per_bottle: ibPrice,
-        include_in_buyer_view: false,
+        bottle_volume: addBottleSize, quantity: String(addQuantity),
+        purchase_price_per_bottle: ibPrice, include_in_buyer_view: false,
       }).select().single()
       if (wineError) throw wineError
       const { error: studioError } = await supabase.from('studio').insert({
-        wine_id: newWine.id,
-        quantity: addQuantity,
-        date_moved: new Date().toISOString().split('T')[0],
-        dp_price: dp,
-        sale_price: addSalePrice ? parseFloat(addSalePrice) : null,
-        status: 'Available',
-        notes: addNotes || null,
-        include_in_local: false,
-        bottle_size: addBottleSize,
-        colour: addColour || null,
+        wine_id: newWine.id, quantity: addQuantity, date_moved: new Date().toISOString().split('T')[0],
+        dp_price: dp, sale_price: addSalePrice ? parseFloat(addSalePrice) : null,
+        status: 'Available', notes: addNotes || null, include_in_local: false,
+        bottle_size: addBottleSize, colour: addColour || null,
       })
       if (studioError) throw studioError
-      await fetchStudio(); closeAddModal()
+      await fetchStudio(); setShowAddModal(false)
     } catch (err) { console.error(err); alert('Save failed: ' + err.message) }
     setAddSaving(false)
   }
@@ -285,8 +374,8 @@ export default function StudioPage() {
     setScanDone(false); setScanRaw(null); setScanMatch(null); setScanWine(null)
     setScanSearch(''); setScanSearchResults([]); setScanQty(1)
     setScanDate(new Date().toISOString().split('T')[0]); setScanNotes('')
-    setScanVintage(''); setScanBottleSize('75'); setScanSalePrice('')
-    setScanColour(''); setScanIBPrice(''); setScanRetailPrice('')
+    setScanVintage(''); setScanBottleSize('75'); setScanSalePrice(''); setScanColour('')
+    setScanIBPrice(''); setScanRetailPrice('')
   }
 
   function handleScanFileSelect(e) {
@@ -302,14 +391,10 @@ export default function StudioPage() {
     setScanAnalysing(true)
     try {
       const base64 = await new Promise((res, rej) => {
-        const r = new FileReader()
-        r.onload = () => res(r.result.split(',')[1])
-        r.onerror = rej
-        r.readAsDataURL(scanFile)
+        const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(scanFile)
       })
       const response = await fetch('/api/analyse-label', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64, mediaType: scanFile.type })
       })
       const result = await response.json()
@@ -362,48 +447,25 @@ export default function StudioPage() {
     const dp = ibPrice ? ((ibPrice + 3) * 1.2).toFixed(2) : null
     const retailPrice = scanRetailPrice ? parseFloat(scanRetailPrice) : (scanWine?.retail_price || null)
     const insertData = {
-      wine_id: scanWine?.id || null,
-      quantity: scanQty,
-      date_moved: scanDate,
-      dp_price: dp,
-      status: 'Available',
-      notes: scanNotes || null,
-      include_in_local: false,
-      bottle_size: scanBottleSize || '75',
-      sale_price: scanSalePrice ? parseFloat(scanSalePrice) : null,
+      wine_id: scanWine?.id || null, quantity: scanQty, date_moved: scanDate,
+      dp_price: dp, status: 'Available', notes: scanNotes || null, include_in_local: false,
+      bottle_size: scanBottleSize || '75', sale_price: scanSalePrice ? parseFloat(scanSalePrice) : null,
       colour: scanWine ? (scanWine.colour || null) : (scanColour || null),
       unlinked_description: !scanWine ? [scanRaw?.wine_name, scanRaw?.producer].filter(Boolean).join(', ') : null,
       unlinked_vintage: !scanWine ? (scanVintage || scanRaw?.vintage || null) : null,
     }
     if (scanWine?.id && retailPrice && retailPrice !== scanWine?.retail_price) {
-      await supabase.from('wines').update({
-        retail_price: retailPrice,
-        retail_price_source: 'Manual',
-        retail_price_date: new Date().toISOString().split('T')[0]
-      }).eq('id', scanWine.id)
+      await supabase.from('wines').update({ retail_price: retailPrice, retail_price_source: 'Manual', retail_price_date: new Date().toISOString().split('T')[0] }).eq('id', scanWine.id)
     }
     let saved = false
     if (scanWine?.id) {
-      const { data: existing } = await supabase.from('studio').select('id, quantity')
-        .eq('wine_id', scanWine.id).eq('status', 'Available').maybeSingle()
-      if (existing) {
-        const { error } = await supabase.from('studio').update({ quantity: existing.quantity + scanQty }).eq('id', existing.id)
-        if (!error) saved = true; else alert('Save failed: ' + error.message)
-      }
+      const { data: existing } = await supabase.from('studio').select('id, quantity').eq('wine_id', scanWine.id).eq('status', 'Available').maybeSingle()
+      if (existing) { const { error } = await supabase.from('studio').update({ quantity: existing.quantity + scanQty }).eq('id', existing.id); if (!error) saved = true; else alert('Save failed: ' + error.message) }
     } else if (insertData.unlinked_description) {
-      const { data: existing } = await supabase.from('studio').select('id, quantity')
-        .eq('unlinked_description', insertData.unlinked_description)
-        .eq('unlinked_vintage', insertData.unlinked_vintage || '')
-        .eq('status', 'Available').maybeSingle()
-      if (existing) {
-        const { error } = await supabase.from('studio').update({ quantity: existing.quantity + scanQty }).eq('id', existing.id)
-        if (!error) saved = true; else alert('Save failed: ' + error.message)
-      }
+      const { data: existing } = await supabase.from('studio').select('id, quantity').eq('unlinked_description', insertData.unlinked_description).eq('unlinked_vintage', insertData.unlinked_vintage || '').eq('status', 'Available').maybeSingle()
+      if (existing) { const { error } = await supabase.from('studio').update({ quantity: existing.quantity + scanQty }).eq('id', existing.id); if (!error) saved = true; else alert('Save failed: ' + error.message) }
     }
-    if (!saved) {
-      const { error } = await supabase.from('studio').insert(insertData)
-      if (!error) saved = true; else alert('Save failed: ' + error.message)
-    }
+    if (!saved) { const { error } = await supabase.from('studio').insert(insertData); if (!error) saved = true; else alert('Save failed: ' + error.message) }
     if (saved) { await fetchStudio(); setShowScanModal(false) }
     setScanSaving(false)
   }
@@ -411,28 +473,18 @@ export default function StudioPage() {
   const filtered = studioWines
     .filter(s => {
       if (filterStatus && s.status !== filterStatus) return false
-      if (filterColour) {
-        const c = (s.wines?.colour || s.colour || '').toLowerCase()
-        if (!c.includes(filterColour.toLowerCase())) return false
-      }
-      if (search) {
-        const q = search.toLowerCase()
-        return [s.wines?.description, s.wines?.vintage, s.wines?.region, s.unlinked_description].join(' ').toLowerCase().includes(q)
-      }
+      if (filterColour) { const c = (s.wines?.colour || s.colour || '').toLowerCase(); if (!c.includes(filterColour.toLowerCase())) return false }
+      if (search) { const q = search.toLowerCase(); return [s.wines?.description, s.wines?.vintage, s.wines?.region, s.unlinked_description].join(' ').toLowerCase().includes(q) }
       return true
     })
     .sort((a, b) => {
       let av, bv
       if (sortField === 'quantity') { av = a.quantity || 0; bv = b.quantity || 0 }
-      else if (sortField === 'name') {
-        av = (a.wines?.description || a.unlinked_description || '').toLowerCase()
-        bv = (b.wines?.description || b.unlinked_description || '').toLowerCase()
-      } else if (sortField === 'dp_price') { av = parseFloat(a.dp_price) || 0; bv = parseFloat(b.dp_price) || 0 }
+      else if (sortField === 'name') { av = (a.wines?.description || a.unlinked_description || '').toLowerCase(); bv = (b.wines?.description || b.unlinked_description || '').toLowerCase() }
+      else if (sortField === 'dp_price') { av = parseFloat(a.dp_price) || 0; bv = parseFloat(b.dp_price) || 0 }
       else if (sortField === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
-      else if (sortField === 'colour') {
-        av = (a.wines?.colour || a.colour || '').toLowerCase()
-        bv = (b.wines?.colour || b.colour || '').toLowerCase()
-      } else { av = a.date_moved || ''; bv = b.date_moved || '' }
+      else if (sortField === 'colour') { av = (a.wines?.colour || a.colour || '').toLowerCase(); bv = (b.wines?.colour || b.colour || '').toLowerCase() }
+      else { av = a.date_moved || ''; bv = b.date_moved || '' }
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
@@ -454,21 +506,29 @@ export default function StudioPage() {
     </div>
   )
 
+  // Nav items — Labels removed
+  const NAV_ITEMS = [['Inventory', '/admin'], ['Studio', '/studio'], ['Box Builder', '/boxes'], ['Buyer View', '/buyer'], ['Local Sales', '/local'], ['Consignment', '/consignment']]
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
 
-      {/* Nav */}
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100 }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
-        <div style={{ display: 'flex', gap: '4px' }}>
-          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Box Builder', '/boxes'], ['Labels', '/labels'], ['Buyer View', '/buyer'], ['Local Sales', '/local'], ['Consignment', '/consignment']].map(([label, path]) => (
-            <button key={path} onClick={() => router.push(path)} style={{ background: path === '/studio' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/studio' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>{label}</button>
+      {/* Nav — mobile horizontally scrollable, Cellar logo = home (/admin) */}
+      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', padding: '0 16px 0 20px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box', gap: '8px' }}>
+        <button onClick={() => router.push('/admin')} style={{ background: 'none', border: 'none', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', cursor: 'pointer', padding: 0, flexShrink: 0 }}>Cellar</button>
+        <div style={{ display: 'flex', gap: '2px', overflowX: 'auto', flex: 1, scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          {NAV_ITEMS.map(([label, path]) => (
+            <button key={path} onClick={() => router.push(path)}
+              style={{ background: path === '/studio' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/studio' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 12px', borderRadius: '2px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {label}
+            </button>
           ))}
         </div>
-        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
+        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px', flexShrink: 0 }}>Sign Out</button>
       </div>
 
       <div style={{ padding: '76px 28px 24px' }}>
+
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Studio Inventory</div>
@@ -482,6 +542,7 @@ export default function StudioPage() {
           </div>
         </div>
 
+        {/* Stats */}
         <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '16px', fontSize: '11px', flexWrap: 'wrap' }}>
           {[['available', availableCount], ['on local sales', localCount], ['total bottles', totalBottles]].map(([label, n]) => (
             <div key={label} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
@@ -491,6 +552,7 @@ export default function StudioPage() {
           ))}
         </div>
 
+        {/* Toolbar */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search studio…"
             style={{ flex: 1, minWidth: '160px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
@@ -535,29 +597,24 @@ export default function StudioPage() {
             </span>
             {(filterColour || filterStatus || search) && (
               <button onClick={() => { setFilterColour(''); setFilterStatus('Available'); setSearch('') }}
-                style={{ background: 'none', border: 'none', fontSize: '10px', color: 'var(--wine)', cursor: 'pointer', fontFamily: 'DM Mono, monospace', padding: 0 }}>Clear filters</button>
+                style={{ background: 'none', border: 'none', fontSize: '10px', color: 'var(--wine)', cursor: 'pointer', fontFamily: 'DM Mono, monospace', padding: 0 }}>
+                Clear filters
+              </button>
             )}
           </div>
         )}
 
+        {/* Table */}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
                 {[
-                  { label: 'Wine', field: 'name' },
-                  { label: 'Vintage', field: null },
-                  { label: 'Colour', field: null },
-                  { label: 'Size', field: null },
-                  { label: 'Qty', field: 'quantity' },
-                  { label: 'Moved', field: 'date_moved' },
-                  { label: 'DP Price', field: 'dp_price' },
-                  { label: 'Sale £', field: 'sale_price' },
-                  { label: 'Status', field: null },
-                  { label: 'Local Sales', field: null },
-                  { label: 'Notes', field: null },
-                  { label: '', field: null },
-                  { label: '!', field: null },
+                  { label: 'Wine', field: 'name' }, { label: 'Vintage', field: null }, { label: 'Colour', field: null },
+                  { label: 'Size', field: null }, { label: 'Qty', field: 'quantity' }, { label: 'Moved', field: 'date_moved' },
+                  { label: 'DP Price', field: 'dp_price' }, { label: 'Sale £', field: 'sale_price' },
+                  { label: 'Status', field: null }, { label: 'Local', field: null }, { label: 'Notes', field: null },
+                  { label: '', field: null }, { label: '!', field: null },
                 ].map(({ label, field }) => (
                   <th key={label} onClick={field ? () => cycleSort(field) : undefined}
                     style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: field ? 'pointer' : 'default', userSelect: 'none' }}>
@@ -636,7 +693,8 @@ export default function StudioPage() {
                     <td style={{ padding: '9px 12px' }}>
                       <EditableCell type="number" min="0" value={s.quantity}
                         onSave={v => updateStudio(s.id, 'quantity', v === null ? 0 : parseInt(v))}
-                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, outline: 'none', textAlign: 'center' }} width="52px" />
+                        style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, outline: 'none', textAlign: 'center' }}
+                        width="52px" />
                     </td>
 
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: '11px' }}>{s.date_moved}</td>
@@ -657,7 +715,8 @@ export default function StudioPage() {
                     <td style={{ padding: '9px 12px' }}>
                       <EditableCell type="number" step="0.01" value={s.sale_price ? parseFloat(s.sale_price) : null}
                         onSave={v => updateStudio(s.id, 'sale_price', v)} placeholder="—"
-                        style={{ border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: s.sale_price ? 'var(--wine)' : 'var(--muted)' }} width="72px" />
+                        style={{ border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', fontWeight: 600, color: s.sale_price ? 'var(--wine)' : 'var(--muted)' }}
+                        width="72px" />
                     </td>
 
                     <td style={{ padding: '9px 12px' }}>
@@ -672,7 +731,8 @@ export default function StudioPage() {
                     </td>
 
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
-                      <input type="checkbox" checked={!!s.include_in_local} onChange={e => updateStudio(s.id, 'include_in_local', e.target.checked)}
+                      <input type="checkbox" checked={!!s.include_in_local}
+                        onChange={e => updateStudio(s.id, 'include_in_local', e.target.checked)}
                         style={{ width: '16px', height: '16px', accentColor: 'var(--wine)', cursor: 'pointer' }} />
                     </td>
 
@@ -683,17 +743,26 @@ export default function StudioPage() {
                       ) : <span style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>{s.notes || ''}</span>}
                     </td>
 
+                    {/* Actions — 🏷 label button added */}
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => setExpandedNote(isDetailOpen ? null : s.id)} title="View price details"
-                        style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: isDetailOpen ? 'var(--wine)' : 'var(--muted)', fontSize: '11px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', marginRight: '4px' }}>
+                        style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: isDetailOpen ? 'var(--wine)' : 'var(--muted)', fontSize: '11px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', marginRight: '3px' }}>
                         {isDetailOpen ? '▲' : '£'}
+                      </button>
+                      <button onClick={() => openLabelModal(s)} title="Print label"
+                        style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--muted)', fontSize: '11px', padding: '2px 7px', marginRight: '3px' }}>
+                        🏷
                       </button>
                       {isEditing ? (
                         <button onClick={() => setEditingRow(null)}
-                          style={{ background: 'var(--wine)', border: 'none', cursor: 'pointer', color: 'var(--white)', fontSize: '10px', padding: '3px 8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.05em', marginRight: '4px' }}>Done</button>
+                          style={{ background: 'var(--wine)', border: 'none', cursor: 'pointer', color: 'var(--white)', fontSize: '10px', padding: '3px 8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.05em', marginRight: '3px' }}>
+                          Done
+                        </button>
                       ) : (
                         <button onClick={() => setEditingRow(s.id)} title="Edit this entry"
-                          style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--muted)', fontSize: '11px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', marginRight: '4px' }}>✎</button>
+                          style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--muted)', fontSize: '11px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', marginRight: '3px' }}>
+                          ✎
+                        </button>
                       )}
                       <button onClick={() => deleteStudio(s.id)} title="Remove from studio"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 4px' }}>✕</button>
@@ -704,88 +773,16 @@ export default function StudioPage() {
                     </td>
                   </tr>
 
-                  {/* Price detail row — now includes WS retail price input + search */}
                   {isDetailOpen && (
                     <tr key={s.id + '-detail'} style={{ borderBottom: '1px solid #ede6d6', background: 'rgba(107,30,46,0.03)' }}>
                       <td colSpan={13} style={{ padding: '8px 20px 12px 36px' }}>
-                        <div style={{ display: 'flex', gap: '28px', fontSize: '11px', fontFamily: 'DM Mono, monospace', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                          {ibPrice && (
-                            <div>
-                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>IB price</span>
-                              <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{ibPrice}</div>
-                            </div>
-                          )}
-                          {s.dp_price && (
-                            <div>
-                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>DP price</span>
-                              <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{parseFloat(s.dp_price).toFixed(2)}</div>
-                            </div>
-                          )}
-                          {s.sale_price && (
-                            <div>
-                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Sale price</span>
-                              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wine)', marginTop: '2px' }}>£{parseFloat(s.sale_price).toFixed(2)}</div>
-                            </div>
-                          )}
-                          {s.dp_price && s.sale_price && (
-                            <div>
-                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Margin on DP</span>
-                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#2d6a4f', marginTop: '2px' }}>
-                                {((parseFloat(s.sale_price) - parseFloat(s.dp_price)) / parseFloat(s.dp_price) * 100).toFixed(1)}%
-                              </div>
-                            </div>
-                          )}
-                          <div>
-                            <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Bottle size</span>
-                            <div style={{ fontSize: '13px', marginTop: '2px' }}>{s.bottle_size || '75'}cl</div>
-                          </div>
-                          {s.date_moved && (
-                            <div>
-                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Date moved</span>
-                              <div style={{ fontSize: '13px', marginTop: '2px' }}>{s.date_moved}</div>
-                            </div>
-                          )}
-                          {/* WS Retail — only for linked wines */}
-                          {s.wines && (
-                            <div>
-                              <span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>WS Retail (ex-duty)</span>
-                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginTop: '4px' }}>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="ex-duty £"
-                                  defaultValue={s.wines.ws_lowest_per_bottle ? parseFloat(s.wines.ws_lowest_per_bottle) : ''}
-                                  onBlur={async e => {
-                                    const val = e.target.value ? parseFloat(e.target.value) : null
-                                    await supabase.from('wines').update({
-                                      ws_lowest_per_bottle: val,
-                                      retail_price: val ? Math.round((val + 3) * 1.2 * 100) / 100 : null,
-                                      retail_price_source: val ? 'WS avg (ex duty)' : null,
-                                      retail_price_date: val ? new Date().toISOString().split('T')[0] : null,
-                                    }).eq('id', s.wines.id)
-                                    await fetchStudio()
-                                  }}
-                                  style={{ width: '80px', border: '1px solid rgba(212,173,69,0.5)', background: 'rgba(212,173,69,0.06)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', color: '#7a5e10', fontWeight: 600 }}
-                                />
-                                <button
-                                  onClick={() => {
-                                    const desc = s.wines.description || ''
-                                    const vin = s.wines.vintage || ''
-                                    const keywords = desc.toLowerCase().replace(/,/g, '').replace(/\s+/g, '+')
-                                    window.open(`https://www.wine-searcher.com/find/${keywords}/${vin}/uk/gbp`, '_blank')
-                                  }}
-                                  title="Search Wine Searcher"
-                                  style={{ background: 'none', border: '1px solid rgba(212,173,69,0.4)', padding: '2px 6px', cursor: 'pointer', fontSize: '12px', color: '#7a5e10' }}>
-                                  🔍
-                                </button>
-                              </div>
-                              {s.wines.ws_lowest_per_bottle && (
-                                <div style={{ fontSize: '9px', color: '#7a5e10', fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>
-                                  → DP £{((parseFloat(s.wines.ws_lowest_per_bottle) + 3) * 1.2).toFixed(2)}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                        <div style={{ display: 'flex', gap: '28px', fontSize: '11px', fontFamily: 'DM Mono, monospace', flexWrap: 'wrap' }}>
+                          {ibPrice && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>IB price</span><div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{ibPrice}</div></div>}
+                          {s.dp_price && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>DP price</span><div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{parseFloat(s.dp_price).toFixed(2)}</div></div>}
+                          {s.sale_price && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Sale price</span><div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wine)', marginTop: '2px' }}>£{parseFloat(s.sale_price).toFixed(2)}</div></div>}
+                          {s.dp_price && s.sale_price && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Margin on DP</span><div style={{ fontSize: '13px', fontWeight: 600, color: '#2d6a4f', marginTop: '2px' }}>{((parseFloat(s.sale_price) - parseFloat(s.dp_price)) / parseFloat(s.dp_price) * 100).toFixed(1)}%</div></div>}
+                          <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Bottle size</span><div style={{ fontSize: '13px', marginTop: '2px' }}>{s.bottle_size || '75'}cl</div></div>
+                          {s.date_moved && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Date moved</span><div style={{ fontSize: '13px', marginTop: '2px' }}>{s.date_moved}</div></div>}
                         </div>
                       </td>
                     </tr>
@@ -797,6 +794,57 @@ export default function StudioPage() {
           </table>
         </div>
       </div>
+
+      {/* ─── Label Print Modal ────────────────────────────────────────────────── */}
+      {showLabelModal && labelEntry && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '440px', padding: '28px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, color: 'var(--wine)' }}>Print Label</div>
+              <button onClick={() => setShowLabelModal(false)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Wine Name (Line 1)</label>
+              <input value={labelWineName} onChange={e => setLabelWineName(e.target.value)}
+                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Producer (Line 2)</label>
+              <input value={labelProducer} onChange={e => setLabelProducer(e.target.value)}
+                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ border: '1px solid var(--border)', background: 'var(--white)', width: '288px', margin: '0 auto 20px' }}>
+              <div style={{ borderBottom: '1px dashed #ccc' }}>
+                <StudioLabelContent entry={labelEntry} wineName={labelWineName} producer={labelProducer} />
+              </div>
+              <div>
+                <StudioLabelContent entry={labelEntry} wineName={labelWineName} producer={labelProducer} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+              {labelEntry.dp_price && (
+                <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>DP Price</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px' }}>£{parseFloat(labelEntry.dp_price).toFixed(2)}</div>
+                </div>
+              )}
+              {labelEntry.sale_price && (
+                <div style={{ flex: 1, background: 'var(--white)', border: '1px solid var(--border)', padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Sale Price</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--wine)' }}>£{parseFloat(labelEntry.sale_price).toFixed(2)}</div>
+                </div>
+              )}
+            </div>
+            <button onClick={printLabel}
+              style={{ width: '100%', background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer' }}>
+              🖨 Print Label
+            </button>
+            <div style={{ fontSize: '10px', color: 'var(--muted)', textAlign: 'center', marginTop: '8px', lineHeight: 1.5 }}>
+              Prints 2 labels per sheet · Opens system print dialog
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Move to Studio Modal ─────────────────────────────────────────────── */}
       {showMoveModal && (
@@ -945,9 +993,9 @@ export default function StudioPage() {
                     <label style={{ display: 'block', fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>BOTTLE SIZE</label>
                     <select value={scanBottleSize} onChange={e => setScanBottleSize(e.target.value)}
                       style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}>
-                      <option value="37.5">37.5cl (half)</option>
-                      <option value="75">75cl (bottle)</option>
-                      <option value="150">150cl (magnum)</option>
+                      <option value="37.5">37.5cl</option>
+                      <option value="75">75cl</option>
+                      <option value="150">150cl</option>
                     </select>
                   </div>
                   <div>
@@ -993,9 +1041,7 @@ export default function StudioPage() {
                   {scanSalePrice && scanIBPrice && (() => {
                     const dp = (parseFloat(scanIBPrice) + 3) * 1.2
                     const margin = ((parseFloat(scanSalePrice) - dp) / dp * 100)
-                    return <div style={{ fontSize: '10px', color: margin >= 0 ? '#2d6a4f' : '#c0392b', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>
-                      {margin >= 0 ? '+' : ''}{margin.toFixed(1)}% on DP
-                    </div>
+                    return <div style={{ fontSize: '10px', color: margin >= 0 ? '#2d6a4f' : '#c0392b', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}% on DP</div>
                   })()}
                 </div>
                 <div style={{ marginBottom: '20px' }}>
@@ -1019,9 +1065,9 @@ export default function StudioPage() {
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '580px', padding: '28px', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '6px' }}>
               <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300 }}>Add Wine Manually</div>
-              <button onClick={closeAddModal} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginBottom: '24px' }}>Creates a new wine record + studio entry. Use for holiday finds, shop purchases, Corney &amp; Barrow, etc.</div>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginBottom: '24px' }}>Creates a new wine record + studio entry.</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Wine Name *</label>
@@ -1100,7 +1146,7 @@ export default function StudioPage() {
               <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px', fontFamily: 'DM Mono, monospace' }}>Format: YY · MM (maker) · WWWW (wine) · C (colour) · S (size)</div>
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={closeAddModal} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={saveNewWine} disabled={!addDescription || addSaving}
                 style={{ background: addDescription ? 'var(--ink)' : '#ccc', color: addDescription ? 'var(--white)' : '#999', border: 'none', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: addDescription ? 'pointer' : 'not-allowed' }}>
                 {addSaving ? 'Saving…' : `✓ Add ${addQuantity} bottle${addQuantity !== 1 ? 's' : ''} to Studio`}
@@ -1109,6 +1155,7 @@ export default function StudioPage() {
           </div>
         </div>
       )}
+
     </div>
   )
 }
