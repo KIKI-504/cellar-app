@@ -322,16 +322,48 @@ export default function BuyerPage() {
                     </div>
                   </div>
 
-                  {/* Buyer note (from Jessica) */}
+                  {/* Price — sits directly under wine name/details */}
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', fontWeight: 500, color: 'var(--ink)' }}>£{sale.toFixed(2)}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--muted)', letterSpacing: '0.08em', marginTop: '2px' }}>Per bottle · includes duty &amp; VAT</div>
+                      {exceptional && normalMarketDP && saving && (
+                        <div style={{ marginTop: '6px', fontSize: '10px', color: '#2d6a4f', lineHeight: 1.5 }}>
+                          <span style={{ fontFamily: 'DM Mono, monospace' }}>
+                            Normal market rate: £{normalMarketDP.toFixed(2)}<br />
+                            You save: £{saving.toFixed(2)} per bottle
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {hearted && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1}
+                          style={{ width: '24px', height: '24px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '14px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 500, minWidth: '20px', textAlign: 'center' }}>{qty}</span>
+                        <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty}
+                          style={{ width: '24px', height: '24px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty >= maxQty ? 'default' : 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '14px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                        <span style={{ fontSize: '10px', color: 'var(--muted)' }}>/ {maxQty}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {hearted && (
+                    <div style={{ marginBottom: '10px', fontSize: '11px', color: 'var(--wine)', fontWeight: 500 }}>
+                      Subtotal: £{(sale * qty).toFixed(2)}
+                    </div>
+                  )}
+
+                  {/* Buyer note (from Jessica) — bottom of card */}
                   {w.buyer_note && !isAdmin && (
-                    <div style={{ background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.25)', padding: '8px 10px', marginBottom: '12px', fontSize: '11px', color: 'var(--ink)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                    <div style={{ background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.25)', padding: '8px 10px', marginBottom: '8px', fontSize: '11px', color: 'var(--ink)', lineHeight: 1.5, fontStyle: 'italic' }}>
                       {w.buyer_note}
                     </div>
                   )}
 
                   {/* Admin: editable buyer note */}
                   {isAdmin && (
-                    <div style={{ marginBottom: '10px' }}>
+                    <div style={{ marginBottom: '8px' }}>
                       {editingNote === w.id ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           <textarea
@@ -355,16 +387,16 @@ export default function BuyerPage() {
                     </div>
                   )}
 
-                  {/* Restaurant spot */}
+                  {/* Restaurant spot — bottom of card */}
                   {w.restaurant_spot && !isAdmin && (
-                    <div style={{ background: 'rgba(107,30,46,0.05)', border: '1px solid rgba(107,30,46,0.2)', padding: '8px 10px', marginBottom: '12px', fontSize: '11px', color: 'var(--wine)', lineHeight: 1.5 }}>
+                    <div style={{ background: 'rgba(107,30,46,0.05)', border: '1px solid rgba(107,30,46,0.2)', padding: '8px 10px', fontSize: '11px', color: 'var(--wine)', lineHeight: 1.5 }}>
                       🍽 {w.restaurant_spot}
                     </div>
                   )}
 
                   {/* Admin: editable restaurant spot */}
                   {isAdmin && (
-                    <div style={{ marginBottom: '12px' }}>
+                    <div>
                       {editingSpot === w.id ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           <input
@@ -386,39 +418,6 @@ export default function BuyerPage() {
                           {w.restaurant_spot ? `🍽 ${w.restaurant_spot}` : '+ Add restaurant spot'}
                         </button>
                       )}
-                    </div>
-                  )}
-
-                  {/* Price row */}
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', fontWeight: 500, color: 'var(--ink)' }}>£{sale.toFixed(2)}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '2px' }}>per bottle · in bond</div>
-                      {/* Value context: show what they'd normally pay */}
-                      {exceptional && normalMarketDP && saving && (
-                        <div style={{ marginTop: '6px', fontSize: '10px', color: '#2d6a4f', lineHeight: 1.5 }}>
-                          <span style={{ fontFamily: 'DM Mono, monospace' }}>
-                            Normal market rate: £{normalMarketDP.toFixed(2)}<br />
-                            You save: £{saving.toFixed(2)} per bottle
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    {hearted && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1}
-                          style={{ width: '24px', height: '24px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '14px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 500, minWidth: '20px', textAlign: 'center' }}>{qty}</span>
-                        <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty}
-                          style={{ width: '24px', height: '24px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty >= maxQty ? 'default' : 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '14px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                        <span style={{ fontSize: '10px', color: 'var(--muted)' }}>/ {maxQty}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {hearted && (
-                    <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--wine)', fontWeight: 500 }}>
-                      Subtotal: £{(sale * qty).toFixed(2)}
                     </div>
                   )}
                 </div>
