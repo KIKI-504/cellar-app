@@ -58,6 +58,60 @@ function EditableCell({ value, onSave, type = 'text', step, min, placeholder, st
   )
 }
 
+// ─── Label printer ────────────────────────────────────────────────────────────
+function printLabel(s) {
+  const w = s.wines
+  const desc = w?.description || s.unlinked_description || ''
+  const vintage = w?.vintage || s.unlinked_vintage || ''
+  const region = w?.region || ''
+  const colour = w?.colour || s.colour || ''
+  const sourceId = w?.source_id || s.source_id || ''
+  const dp = s.dp_price ? parseFloat(s.dp_price) : null
+  const sale = s.sale_price ? parseFloat(s.sale_price) : null
+  const isMag = s.bottle_size === '150' || (w?.bottle_format || '').toLowerCase().includes('magnum')
+
+  const labelHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap');
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { width: 101.6mm; height: 152.4mm; font-family: 'Cormorant Garamond', serif; background: white; display: flex; align-items: center; justify-content: center; }
+      .label { width: 95mm; height: 145mm; border: 1px solid #c8b89a; padding: 14mm 12mm; display: flex; flex-direction: column; justify-content: space-between; }
+      .header { font-size: 8px; font-family: 'DM Mono', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #7a6652; margin-bottom: 6mm; }
+      .desc { font-size: 20px; font-weight: 500; line-height: 1.25; color: #1a1008; margin-bottom: 3mm; }
+      .vintage { font-size: 28px; font-weight: 300; color: #6b1e2e; margin-bottom: 2mm; }
+      .meta { font-size: 9px; font-family: 'DM Mono', monospace; color: #7a6652; letter-spacing: 0.08em; margin-bottom: 1mm; }
+      .badge { display: inline-block; font-size: 8px; font-family: 'DM Mono', monospace; background: rgba(107,30,46,0.08); border: 0.5px solid rgba(107,30,46,0.3); color: #6b1e2e; padding: 2px 7px; margin-bottom: 4mm; }
+      .divider { border: none; border-top: 0.5px solid #c8b89a; margin: 4mm 0; }
+      .price-row { display: flex; justify-content: space-between; align-items: baseline; }
+      .price-label { font-size: 8px; font-family: 'DM Mono', monospace; color: #7a6652; letter-spacing: 0.1em; text-transform: uppercase; }
+      .price-val { font-size: 18px; font-weight: 500; color: #1a1008; font-family: 'DM Mono', monospace; }
+      .footer { font-size: 7px; font-family: 'DM Mono', monospace; color: #c8b89a; letter-spacing: 0.12em; text-align: center; margin-top: 4mm; }
+      .source-id { font-size: 7px; font-family: 'DM Mono', monospace; color: #c8b89a; letter-spacing: 0.08em; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+    <div class="label">
+      <div>
+        <div class="header">Belle Année Wines</div>
+        <div class="vintage">${vintage}</div>
+        <div class="desc">${desc}</div>
+        <div class="meta">${region}${colour ? ' · ' + colour : ''}${isMag ? ' · Magnum' : ''}</div>
+        ${sourceId ? `<div class="source-id">${sourceId}</div>` : ''}
+      </div>
+      <div>
+        <hr class="divider">
+        ${dp ? `<div class="price-row"><span class="price-label">DP</span><span class="price-val">£${dp.toFixed(2)}</span></div>` : ''}
+        ${sale ? `<div class="price-row" style="margin-top:3mm"><span class="price-label">Sale price</span><span class="price-val" style="color:#6b1e2e">£${sale.toFixed(2)}</span></div>` : ''}
+        <div class="footer">Includes duty &amp; VAT · ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+      </div>
+    </div>
+  </body></html>`
+
+  const win = window.open('', '_blank', 'width=420,height=580')
+  win.document.write(labelHtml)
+  win.document.close()
+  win.onload = () => { win.focus(); win.print() }
+}
+
 export default function StudioPage() {
   const router = useRouter()
   const [studioWines, setStudioWines] = useState([])
@@ -69,7 +123,6 @@ export default function StudioPage() {
   const [sortDir, setSortDir] = useState('desc')
   const [expandedNote, setExpandedNote] = useState(null)
   const [showDPTotal, setShowDPTotal] = useState(false)
-  const [editingRow, setEditingRow] = useState(null)
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [moveSearch, setMoveSearch] = useState('')
   const [moveResults, setMoveResults] = useState([])
@@ -143,7 +196,7 @@ export default function StudioPage() {
     if (!error) setStudioWines(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
-  // Update wine_notes on the wines table — flows to buyer view and boxes
+  // Saves wine_notes to wines.buyer_note — flows to Buyer View and Bottles On Hand
   async function updateWineNote(wineId, value) {
     if (!wineId) return
     const { error } = await supabase.from('wines').update({ buyer_note: value || null }).eq('id', wineId)
@@ -182,13 +235,8 @@ export default function StudioPage() {
     setMoveSaving(true)
     const dp = calcDP(selectedWine.purchase_price_per_bottle)
     const { error } = await supabase.from('studio').insert({
-      wine_id: selectedWine.id,
-      quantity: moveQty,
-      date_moved: moveDate,
-      dp_price: dp,
-      status: 'Available',
-      notes: moveNotes || null,
-      include_in_local: false
+      wine_id: selectedWine.id, quantity: moveQty, date_moved: moveDate,
+      dp_price: dp, status: 'Available', notes: moveNotes || null, include_in_local: false
     })
     if (!error) { await fetchStudio(); closeMoveModal() }
     setMoveSaving(false)
@@ -214,19 +262,16 @@ export default function StudioPage() {
     setAddQuantity(1); setAddIBPrice(''); setAddSalePrice(''); setAddNotes(''); setAddWineId('')
   }
 
-  function closeAddModal() { setShowAddModal(false) }
-
   function updateAddField(field, value) {
     const fields = { addDescription, addProducer, addVintage, addColour, addBottleSize, [field]: value }
     if (['addDescription', 'addProducer', 'addVintage', 'addColour', 'addBottleSize'].includes(field)) {
-      const newId = generateWineId(
+      setAddWineId(generateWineId(
         field === 'addVintage' ? value : fields.addVintage,
         field === 'addProducer' ? value : fields.addProducer,
         field === 'addDescription' ? value : fields.addDescription,
         field === 'addColour' ? value : fields.addColour,
         field === 'addBottleSize' ? value : fields.addBottleSize,
-      )
-      setAddWineId(newId)
+      ))
     }
     if (field === 'addDescription') setAddDescription(value)
     if (field === 'addProducer') setAddProducer(value)
@@ -260,14 +305,12 @@ export default function StudioPage() {
         wine_id: newWine.id, quantity: addQuantity,
         date_moved: new Date().toISOString().split('T')[0], dp_price: dp,
         sale_price: addSalePrice ? parseFloat(addSalePrice) : null,
-        status: 'Available', notes: addNotes || null,
-        include_in_local: false, bottle_size: addBottleSize, colour: addColour || null,
+        status: 'Available', notes: addNotes || null, include_in_local: false,
+        bottle_size: addBottleSize, colour: addColour || null,
       })
       if (studioError) throw studioError
-      await fetchStudio(); closeAddModal()
-    } catch (err) {
-      console.error(err); alert('Save failed: ' + err.message)
-    }
+      await fetchStudio(); setShowAddModal(false)
+    } catch (err) { console.error(err); alert('Save failed: ' + err.message) }
     setAddSaving(false)
   }
 
@@ -281,8 +324,7 @@ export default function StudioPage() {
   }
 
   function handleScanFileSelect(e) {
-    const file = e.target.files[0]
-    if (!file) return
+    const file = e.target.files[0]; if (!file) return
     setScanFile(file); setScanDone(false); setScanRaw(null); setScanMatch(null); setScanWine(null)
     const reader = new FileReader()
     reader.onload = ev => setScanPreview(ev.target.result)
@@ -295,13 +337,10 @@ export default function StudioPage() {
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader()
-        r.onload = () => res(r.result.split(',')[1])
-        r.onerror = rej
-        r.readAsDataURL(scanFile)
+        r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(scanFile)
       })
       const response = await fetch('/api/analyse-label', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64, mediaType: scanFile.type })
       })
       const result = await response.json()
@@ -329,15 +368,12 @@ export default function StudioPage() {
           setScanRetailPrice(matches[0].retail_price ? String(matches[0].retail_price) : '')
         }
       }
-    } catch (err) {
-      console.error('Label analysis error:', err); alert('Label reading failed: ' + err.message)
-    }
+    } catch (err) { console.error('Label analysis error:', err); alert('Label reading failed: ' + err.message) }
     setScanAnalysing(false)
   }
 
   async function scanSearchWines(q) {
-    setScanSearch(q)
-    if (q.length < 2) { setScanSearchResults([]); return }
+    setScanSearch(q); if (q.length < 2) { setScanSearchResults([]); return }
     const { data } = await supabase.from('wines')
       .select('id, description, vintage, colour, region, purchase_price_per_bottle, retail_price, quantity')
       .ilike('description', `%${q}%`).order('description').limit(8)
@@ -428,7 +464,6 @@ export default function StudioPage() {
   }, 0)
 
   const availableCount = studioWines.filter(s => s.status === 'Available').length
-  const localCount = studioWines.filter(s => s.include_in_local && s.status === 'Available').length
   const totalBottles = studioWines.filter(s => s.status === 'Available').reduce((sum, s) => sum + (s.quantity || 0), 0)
   const statusColour = s => s === 'Available' ? '#2d6a4f' : s === 'Consumed' ? '#7a5e10' : '#c0392b'
 
@@ -441,11 +476,11 @@ export default function StudioPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
 
-      {/* Nav */}
+      {/* Nav — Labels removed; access via 🏷 per-row button instead */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <div style={{ display: 'flex', gap: '4px' }}>
-          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Box Builder', '/boxes'], ['Labels', '/labels'], ['Buyer View', '/buyer'], ['Bottles On Hand', '/local'], ['Consignment', '/consignment']].map(([label, path]) => (
+          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Box Builder', '/boxes'], ['Buyer View', '/buyer'], ['Bottles On Hand', '/local'], ['Consignment', '/consignment']].map(([label, path]) => (
             <button key={path} onClick={() => router.push(path)} style={{ background: path === '/studio' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/studio' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>{label}</button>
           ))}
         </div>
@@ -467,8 +502,8 @@ export default function StudioPage() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '16px', fontSize: '11px', flexWrap: 'wrap' }}>
-          {[['available', availableCount], ['on local sales', localCount], ['total bottles', totalBottles]].map(([label, n]) => (
+        <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '16px', fontSize: '11px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {[['available', availableCount], ['total bottles', totalBottles]].map(([label, n]) => (
             <div key={label} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
               <span style={{ fontWeight: 500, color: 'var(--wine)', fontSize: '14px' }}>{n}</span>
               <span style={{ color: 'var(--muted)' }}>{label}</span>
@@ -495,12 +530,12 @@ export default function StudioPage() {
           </select>
         </div>
 
-        {/* Table */}
+        {/* ─── Table ──────────────────────────────────────────────────────────── */}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                <th onClick={() => cycleSort('name')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', minWidth: '180px' }}>Wine {sortIcon('name')}</th>
+                <th onClick={() => cycleSort('name')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', minWidth: '200px' }}>Wine {sortIcon('name')}</th>
                 <th onClick={() => cycleSort('colour')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer' }}>Colour {sortIcon('colour')}</th>
                 <th onClick={() => cycleSort('quantity')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer' }}>Qty {sortIcon('quantity')}</th>
                 <th onClick={() => cycleSort('dp_price')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer' }}>DP {sortIcon('dp_price')}</th>
@@ -508,6 +543,7 @@ export default function StudioPage() {
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Notes</th>
                 <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Local</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Label</th>
                 <th style={{ padding: '10px 4px' }}></th>
               </tr>
             </thead>
@@ -521,12 +557,14 @@ export default function StudioPage() {
                 const isExpanded = expandedNote === s.id
                 const alert = getPriceAlert(s)
                 const dp = s.dp_price ? parseFloat(s.dp_price) : w?.purchase_price_per_bottle ? (parseFloat(w.purchase_price_per_bottle) + 3) * 1.2 : null
-                const isEditing = editingRow === s.id
+                const hasNote = !!(s.notes || w?.buyer_note)
 
                 return (
                   <React.Fragment key={s.id}>
-                    <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid #ede6d6', background: 'transparent' }}>
-                      <td style={{ padding: '10px 12px', minWidth: '180px' }}>
+                    <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid #ede6d6' }}>
+
+                      {/* Wine name */}
+                      <td style={{ padding: '10px 12px', minWidth: '200px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: colourDot(colour), flexShrink: 0 }}></span>
                           <div>
@@ -535,88 +573,129 @@ export default function StudioPage() {
                               {vintage}{region ? ` · ${region}` : ''}
                               {s.bottle_size === '150' ? ' · Magnum' : s.bottle_size === '37.5' ? ' · Half' : ''}
                             </div>
-                            {w?.buyer_note && <div style={{ fontSize: '10px', color: 'rgba(212,173,69,0.8)', marginTop: '2px', fontStyle: 'italic' }}>✎ note</div>}
-                            {w?.women_note && <div style={{ fontSize: '10px', color: '#9b3a4a', marginTop: '1px' }}>♀</div>}
+                            {/* Show hint if wine note exists */}
+                            {w?.buyer_note && (
+                              <div style={{ fontSize: '9px', color: 'rgba(212,173,69,0.9)', marginTop: '2px', fontFamily: 'DM Mono, monospace' }}>✎ note</div>
+                            )}
+                            {w?.women_note && (
+                              <div style={{ fontSize: '10px', color: '#9b3a4a', marginTop: '1px' }}>♀</div>
+                            )}
                           </div>
                           {alert && <span title={alert.tooltip} style={{ fontSize: '13px', cursor: 'help' }}>{alert.icon}</span>}
                         </div>
                       </td>
+
                       <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--muted)' }}>{colour}</td>
+
+                      {/* Qty */}
                       <td style={{ padding: '10px 12px' }}>
-                        <EditableCell
-                          value={s.quantity} type="number" min="0"
+                        <EditableCell value={s.quantity} type="number" min="0"
                           onSave={v => updateStudio(s.id, 'quantity', v)}
                           style={{ width: '50px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, textAlign: 'center', outline: 'none' }}
                         />
                       </td>
+
+                      {/* DP */}
                       <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600 }}>
                         {dp ? `£${dp.toFixed(2)}` : '—'}
                       </td>
+
+                      {/* Sale price */}
                       <td style={{ padding: '10px 12px' }}>
-                        <EditableCell
-                          value={s.sale_price} type="number" step="0.01" placeholder="—"
+                        <EditableCell value={s.sale_price} type="number" step="0.01" placeholder="—"
                           onSave={v => updateStudio(s.id, 'sale_price', v)}
                           style={{ width: '70px', border: '1px solid var(--border)', background: s.sale_price ? 'rgba(107,30,46,0.05)' : 'var(--white)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: s.sale_price ? 600 : 400, outline: 'none', color: 'var(--wine)' }}
                         />
                       </td>
+
+                      {/* Status */}
                       <td style={{ padding: '10px 12px' }}>
                         <select value={s.status} onChange={e => updateStudio(s.id, 'status', e.target.value)}
                           style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 8px', fontFamily: 'DM Mono, monospace', fontSize: '10px', outline: 'none', color: statusColour(s.status) }}>
                           {['Available', 'Consumed', 'Gifted', 'Sold'].map(st => <option key={st} value={st}>{st}</option>)}
                         </select>
                       </td>
+
+                      {/* Notes toggle */}
                       <td style={{ padding: '10px 12px' }}>
                         <button onClick={() => setExpandedNote(isExpanded ? null : s.id)}
-                          style={{ background: isExpanded ? 'var(--ink)' : (s.notes || w?.buyer_note || w?.women_note) ? 'rgba(212,173,69,0.12)' : 'none', border: '1px solid var(--border)', padding: '3px 8px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', color: isExpanded ? 'var(--white)' : 'var(--muted)', whiteSpace: 'nowrap' }}>
+                          style={{ background: isExpanded ? 'var(--ink)' : hasNote ? 'rgba(212,173,69,0.12)' : 'none', border: '1px solid var(--border)', padding: '3px 8px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', color: isExpanded ? 'var(--white)' : 'var(--muted)', whiteSpace: 'nowrap' }}>
                           {isExpanded ? '▲ close' : '▼ notes'}
                         </button>
                       </td>
+
+                      {/* Include in local (Bottles On Hand) */}
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                         <input type="checkbox" checked={!!s.include_in_local} onChange={e => updateStudio(s.id, 'include_in_local', e.target.checked)}
                           style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--wine)' }} />
                       </td>
+
+                      {/* Print label — inline per row */}
+                      <td style={{ padding: '10px 8px' }}>
+                        <button onClick={() => printLabel(s)} title="Print label for this wine"
+                          style={{ background: 'none', border: '1px solid var(--border)', padding: '3px 8px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                          🏷
+                        </button>
+                      </td>
+
+                      {/* Delete */}
                       <td style={{ padding: '10px 4px' }}>
                         <button onClick={() => deleteStudio(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 6px' }}>✕</button>
                       </td>
                     </tr>
 
-                    {/* Expanded notes */}
+                    {/* ─── Expanded notes panel ──────────────────────────────── */}
                     {isExpanded && (
                       <tr style={{ borderBottom: '1px solid #ede6d6' }}>
-                        <td colSpan={9} style={{ padding: '16px 20px', background: 'rgba(250,247,242,0.8)' }}>
+                        <td colSpan={10} style={{ padding: '16px 20px', background: 'rgba(250,247,242,0.8)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
 
-                            {/* Wine Notes — writes to wines.buyer_note, flows to buyer view + boxes */}
+                            {/* Wine Notes — saves to wines.buyer_note, flows to Buyer View + Bottles On Hand */}
                             <div>
                               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>
-                                Wine Notes <span style={{ color: 'rgba(212,173,69,0.8)', fontStyle: 'italic', textTransform: 'none', letterSpacing: 0 }}>shown to buyers</span>
+                                Wine Notes
+                                <span style={{ color: 'rgba(212,173,69,0.8)', fontStyle: 'italic', textTransform: 'none', letterSpacing: 0, marginLeft: '6px' }}>shown on Buyer View &amp; Bottles On Hand</span>
                               </label>
                               <textarea
                                 key={`wn-${s.id}`}
                                 defaultValue={w?.buyer_note || ''}
-                                onBlur={e => { const v = e.target.value.trim() || null; if (v !== (w?.buyer_note || null)) updateWineNote(s.wine_id, v) }}
-                                placeholder="Editorial note — producer story, interest, context…"
-                                rows={3}
-                                style={{ width: '100%', border: '1px solid rgba(212,173,69,0.4)', background: 'rgba(212,173,69,0.04)', padding: '8px 10px', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', color: 'var(--ink)' }}
+                                onBlur={e => {
+                                  const v = e.target.value.trim() || null
+                                  if (v !== (w?.buyer_note || null)) updateWineNote(s.wine_id, v)
+                                }}
+                                placeholder="Producer story, interest, tasting context — anything worth sharing with buyers…"
+                                rows={4}
+                                style={{ width: '100%', border: '1px solid rgba(212,173,69,0.4)', background: 'rgba(212,173,69,0.04)', padding: '10px 12px', fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.6, outline: 'none', resize: 'vertical', boxSizing: 'border-box', color: 'var(--ink)' }}
                               />
+                              <div style={{ fontSize: '9px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '4px' }}>
+                                This note is shared — editing here also updates the inventory and buyer view records
+                              </div>
                             </div>
 
-                            {/* Studio delivery note */}
+                            {/* Delivery note — studio only */}
                             <div>
-                              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Delivery Note <span style={{ color: 'var(--muted)', fontStyle: 'italic', textTransform: 'none', letterSpacing: 0 }}>studio only</span></label>
+                              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>
+                                Delivery Note
+                                <span style={{ color: 'var(--muted)', fontStyle: 'italic', textTransform: 'none', letterSpacing: 0, marginLeft: '6px' }}>studio only</span>
+                              </label>
                               <textarea
                                 key={`dn-${s.id}`}
                                 defaultValue={s.notes || ''}
-                                onBlur={e => { const v = e.target.value.trim() || null; if (v !== (s.notes || null)) updateStudio(s.id, 'notes', v) }}
-                                placeholder="Condition, storage note…"
+                                onBlur={e => {
+                                  const v = e.target.value.trim() || null
+                                  if (v !== (s.notes || null)) updateStudio(s.id, 'notes', v)
+                                }}
+                                placeholder="Condition on arrival, storage note, batch reference…"
                                 rows={3}
-                                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
                               />
                             </div>
 
                           </div>
                           {s.date_moved && (
-                            <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '12px' }}>Moved to studio: {s.date_moved}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '12px' }}>
+                              Moved to studio: {s.date_moved}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -629,7 +708,7 @@ export default function StudioPage() {
         </div>
       </div>
 
-      {/* Move to Studio modal */}
+      {/* ─── Move to Studio modal ──────────────────────────────────────────────── */}
       {showMoveModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '480px', padding: '28px', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -664,6 +743,7 @@ export default function StudioPage() {
                 <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px', fontFamily: 'DM Mono, monospace' }}>
                   {selectedWine.vintage} · {selectedWine.colour} · DP £{selectedWine.purchase_price_per_bottle ? ((parseFloat(selectedWine.purchase_price_per_bottle) + 3) * 1.2).toFixed(2) : '—'}
                 </div>
+                <button onClick={() => { setSelectedWine(null); setMoveSearch('') }} style={{ marginTop: '6px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'DM Mono, monospace' }}>✕ Change</button>
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
@@ -694,13 +774,13 @@ export default function StudioPage() {
         </div>
       )}
 
-      {/* Add Wine modal */}
+      {/* ─── Add Wine modal ────────────────────────────────────────────────────── */}
       {showAddModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '560px', padding: '28px', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px' }}>
               <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300 }}>Add Wine to Studio</div>
-              <button onClick={closeAddModal} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
@@ -708,16 +788,14 @@ export default function StudioPage() {
                 <input value={addDescription} onChange={e => updateAddField('addDescription', e.target.value)} placeholder="e.g. Chambolle-Musigny, Domaine Mugnier"
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Producer</label>
-                <input value={addProducer} onChange={e => updateAddField('addProducer', e.target.value)} placeholder="e.g. Mugnier"
-                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Vintage</label>
-                <input value={addVintage} onChange={e => updateAddField('addVintage', e.target.value)} placeholder="e.g. 2019"
-                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
+              {[['Producer', 'addProducer', 'e.g. Mugnier'], ['Vintage', 'addVintage', 'e.g. 2019'], ['Region', 'addRegion', 'e.g. Burgundy']].map(([label, field, ph]) => (
+                <div key={field}>
+                  <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>{label}</label>
+                  <input value={field === 'addProducer' ? addProducer : field === 'addVintage' ? addVintage : addRegion}
+                    onChange={e => updateAddField(field, e.target.value)} placeholder={ph}
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              ))}
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Colour</label>
                 <select value={addColour} onChange={e => updateAddField('addColour', e.target.value)}
@@ -725,11 +803,6 @@ export default function StudioPage() {
                   <option value="">—</option>
                   {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Region</label>
-                <input value={addRegion} onChange={e => updateAddField('addRegion', e.target.value)} placeholder="e.g. Burgundy"
-                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Bottle Size</label>
@@ -756,18 +829,14 @@ export default function StudioPage() {
                   style={{ width: '100%', border: '2px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'var(--wine)' }} />
               </div>
             </div>
-            {addWineId && (
-              <div style={{ marginBottom: '12px', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
-                Wine ID: <strong>{addWineId}</strong>
-              </div>
-            )}
+            {addWineId && <div style={{ marginBottom: '12px', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>Wine ID: <strong>{addWineId}</strong></div>}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Notes</label>
               <input value={addNotes} onChange={e => updateAddField('addNotes', e.target.value)} placeholder="optional…"
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={closeAddModal} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={saveNewWine} disabled={!addDescription || addSaving}
                 style={{ background: addDescription ? 'var(--wine)' : '#ccc', color: 'var(--white)', border: 'none', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: addDescription ? 'pointer' : 'not-allowed' }}>
                 {addSaving ? 'Saving…' : 'Add to Studio'}
@@ -777,7 +846,7 @@ export default function StudioPage() {
         </div>
       )}
 
-      {/* Scan modal */}
+      {/* ─── Scan modal ────────────────────────────────────────────────────────── */}
       {showScanModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '520px', padding: '28px', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -785,8 +854,6 @@ export default function StudioPage() {
               <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300 }}>Scan Bottle Label</div>
               <button onClick={() => setShowScanModal(false)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
             </div>
-
-            {/* File select */}
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px', fontFamily: 'DM Mono, monospace' }}>Upload label photo</label>
               <label style={{ display: 'inline-block', cursor: 'pointer' }}>
@@ -812,13 +879,11 @@ export default function StudioPage() {
                 </div>
               )}
             </div>
-
-            {/* Match / search */}
             <div style={{ marginBottom: '14px' }}>
               <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Link to inventory</label>
               {scanWine ? (
                 <div style={{ background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.3)', padding: '10px 14px' }}>
-                  <div style={{ fontSize: '10px', color: '#2d6a4f', fontFamily: 'DM Mono, monospace', marginBottom: '4px' }}>{scanMatch?.id === scanWine?.id && scanMatch ? '✓ AUTO-MATCHED' : '✓ SELECTED'}</div>
+                  <div style={{ fontSize: '10px', color: '#2d6a4f', fontFamily: 'DM Mono, monospace', marginBottom: '4px' }}>✓ {scanMatch?.id === scanWine?.id ? 'AUTO-MATCHED' : 'SELECTED'}</div>
                   <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 500 }}>{scanWine.description}</div>
                   <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px', fontFamily: 'DM Mono, monospace' }}>{scanWine.vintage} · {scanWine.colour}</div>
                   <button onClick={() => { setScanWine(null); setScanMatch(null) }} style={{ marginTop: '6px', background: 'none', border: 'none', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'DM Mono, monospace' }}>✕ Change</button>
@@ -843,14 +908,15 @@ export default function StudioPage() {
                 </div>
               )}
             </div>
-
-            {/* Qty, date, size, price */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Qty</label>
-                <input type="number" min="1" value={scanQty} onChange={e => setScanQty(parseInt(e.target.value) || 1)}
-                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
-              </div>
+              {[['Qty', 'number', scanQty, e => setScanQty(parseInt(e.target.value) || 1)],
+                ['Date moved', 'date', scanDate, e => setScanDate(e.target.value)]].map(([label, type, val, fn]) => (
+                <div key={label}>
+                  <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>{label}</label>
+                  <input type={type} min={type === 'number' ? '1' : undefined} value={val} onChange={fn}
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: type === 'number' ? '14px' : '12px', fontWeight: type === 'number' ? 600 : 400, outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              ))}
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Size</label>
                 <select value={scanBottleSize} onChange={e => setScanBottleSize(e.target.value)}
@@ -860,13 +926,8 @@ export default function StudioPage() {
                   <option value="150">Magnum</option>
                 </select>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Date moved</label>
-                <input type="date" value={scanDate} onChange={e => setScanDate(e.target.value)}
-                  style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>IB Price / btl (£)</label>
                 <input type="number" step="0.01" value={scanIBPrice} onChange={e => setScanIBPrice(e.target.value)} placeholder="auto from inventory"
