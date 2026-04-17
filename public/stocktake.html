@@ -67,7 +67,6 @@
   .card-wine { font-size: 1.05rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card-meta { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
   .tag-green { color: var(--green) !important; }
-  .tag-amber { color: var(--amber) !important; }
 
   .qty-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
   .qty-edit { display: flex; align-items: center; gap: 5px; }
@@ -107,6 +106,10 @@
   .toast.show { transform: translateX(-50%) translateY(0); }
 
   .empty-state { text-align: center; padding: 48px 0; color: var(--muted); font-style: italic; }
+
+  /* Debug box */
+  .debug-box { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); background: var(--cream); border: 1px solid var(--border); padding: 8px 12px; margin-bottom: 12px; display: none; line-height: 1.6; }
+  .debug-box.visible { display: block; }
 </style>
 </head>
 <body>
@@ -119,9 +122,10 @@
 
 <main>
   <div class="instructions">
-    Speak each wine as: <strong>price · vintage · quantity</strong><br>
-    <em>"Thirty three sixty · twenty sixteen · two bottles"</em><br><br>
-    Price + vintage together will uniquely identify almost every wine. If the match is unique it auto-confirms in green. Separate wines with a short pause — the mic detects silence between entries.
+    Say: <strong>price · vintage · quantity</strong><br>
+    <em>"Thirty three sixty, twenty sixteen, two bottles"</em><br>
+    <em>"Forty two, twenty eighteen, one bottle"</em><br><br>
+    Pause between wines — each pause creates a new entry.
   </div>
 
   <div class="voice-area">
@@ -134,6 +138,8 @@
     <div class="voice-status" id="voiceStatus">Tap to speak</div>
     <div class="transcript-box" id="transcriptBox"></div>
   </div>
+
+  <div class="debug-box" id="debugBox"></div>
 
   <div class="batch-section" id="batchSection" style="display:none">
     <div class="batch-header">
@@ -170,125 +176,162 @@ let loggedItems       = [];
 let finalTranscript   = '';
 let interimTranscript = '';
 
-// ── Number word helpers ───────────────────────────────────────────────────────
-const ONES  = {zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,
-               ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,
-               sixteen:16,seventeen:17,eighteen:18,nineteen:19};
-const TENS  = {twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+// ── Number dictionaries ───────────────────────────────────────────────────────
+const ONES = {
+  zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9,
+  ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15,
+  sixteen:16, seventeen:17, eighteen:18, nineteen:19
+};
+const TENS = {
+  twenty:20, thirty:30, forty:40, fifty:50, sixty:60,
+  seventy:70, eighty:80, ninety:90
+};
+const ALL_NUM_WORDS = { ...ONES, ...TENS };
 
-// Convert a short spoken phrase like "thirty three point sixty" → 33.60
-function spokenToNumber(str) {
-  if (!str) return null;
-  str = str.toLowerCase().replace(/,/g,'').trim();
+// Convert a word or word-pair to integer: "thirty" → 30, "thirty three" → 33
+function wordsToInt(words) {
+  if (!words) return null;
+  const ws = words.toLowerCase().replace(/-/g, ' ').trim().split(/\s+/).filter(Boolean);
+  let n = 0;
+  for (const w of ws) {
+    if (ONES[w] !== undefined) n += ONES[w];
+    else if (TENS[w] !== undefined) n += TENS[w];
+    else if (w === 'hundred') n = (n || 1) * 100;
+    // ignore noise words
+  }
+  return n > 0 ? n : null;
+}
 
-  // Already a digit string
-  const direct = str.match(/^(\d+(?:\.\d+)?)$/);
-  if (direct) return parseFloat(direct[1]);
+// ── Price extraction ──────────────────────────────────────────────────────────
+// Handles every realistic iOS speech output for your prices:
+//   "33.60"              → 33.60  (iOS rendered as decimal)
+//   "£33.60"             → 33.60
+//   "33 60"              → 33.60  (two adjacent 2-digit numbers)
+//   "thirty three sixty" → 33.60  (word tens + word tens)
+//   "forty two"          → 42.00  (single compound number, no pence)
+//   "42"                 → 42.00  (bare digit)
+//   "153.20"             → 153.20
+//   "one fifty three twenty" → 153.20
 
-  // Handle "point" as decimal separator: "thirty three point sixty" → 33.60
-  if (str.includes('point')) {
-    const parts = str.split(/\bpoint\b/);
-    const left  = wordBlockToInt(parts[0].trim());
-    const right = wordBlockToInt(parts[1].trim());
-    if (left !== null && right !== null) {
-      // "sixty" → 60 → pad as two digits → ".60"
-      const rightStr = right < 10 ? '0' + right : '' + right;
-      return parseFloat(left + '.' + rightStr);
+function extractPrice(phrase) {
+  const p = phrase.toLowerCase().replace(/[,£]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // 1. Digit with decimal already: 33.60 / 153.20
+  const decimalDigit = p.match(/\b(\d{2,3})\.(\d{2})\b/);
+  if (decimalDigit) return parseFloat(decimalDigit[1] + '.' + decimalDigit[2]);
+
+  // 2. Two adjacent 2-digit numbers (no decimal point): "33 60" → 33.60
+  //    Must be before vintage/qty extraction — exclude 4-digit years
+  const twoDigits = p.match(/\b(\d{2,3})\s+(\d{2})\b/);
+  if (twoDigits) {
+    const left = parseInt(twoDigits[1]);
+    const right = parseInt(twoDigits[2]);
+    // left must look like a price (10-300), right must look like pence (00-99)
+    // and the pair shouldn't straddle a 4-digit year
+    if (left >= 10 && left < 300 && right < 100) {
+      const combined = parseFloat(left + '.' + (right < 10 ? '0' + right : right));
+      return combined;
     }
   }
 
-  return wordBlockToInt(str);
-}
-
-function wordBlockToInt(str) {
-  if (!str) return null;
-  str = str.trim();
-  const d = str.match(/^\d+$/);
-  if (d) return parseInt(d[0]);
-  let total = 0;
-  for (const w of str.split(/[\s-]+/)) {
-    if (ONES[w] !== undefined) total += ONES[w];
-    else if (TENS[w] !== undefined) total += TENS[w];
-    else if (w === 'hundred') total = (total || 1) * 100;
-    // ignore unrecognised words
+  // 3. Word numbers: extract all number-word tokens in order
+  //    Strategy: tokenise, collect runs of number words, interpret first run as price
+  const tokens = p.split(/\s+/);
+  const numRuns = []; // each run = consecutive number-word tokens
+  let currentRun = [];
+  for (const t of tokens) {
+    if (ALL_NUM_WORDS[t] !== undefined || t === 'hundred' || t === 'and') {
+      currentRun.push(t);
+    } else {
+      if (currentRun.length) { numRuns.push([...currentRun]); currentRun = []; }
+    }
   }
-  return total || null;
+  if (currentRun.length) numRuns.push(currentRun);
+
+  if (numRuns.length >= 2) {
+    // First run = integer part, second run = decimal part
+    // e.g. ["thirty", "three"] + ["sixty"] → 33.60
+    // e.g. ["one", "fifty", "three"] + ["twenty"] → 153.20
+    const intPart  = wordsToInt(numRuns[0].join(' '));
+    const decPart  = wordsToInt(numRuns[1].join(' '));
+    if (intPart !== null && decPart !== null && intPart >= 5 && intPart < 500) {
+      const decStr = decPart < 10 ? '0' + decPart : '' + decPart;
+      return parseFloat(intPart + '.' + decStr);
+    }
+  }
+
+  if (numRuns.length >= 1) {
+    // Single run — whole number price, e.g. "forty two" → 42
+    const n = wordsToInt(numRuns[0].join(' '));
+    if (n && n >= 5 && n < 500) return n; // treat as whole number
+  }
+
+  // 4. Bare single integer (iOS may render "42" directly)
+  const bareInt = p.match(/\b(\d{2,3})\b/);
+  if (bareInt) {
+    const n = parseInt(bareInt[1]);
+    if (n >= 5 && n < 500) return n;
+  }
+
+  return null;
 }
 
-// ── Extract numbers from a phrase ─────────────────────────────────────────────
-// Returns { price, vintage, qty } — all optional
+// ── Vintage extraction ────────────────────────────────────────────────────────
+function extractVintage(phrase) {
+  const p = phrase.toLowerCase();
+
+  // 4-digit year
+  const fourDigit = p.match(/\b(19[5-9]\d|20[0-2]\d)\b/);
+  if (fourDigit) return parseInt(fourDigit[1]);
+
+  // "twenty sixteen" / "twenty twenty two"
+  const twentyMatch = p.match(/\btwenty\s+((?:twenty|nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ten|one|two|three|four|five|six|seven|eight|nine|zero)(?:\s+(?:one|two|three|four|five|six|seven|eight|nine))?)\b/);
+  if (twentyMatch) {
+    const n = wordsToInt(twentyMatch[1]);
+    if (n !== null && n >= 0 && n <= 29) return 2000 + n;
+  }
+
+  // "two thousand and sixteen"
+  const twoKMatch = p.match(/\btwo\s+thousand(?:\s+and)?\s+([a-z\s]+?)(?=\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|\d)|$)/);
+  if (twoKMatch) {
+    const n = wordsToInt(twoKMatch[1].trim());
+    if (n !== null) return 2000 + n;
+  }
+
+  return null;
+}
+
+// ── Quantity extraction ───────────────────────────────────────────────────────
+function extractQty(phrase) {
+  const p = phrase.toLowerCase();
+  const QW = { one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,a:1,an:1,single:1,couple:2,pair:2 };
+
+  // digit + bottle(s)
+  const dbt = p.match(/\b(\d+)\s*bottles?\b/);
+  if (dbt) return parseInt(dbt[1]);
+
+  // word + bottle(s)
+  const wbt = p.match(/\b([a-z]+)\s+bottles?\b/);
+  if (wbt && QW[wbt[1]]) return QW[wbt[1]];
+
+  // last small digit in phrase (that isn't vintage)
+  const vintage = extractVintage(phrase);
+  const digits = [...p.matchAll(/\b(\d+)\b/g)].map(m => parseInt(m[1]));
+  const small = digits.filter(n => n >= 1 && n <= 24 && n !== vintage);
+  if (small.length) return small[small.length - 1];
+
+  return 1;
+}
+
+// ── Full extraction with debug output ────────────────────────────────────────
 function extractNumbers(phrase) {
-  const p = phrase.toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
-
-  let price   = null;
-  let vintage = null;
-  let qty     = null;
-
-  // --- PRICE ---
-  // £33.60 or literal digits like "33.60" or "33 60"
-  let priceMatch = p.match(/£\s*(\d+(?:\.\d+)?)/);
-  if (priceMatch) {
-    price = parseFloat(priceMatch[1]);
-  } else {
-    // "thirty three point sixty" / "thirty-three point sixty"
-    const pointMatch = p.match(/([\w\s-]+)\s+point\s+([\w\s-]+?)(?=\s+(?:twenty|nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ten|\d{4}|one|two|three|four|five|six|seven|eight|nine|ten|\d+\s*bottle)|$)/i);
-    if (pointMatch) {
-      const n = spokenToNumber(pointMatch[1].trim() + ' point ' + pointMatch[2].trim());
-      if (n && n >= 5 && n < 1000) price = n;
-    }
-    // fallback: two adjacent numbers like "33 60" → 33.60, or single number < 1000 that isn't a year/qty
-    if (!price) {
-      const twoNums = p.match(/\b(\d{2})\s+(\d{2})\b/);
-      if (twoNums && parseInt(twoNums[1]) >= 10 && parseInt(twoNums[1]) < 300) {
-        price = parseFloat(twoNums[1] + '.' + twoNums[2]);
-      }
-    }
-  }
-
-  // --- VINTAGE ---
-  // Four-digit year 1990-2029, or spoken like "twenty sixteen" / "two thousand and sixteen"
-  const yearDigit = p.match(/\b(19[5-9]\d|20[0-2]\d)\b/);
-  if (yearDigit) {
-    vintage = parseInt(yearDigit[1]);
-  } else {
-    // "twenty sixteen" → 2016, "twenty twenty two" → 2022
-    const twentyMatch = p.match(/\btwenty\s+((?:nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ten|twenty|one|two|three|four|five|six|seven|eight|nine|zero|\d+)(?:\s+(?:one|two|three|four|five|six|seven|eight|nine|\d+))?)\b/);
-    if (twentyMatch) {
-      const suffix = wordBlockToInt(twentyMatch[1]);
-      if (suffix !== null) vintage = 2000 + suffix;
-    }
-    // "two thousand and sixteen"
-    if (!vintage) {
-      const twoK = p.match(/\btwo\s+thousand(?:\s+and)?\s+([\w\s]+?)(?=\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|\d)|$)/);
-      if (twoK) {
-        const n = wordBlockToInt(twoK[1].trim());
-        if (n !== null) vintage = 2000 + n;
-      }
-    }
-  }
-
-  // --- QTY ---
-  const qtyWords = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,
-                    a:1,an:1,single:1,couple:2,pair:2,dozen:12};
-  const qtyDigit = p.match(/\b(\d+)\s*bottles?\b/);
-  if (qtyDigit) {
-    qty = parseInt(qtyDigit[1]);
-  } else {
-    const qtyWord = p.match(/\b([a-z]+)\s+bottles?\b/);
-    if (qtyWord && qtyWords[qtyWord[1]]) qty = qtyWords[qtyWord[1]];
-  }
-  // If only one or two small numbers in phrase and no explicit bottle word, last small number is qty
-  if (!qty) {
-    const allNums = [...p.matchAll(/\b(\d+)\b/g)].map(m => parseInt(m[1]));
-    const small = allNums.filter(n => n >= 1 && n <= 24 && n !== vintage);
-    if (small.length > 0) qty = small[small.length - 1];
-  }
-  if (!qty) qty = 1;
-
+  const price   = extractPrice(phrase);
+  const vintage = extractVintage(phrase);
+  const qty     = extractQty(phrase);
   return { price, vintage, qty };
 }
 
-// ── Sentence splitting (by pause/silence = sentence boundary) ─────────────────
+// ── Split transcript into per-wine phrases ────────────────────────────────────
 function splitPhrases(text) {
   return text
     .split(/[.!?]+/)
@@ -297,36 +340,51 @@ function splitPhrases(text) {
     .slice(0, 5);
 }
 
-// ── Supabase price+vintage lookup ─────────────────────────────────────────────
+// ── Supabase lookup by price + optional vintage ───────────────────────────────
 async function lookupByPriceVintage(price, vintage) {
   if (!price) return [];
 
-  let query = `${SUPABASE_URL}/rest/v1/studio?select=id,dp_price,quantity,bottle_size,unlinked_description,unlinked_vintage,wine_id,wines(description,vintage,region,colour)&status=eq.Available`;
+  // Try exact price first, then floor match for whole-number prices
+  const isWholeNumber = Number.isInteger(price) || price === Math.floor(price);
 
-  // Price match — exact
-  query += `&dp_price=eq.${price}`;
+  // Build two candidate queries: exact and (if whole number) floor match
+  const queries = [`dp_price=eq.${price}`];
+  if (isWholeNumber) {
+    // Also match e.g. 42.00, 42.60 etc when user said "forty two" 
+    // We'll filter in JS after fetching
+  }
 
-  const res = await fetch(query, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-  });
-  let data = await res.json();
-  if (!Array.isArray(data)) return [];
+  let data = [];
+  for (const q of queries) {
+    const url = `${SUPABASE_URL}/rest/v1/studio?select=id,dp_price,quantity,bottle_size,unlinked_description,unlinked_vintage,wine_id,wines(description,vintage,region,colour)&status=eq.Available&${q}`;
+    const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } });
+    const rows = await res.json();
+    if (Array.isArray(rows) && rows.length > 0) { data = rows; break; }
+  }
 
-  // Filter by vintage if provided
-  if (vintage) {
-    const vintageStr = String(vintage);
-    const filtered = data.filter(row => {
-      const v = row.unlinked_vintage || row.wines?.vintage || '';
-      return String(v) === vintageStr;
+  // If whole number and no exact match, try floor match
+  if (!data.length && isWholeNumber) {
+    const url = `${SUPABASE_URL}/rest/v1/studio?select=id,dp_price,quantity,bottle_size,unlinked_description,unlinked_vintage,wine_id,wines(description,vintage,region,colour)&status=eq.Available`;
+    const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } });
+    const all = await res.json();
+    if (Array.isArray(all)) {
+      data = all.filter(r => r.dp_price && Math.floor(parseFloat(r.dp_price)) === price);
+    }
+  }
+
+  // Filter by vintage
+  if (vintage && data.length > 0) {
+    const vs = String(vintage);
+    const filtered = data.filter(r => {
+      const v = r.unlinked_vintage || r.wines?.vintage || '';
+      return String(v) === vs;
     });
     if (filtered.length > 0) data = filtered;
-    // If filtering removes everything, keep unfiltered (vintage may not be stored)
   }
 
   return data;
 }
 
-// ── Normalise a result row for display ────────────────────────────────────────
 function normalise(row) {
   return {
     id:      row.id,
@@ -342,11 +400,11 @@ function normalise(row) {
 // ── Speech ────────────────────────────────────────────────────────────────────
 function initSpeech() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { setStatus('Use Chrome or Safari on iOS'); return false; }
+  if (!SR) { setStatus('Use Safari on iOS'); return false; }
   recognition = new SR();
-  recognition.continuous    = true;
+  recognition.continuous     = true;
   recognition.interimResults = true;
-  recognition.lang          = 'en-GB';
+  recognition.lang           = 'en-GB';
 
   recognition.onresult = e => {
     interimTranscript = '';
@@ -366,10 +424,7 @@ function initSpeech() {
     setStatus('Error — tap to retry');
   };
 
-  recognition.onend = () => {
-    if (isListening) { try { recognition.start(); } catch(e){} }
-  };
-
+  recognition.onend = () => { if (isListening) { try { recognition.start(); } catch(e){} } };
   return true;
 }
 
@@ -385,6 +440,7 @@ function toggleListening() {
     finalTranscript = '';
     interimTranscript = '';
     document.getElementById('transcriptBox').className = 'transcript-box';
+    document.getElementById('debugBox').className = 'debug-box';
     isListening = true;
     document.getElementById('micBtn').className = 'mic-btn listening';
     setStatus('Listening — tap to stop', true);
@@ -394,8 +450,8 @@ function toggleListening() {
 
 function setStatus(msg, active) {
   const el = document.getElementById('voiceStatus');
-  el.textContent  = msg;
-  el.className    = 'voice-status' + (active ? ' active' : '');
+  el.textContent = msg;
+  el.className   = 'voice-status' + (active ? ' active' : '');
 }
 
 // ── Process ───────────────────────────────────────────────────────────────────
@@ -404,6 +460,15 @@ async function processTranscript(text) {
 
   const phrases = splitPhrases(text);
   if (!phrases.length) { setStatus('Tap to speak'); document.getElementById('micBtn').className = 'mic-btn'; return; }
+
+  // Show debug info
+  const debugLines = phrases.map(ph => {
+    const { price, vintage, qty } = extractNumbers(ph);
+    return `"${ph}" → price:${price ?? '?'} vintage:${vintage ?? '?'} qty:${qty}`;
+  });
+  const dbx = document.getElementById('debugBox');
+  dbx.className = 'debug-box visible';
+  dbx.textContent = debugLines.join('\n');
 
   currentBatch = [];
   document.getElementById('batchSection').style.display = 'block';
@@ -414,7 +479,7 @@ async function processTranscript(text) {
 
   for (const phrase of phrases) {
     const { price, vintage, qty } = extractNumbers(phrase);
-    const rows   = await lookupByPriceVintage(price, vintage);
+    const rows    = await lookupByPriceVintage(price, vintage);
     const matches = rows.map(normalise);
     currentBatch.push({ spoken: phrase, price, vintage, qty, matches, selectedIdx: 0 });
   }
@@ -427,7 +492,7 @@ async function processTranscript(text) {
   document.getElementById('confirmBtn').disabled    = false;
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
+// ── Render cards ──────────────────────────────────────────────────────────────
 function renderBatch() {
   const container = document.getElementById('matchCards');
   container.innerHTML = '';
@@ -435,13 +500,7 @@ function renderBatch() {
   currentBatch.forEach((item, i) => {
     const hasMatch = item.matches.length > 0;
     const sel      = hasMatch ? item.matches[item.selectedIdx] : null;
-
-    // Confidence: unique price+vintage match = high; multiple = med; no match = low
-    const tier = !hasMatch ? 'low' : item.matches.length === 1 ? 'high' : 'med';
-
-    const card = document.createElement('div');
-    card.className = `match-card ${tier}`;
-    card.id = `card-${i}`;
+    const tier     = !hasMatch ? 'low' : item.matches.length === 1 ? 'high' : 'med';
 
     const vintageLabel = sel?.vintage || (item.vintage ? String(item.vintage) : '');
     const priceLabel   = sel?.dp      ? `£${sel.dp.toFixed(2)}` : (item.price ? `£${item.price.toFixed(2)}` : '');
@@ -449,6 +508,9 @@ function renderBatch() {
     const sizeLabel    = sel?.size && sel.size !== '75' ? `${sel.size}cl` : '';
     const stockLabel   = sel?.stock != null ? `${sel.stock} in stock` : '';
 
+    const card = document.createElement('div');
+    card.className = `match-card ${tier}`;
+    card.id = `card-${i}`;
     card.innerHTML = `
       <div class="card-main">
         <div class="card-num">${i + 1}</div>
@@ -457,11 +519,11 @@ function renderBatch() {
             ? sel.name
             : `<em style="color:var(--wine);font-size:0.85rem">No match${item.price ? ' for £' + item.price.toFixed(2) : ''}</em>`}</div>
           <div class="card-meta">
-            ${vintageLabel ? `<span class="${tier === 'high' ? 'tag-green' : ''}">${vintageLabel}</span>` : ''}
-            ${priceLabel   ? `<span class="${tier === 'high' ? 'tag-green' : ''}">${priceLabel}${tier === 'high' ? ' ✓' : ''}</span>` : ''}
-            ${regionLabel  ? `<span>${regionLabel}</span>`  : ''}
-            ${sizeLabel    ? `<span>${sizeLabel}</span>`    : ''}
-            ${stockLabel   ? `<span>${stockLabel}</span>`   : ''}
+            ${vintageLabel ? `<span class="${tier==='high'?'tag-green':''}">${vintageLabel}</span>` : ''}
+            ${priceLabel   ? `<span class="${tier==='high'?'tag-green':''}">${priceLabel}${tier==='high'?' ✓':''}</span>` : ''}
+            ${regionLabel  ? `<span>${regionLabel}</span>` : ''}
+            ${sizeLabel    ? `<span>${sizeLabel}</span>` : ''}
+            ${stockLabel   ? `<span>${stockLabel}</span>` : ''}
           </div>
         </div>
         <div class="qty-wrap">
@@ -491,15 +553,8 @@ function renderBatch() {
         if (mi === item.selectedIdx) return;
         const alt = document.createElement('div');
         alt.className = 'alt-item';
-        alt.innerHTML = `
-          <span class="alt-name">${m.name}</span>
-          <span class="alt-meta">${m.vintage || ''} ${m.dp ? '· £' + m.dp.toFixed(2) : ''} ${m.size && m.size !== '75' ? '· ' + m.size + 'cl' : ''}</span>
-        `;
-        alt.onclick = () => {
-          currentBatch[i].selectedIdx = mi;
-          altsDiv.classList.remove('open');
-          renderBatch();
-        };
+        alt.innerHTML = `<span class="alt-name">${m.name}</span><span class="alt-meta">${m.vintage||''} ${m.dp?'· £'+m.dp.toFixed(2):''} ${m.size&&m.size!=='75'?'· '+m.size+'cl':''}</span>`;
+        alt.onclick = () => { currentBatch[i].selectedIdx = mi; altsDiv.classList.remove('open'); renderBatch(); };
         altsDiv.appendChild(alt);
       });
       card.appendChild(altsDiv);
@@ -525,15 +580,16 @@ function confirmBatch() {
   if (!toLog.length) { showToast('Nothing matched to log'); return; }
 
   toLog.forEach(item => {
-    const m        = item.matches[item.selectedIdx];
+    const m = item.matches[item.selectedIdx];
     const existing = loggedItems.find(l => l.id === m.id);
     if (existing) existing.qty += item.qty;
     else loggedItems.push({ id: m.id, name: m.name, vintage: m.vintage, qty: item.qty });
   });
 
   currentBatch = [];
-  document.getElementById('batchSection').style.display      = 'none';
-  document.getElementById('transcriptBox').className         = 'transcript-box';
+  document.getElementById('batchSection').style.display = 'none';
+  document.getElementById('transcriptBox').className    = 'transcript-box';
+  document.getElementById('debugBox').className         = 'debug-box';
   finalTranscript = '';
   setStatus('Tap to speak');
   renderLog();
