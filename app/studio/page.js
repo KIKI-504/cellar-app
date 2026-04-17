@@ -370,7 +370,57 @@ export default function StudioPage() {
   }
  
   function closeAddModal() { setShowAddModal(false) }
- 
+ function isMagnum(size) {
+  const s = String(size || '').toLowerCase().replace(/\s/g, '')
+  return s === '150' || s === '150cl' || s === '1500' || s.includes('magnum')
+}
+function dutyForSize(size) { return isMagnum(size) ? 6 : 3 }
+
+function printLabel(s) {
+  const name = s.wines?.description || s.unlinked_description || ''
+  const vintage = s.wines?.vintage || s.unlinked_vintage || ''
+  const parts = name.split(',')
+  const wineName = parts.length > 1 ? parts.slice(0, -1).join(',').trim() : name
+  const producer = parts.length > 1 ? parts[parts.length - 1].trim() : ''
+  const dp = s.dp_price
+    ? parseFloat(s.dp_price).toFixed(2)
+    : s.wines?.purchase_price_per_bottle
+      ? ((parseFloat(s.wines.purchase_price_per_bottle) + dutyForSize(s.bottle_size)) * 1.2).toFixed(2)
+      : null
+  const salePrice = s.sale_price ? parseFloat(s.sale_price).toFixed(2) : null
+  const ws = s.wines?.ws_lowest_per_bottle ? parseFloat(s.wines.ws_lowest_per_bottle) : null
+  const wsDate = s.wines?.ws_price_date || null
+  const wsDP = ws ? ((ws + dutyForSize(s.bottle_size)) * 1.2).toFixed(2) : null
+  const wsLine = wsDP ? `WS Avg Price: £${wsDP}${wsDate ? '  ·  ' + wsDate : ''}` : 'WS Avg Price:'
+  const block = `<div class="label-copy">
+    <div class="line vintage">${vintage}</div>
+    <div class="line wine">${wineName}</div>
+    ${producer ? `<div class="line producer">${producer}</div>` : ''}
+    <div class="line price">DP  £${dp || '—'}</div>
+    <div class="line price">Sale Price  £${salePrice || '—'}</div>
+    <div class="line ws">${wsLine}</div>
+  </div>`
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    @page { size: 4in 6in; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 4in; height: 6in; font-family: Arial, Helvetica, sans-serif; display: flex; flex-direction: column; }
+    .label-copy { width: 4in; height: 3in; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.2in 0.25in; border-bottom: 1px dashed #ccc; }
+    .label-copy:last-child { border-bottom: none; }
+    .line { text-align: center; line-height: 1.2; width: 100%; }
+    .vintage { font-size: 28pt; font-weight: 900; letter-spacing: 0.05em; margin-bottom: 4pt; }
+    .wine { font-size: 22pt; font-weight: 700; margin-bottom: 2pt; }
+    .producer { font-size: 18pt; font-weight: 700; margin-bottom: 6pt; }
+    .price { font-size: 16pt; font-weight: 400; margin-bottom: 2pt; }
+    .ws { font-size: 12pt; font-weight: 300; margin-top: 4pt; color: #555; }
+  </style></head><body>${block}${block}</body></html>`
+  const win = window.open('', '_blank', 'width=400,height=600')
+  if (!win) { alert('Please allow popups to print labels'); return }
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  win.print()
+  win.close()
+}
   function updateAddField(field, value) {
     const fields = { addDescription, addProducer, addVintage, addColour, addBottleSize, [field]: value }
     if (['addDescription', 'addProducer', 'addVintage', 'addColour', 'addBottleSize'].includes(field)) {
