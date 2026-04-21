@@ -271,7 +271,7 @@ export default function ConsignmentPage() {
       <div className="no-print" style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', flexShrink: 0 }}>Cellar</div>
         <div style={{ display: 'flex', gap: '2px', overflowX: 'auto', flexShrink: 1 }}>
-          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Boxes', '/boxes'], ['Labels', '/labels'], ['Buyer', '/buyer'], ['Local', '/local'], ['Consignment', '/consignment']].map(([label, path]) => (
+          [['Inventory', '/admin'], ['Studio', '/studio'], ['Boxes', '/boxes'], ['Buyer', '/buyer'], ['Bottles On Hand', '/local'], ['Consignment', '/consignment']]
             <button key={path} onClick={() => router.push(path)} style={{ background: path === '/consignment' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/consignment' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 10px', borderRadius: '2px', flexShrink: 0 }}>{label}</button>
           ))}
         </div>
