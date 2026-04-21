@@ -123,7 +123,7 @@ function printLabel(s) {
 <head>
 <meta charset="utf-8">
 <style>
-  @page { size: 4in 6in; margin: 4pt; }
+  @page { size: 4in 6in; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { width: 4in; height: 6in; font-family: Arial, Helvetica, sans-serif; display: flex; flex-direction: column; }
   .label-copy {
