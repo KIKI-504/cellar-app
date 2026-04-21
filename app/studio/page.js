@@ -125,7 +125,7 @@ function printLabel(s) {
 <style>
   @page { size: 4in 6in; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { width: 4in; height: 6in; font-family: Arial, Helvetica, sans-serif; display: flex; flex-direction: column; }
+body { width: 4in; height: 6in; font-family: Arial, Helvetica, sans-serif; display: flex; flex-direction: column; padding-top: 0.15in; box-sizing: border-box; }
   .label-copy {
     width: 4in;
     height: 3in;
