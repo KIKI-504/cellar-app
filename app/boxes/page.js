@@ -1081,6 +1081,12 @@ export default function BoxPage() {
             <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
               <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300 }}>Boxes</div>
               <div style={{ display:'flex', gap:'6px' }}>
+
+          <button onClick={async () => {
+                const { data, error } = await supabase.rpc('sync_box_prices_from_studio')
+                if (error) showStatus('error', 'Sync failed: ' + error.message)
+                else { showStatus('success', `Prices synced — ${data} item${data !== 1 ? 's' : ''} updated`); await fetchBoxes(); if (activeBox) await fetchBoxItems(activeBox.id) }
+              }} style={{ background:'none', border:'1px solid #b8942a', color:'#b8942a', padding:'5px 10px', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer' }}>🔄 Sync</button>
                 <button onClick={() => setShowImportModal(true)}
                   style={{ background:'none', border:'1px solid #2d6a4f', color:'#2d6a4f', padding:'5px 10px', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer' }}>📊 Import</button>
                 <button onClick={() => setShowNewBoxModal(true)}
