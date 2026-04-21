@@ -876,7 +876,32 @@ export default function StudioPage() {
                                 style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }}
                               />
                             </div>
-
+{/* IB Price */}
+                            <div>
+                              <label style={labelStyle}>IB Price / btl (ex-duty)</label>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>£</span>
+                                <EditableCell
+                                  value={s.wines?.purchase_price_per_bottle || ''}
+                                  type="number" step="0.01" min="0" placeholder="0.00"
+                                  width="90px"
+                                  style={{ border: '1px solid var(--border)', padding: '6px 8px', fontFamily: 'DM Mono, monospace', fontSize: '12px', background: 'var(--white)' }}
+                                  onSave={async v => {
+                                    if (!s.wine_id) return
+                                    const duty = dutyForSize(s.bottle_size)
+                                    const dp = v ? ((parseFloat(v) + duty) * 1.2).toFixed(2) : null
+                                    await supabase.from('wines').update({ purchase_price_per_bottle: v }).eq('id', s.wine_id)
+                                    await supabase.from('studio').update({ dp_price: dp }).eq('id', s.id)
+                                    setStudioWines(prev => prev.map(r => r.id === s.id ? { ...r, dp_price: dp, wines: { ...r.wines, purchase_price_per_bottle: v } } : r))
+                                  }}
+                                />
+                                {s.wines?.purchase_price_per_bottle && (
+                                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>
+                                    → DP £{((parseFloat(s.wines.purchase_price_per_bottle) + dutyForSize(s.bottle_size)) * 1.2).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             {/* WS Price input */}
                             <div>
                               <label style={labelStyle}>WS Ex-Duty Price / btl</label>
