@@ -219,17 +219,20 @@ function ImportModal({ onClose, onImportComplete }) {
 
       for (const [boxNum, wines] of Object.entries(boxMap)) {
         for (const wine of wines) {
-          const searchTerm = wine.wine || wine.producer
+          const searchTerm = wine.wine.split(/[\s,]+/).find(w => w.length > 3) || wine.producer.split(/[\s,]+/).find(w => w.length > 3) || wine.wine
           const { data } = await supabase.rpc('search_studio', { search_term: searchTerm })
           const results = (data || []).map(normaliseRow)
 
-          let best = null
+        let best = null
           for (const r of results) {
             const desc = (r.wines?.description || r.unlinked_description || '').toLowerCase()
             const rvintage = String(r.wines?.vintage || r.unlinked_vintage || '')
             const vintageMatch = rvintage === String(wine.vintage)
-            const nameMatch = desc.includes(wine.wine.toLowerCase().split(' ')[0]) ||
-                              desc.includes(wine.producer.toLowerCase().split(' ')[0])
+            // Use multiple words from wine name and producer for matching
+            const wineWords = wine.wine.toLowerCase().replace(/[^a-z\s]/g, '').split(' ').filter(w => w.length > 3)
+            const producerWords = wine.producer.toLowerCase().replace(/[^a-z\s]/g, '').split(' ').filter(w => w.length > 3)
+            const allWords = [...wineWords, ...producerWords]
+            const nameMatch = allWords.some(word => desc.replace(/[^a-z\s]/g, '').includes(word))
             if (nameMatch && vintageMatch) { best = r; break }
             if (nameMatch && !best) best = r
           }
