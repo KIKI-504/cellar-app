@@ -275,7 +275,7 @@ export default function ConsignmentPage() {
             <button key={path} onClick={() => router.push(path)} style={{ background: path === '/consignment' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/consignment' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 10px', borderRadius: '2px', flexShrink: 0 }}>{label}</button>
           ))}
         </div>
-
+      </div>
       <div className="no-print" style={{ padding: '76px 20px 40px' }}>
 
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
