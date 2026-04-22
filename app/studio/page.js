@@ -1,4 +1,5 @@
 'use client'
+// ✅ CORRECT VERSION — v2 — includes: isMagnum, dutyForSize, WS DP column, updateWsPrice, buyer_note, saveFlash, filterDateFrom, addWsPrice
 export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
