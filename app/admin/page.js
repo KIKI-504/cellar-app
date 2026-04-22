@@ -695,7 +695,7 @@ export default function AdminPage() {
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                         {w.women_note && <span title={w.women_note} style={{ fontSize: '12px', flexShrink: 0, cursor: 'help' }}>♀</span>}
                         <div>
-                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3 }}>{w.description}</div>
+                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3, fontWeight: isMagnum(w) ? 700 : 400 }}>{w.description}</div>
                           <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w.region}{w.country ? ` · ${w.country}` : ''}</div>
                         </div>
                       </div>
