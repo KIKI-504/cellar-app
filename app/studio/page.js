@@ -738,6 +738,7 @@ export default function StudioPage() {
                 <th style={{ padding: '10px 8px', textAlign: 'center', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('quantity')}>Qty {sortIcon('quantity')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'right', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('dp_price')}>DP {sortIcon('dp_price')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'right', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('sale_price')}>Sale Price {sortIcon('sale_price')}</th>
+                <th style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 400 }}>WS DP</th>
                 <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 400 }}>Status</th>
                 <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 400 }}>Notes</th>
                 <th style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 400 }}>Local</th>
@@ -837,6 +838,23 @@ export default function StudioPage() {
                           onSave={v => updateStudio(s.id, 'sale_price', v)} />
                       </td>
 
+                      {/* WS DP — market comparison */}
+                      <td style={{ padding: '10px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {wsDP ? (
+                          <div>
+                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600,
+                              color: s.sale_price && parseFloat(s.sale_price) < parseFloat(wsDP) ? '#2d6a4f'
+                                   : s.sale_price && parseFloat(s.sale_price) > parseFloat(wsDP) ? '#c0392b'
+                                   : 'var(--muted)' }}>
+                              £{wsDP}
+                            </div>
+                            {wsDate && <div style={{ fontSize: '9px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>{wsDate}</div>}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: 'var(--border)', fontFamily: 'DM Mono, monospace' }}>—</span>
+                        )}
+                      </td>
+
                       {/* Status */}
                       <td style={{ padding: '10px 8px' }}>
                         <select value={s.status || 'Available'}
@@ -891,7 +909,7 @@ export default function StudioPage() {
                     {/* Expanded notes + WS price row */}
                     {isExpanded && (
                       <tr style={{ background: 'var(--cream)' }}>
-                        <td colSpan={11} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
+                        <td colSpan={12} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', flexWrap: 'wrap' }}>
 
                             {/* Wine Notes (→ wines.buyer_note) */}
