@@ -41,7 +41,12 @@ export default function AdminPage() {
 
   async function fetchWines() {
     setLoading(true)
-    const { data, error } = await supabase.from('wines').select('*').order('description')
+    // ── Bonded Storage only: exclude Manual wines (those live in Studio) ──
+    const { data, error } = await supabase
+      .from('wines')
+      .select('*')
+      .neq('source', 'Manual')
+      .order('description')
     if (error) console.error(error)
     else { setWines(data); setFiltered(data) }
     setLoading(false)
@@ -223,7 +228,6 @@ export default function AdminPage() {
   // IMPORTANT: 2024 EP wines historically have case prices in Unit Price — verify manually
 
   function transformFlintRow(row) {
-    // Try multiple possible column names for each field
     const description = (row['Wine'] || row['Description'] || row['Name'] || '').replace(/^[\s,]+/, '').trim()
     const vintage = (row['Vintage'] || row['Year'] || '').trim()
     const region = (row['Region'] || row['Appellation'] || '').trim()
@@ -347,7 +351,6 @@ export default function AdminPage() {
     setImportStatus(`Reading ${otherSourceName} file…`)
     const text = await file.text()
     const rows = parseCsv(text)
-    // Generic transform — tries common column names
     const wineRows = rows.map(row => {
       const description = (row['Wine'] || row['Description'] || row['Name'] || '').replace(/^[\s,]+/, '').trim()
       const vintage = (row['Vintage'] || row['Year'] || '').trim()
@@ -403,7 +406,7 @@ export default function AdminPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `cellar-export-${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `bonded-storage-export-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -420,7 +423,6 @@ export default function AdminPage() {
     const livex = w.livex_market_price ? parseFloat(w.livex_market_price) : null
     const sale = w.sale_price ? parseFloat(w.sale_price) : null
 
-    // WS DP equivalents — always show both bottle rates when WS is present
     const wsDP75 = ws ? (ws + 3) * 1.2 : null
     const wsDP150 = ws ? (ws + 6) * 1.2 : null
 
@@ -441,28 +443,18 @@ export default function AdminPage() {
         <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d4ad45', marginBottom: '10px', fontFamily: 'DM Mono, monospace' }}>
           IB Price Ladder — {mag ? 'Magnum · £6 duty' : '75cl · £3 duty'}
         </div>
-
-        {/* IB cost + markups on IB */}
         {row('Cost IB /btl', ib)}
         {row('+10% on IB', ib ? ib * 1.10 : null)}
         {row('+15% on IB', ib ? ib * 1.15 : null)}
-
         {divider('Duty Paid')}
-
-        {/* DP — this is what shows in the main column */}
         {row(`DP  (IB £${ib ? ib.toFixed(2) : '?'} + £${duty} duty × 1.20)`, dp, '#d4ad45')}
         {row('+10% on DP', dp ? dp * 1.10 : null)}
         {row('+15% on DP', dp ? dp * 1.15 : null)}
-
         {ws && divider('Wine Searcher')}
-
-        {/* WS section: raw ex-duty figure, then both DP equivalents */}
         {ws && row('WS lowest (ex duty/VAT)', ws)}
         {ws && row('WS + duty + VAT  75cl', wsDP75, wsDP75 && dp && dp < wsDP75 ? '#86efac' : null)}
         {ws && row('WS + duty + VAT  150cl', wsDP150, null, !mag)}
-
         {(livex || retail || sale) && divider()}
-
         {livex && row('Livex (ex duty)', livex)}
         {retail && row(
           w.retail_price_source === 'WS avg (ex duty)' || w.retail_price_source === 'Wine Searcher avg' || w.retail_price_source === 'Wine Searcher lowest +duty+VAT'
@@ -473,10 +465,7 @@ export default function AdminPage() {
           retail
         )}
         {sale && row('Your sale price', sale, '#d4ad45')}
-
         {!ib && <div style={{ fontSize: '10px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace' }}>No cost data available</div>}
-
-        {/* Competitive verdict */}
         {ws && dp && (
           <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'DM Mono, monospace' }}>
             {dp < (ws + duty) * 1.2
@@ -510,21 +499,20 @@ export default function AdminPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }} onClick={() => { setExpandedPrice(null) }}>
 
-      {/* Nav — fixed */}
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100 }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
-        <div style={{ display: 'flex', gap: '4px' }}>
-          <button onClick={() => router.push('/admin')} style={{ background: 'rgba(107,30,46,0.6)', color: '#d4ad45', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Inventory</button>
-          <button onClick={() => router.push('/studio')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Studio</button>
-          <button onClick={() => router.push('/buyer')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Buyer View</button>
-          <button onClick={() => router.push('/local')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Local Sales</button><button onClick={() => router.push('/consignment')} style={{ background: 'none', color: 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 14px', borderRadius: '2px' }}>Consignment</button>
+      {/* Nav — Studio first, Bonded Storage active */}
+      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
+        <button onClick={() => router.push('/studio')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}>Cellar</button>
+        <div style={{ overflowX: 'auto', display: 'flex', gap: '2px', msOverflowStyle: 'none', scrollbarWidth: 'none', padding: '0 8px' }}>
+          {[['Studio', '/studio'], ['Bonded Storage', '/admin'], ['Box Builder', '/boxes'], ['Buyer View', '/buyer'], ['Bottles On Hand', '/local'], ['Consignment', '/consignment']].map(([label, path]) => (
+            <button key={path} onClick={() => router.push(path)} style={{ background: path === '/admin' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/admin' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 10px', borderRadius: '2px', whiteSpace: 'nowrap', flexShrink: 0 }}>{label}</button>
+          ))}
         </div>
-        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
+        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px', flexShrink: 0 }}>Sign Out</button>
       </div>
 
       <div style={{ padding: '76px 28px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '20px' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Wine Inventory</div>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Bonded Storage</div>
           <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{filtered.length} wines</div>
         </div>
 
@@ -608,7 +596,7 @@ export default function AdminPage() {
             </span>
           </label>
 
-          {/* Import Other — two-step: enter source name, then pick file */}
+          {/* Import Other */}
           {!showOtherSourceInput ? (
             <button onClick={() => setShowOtherSourceInput(true)} disabled={importing}
               style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -659,12 +647,11 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Table — wine name column is sticky so it stays visible while scrolling right */}
+        {/* Table */}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                {/* Sticky wine name column */}
                 <th onClick={() => handleSort('description')}
                   style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'description' ? '#d4ad45' : 'var(--white)', position: 'sticky', left: 0, background: 'var(--ink)', zIndex: 10, minWidth: '200px' }}>
                   Wine {sortCol === 'description' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
@@ -686,7 +673,6 @@ export default function AdminPage() {
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Notes</th>
                 <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Buyer</th>
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
-                {/* SRC moved to end */}
                 <th onClick={() => handleSort('source')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'source' ? '#d4ad45' : 'var(--white)' }}>
                   Src {sortCol === 'source' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
@@ -728,7 +714,6 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', position: 'relative' }}
                       onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
                       <div style={{ cursor: 'pointer', userSelect: 'none' }}>
-                        {/* Primary display: DP price */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <span style={{ fontWeight: 700, color: isPriceOpen ? 'var(--wine)' : 'var(--ink)', fontFamily: 'DM Mono, monospace', fontSize: '13px' }}>
                             {pp ? `£${((parseFloat(pp) + dutyForWine(w)) * 1.2).toFixed(2)}` : '—'}
@@ -736,7 +721,6 @@ export default function AdminPage() {
                           <span style={{ fontSize: '9px', color: isPriceOpen ? 'var(--wine)' : '#bbb' }}>{isPriceOpen ? '▲' : '▼'}</span>
                           {w.manual_override_note && <span title={`Override: ${w.manual_override_note}`} style={{ fontSize: '9px', color: '#b8942a', cursor: 'help' }}>✎</span>}
                         </div>
-                        {/* Secondary: IB cost in muted text */}
                         {pp && <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>IB £{parseFloat(pp).toFixed(2)}</div>}
                       </div>
                       {isPriceOpen && (
@@ -752,7 +736,7 @@ export default function AdminPage() {
                       )}
                     </td>
 
-                    {/* DP Retail — WS duty-paid equivalent prominently, ex-tax underneath */}
+                    {/* DP Retail */}
                     {(() => {
                       const duty = dutyForWine(w)
                       const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
@@ -785,7 +769,6 @@ export default function AdminPage() {
 
                       return (
                         <td style={{ padding: '9px 12px', minWidth: '160px' }}>
-                          {/* Primary: WS DP equivalent in bold */}
                           {wsDP ? (
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -798,7 +781,6 @@ export default function AdminPage() {
                                   </span>
                                 )}
                               </div>
-                              {/* Secondary: WS ex-tax in muted */}
                               <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>
                                 WS £{ws.toFixed(2)} ex-tax
                               </div>
@@ -806,7 +788,6 @@ export default function AdminPage() {
                           ) : (
                             <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>—</div>
                           )}
-                          {/* Edit row: price input + type selector + WS search */}
                           <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginTop: '5px' }}>
                             <input type="number" step="0.01"
                               key={`${w.id}-price`}
@@ -837,7 +818,6 @@ export default function AdminPage() {
                     })()}
 
                     <td style={{ padding: '9px 12px' }}>
-                      {/* Show price prominently if set, editable input below */}
                       {w.sale_price && (
                         <div style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: 'var(--wine)', marginBottom: '3px' }}>
                           £{parseFloat(w.sale_price).toFixed(2)}
@@ -920,7 +900,6 @@ export default function AdminPage() {
                         style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 8px', cursor: 'pointer', fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>→ Studio</button>
                     </td>
 
-                    {/* SRC — moved to end */}
                     <td style={{ padding: '9px 12px' }}>
                       <span style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: '2px', background: w.source === 'Berry Brothers' ? 'rgba(107,30,46,0.1)' : w.source === 'Flint' ? 'rgba(184,148,42,0.12)' : 'rgba(45,106,79,0.1)', color: w.source === 'Berry Brothers' ? 'var(--wine)' : w.source === 'Flint' ? '#7a5e10' : '#2d6a4f', whiteSpace: 'nowrap' }}>
                         {w.source === 'Berry Brothers' ? 'BB' : w.source}
@@ -1010,13 +989,12 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
   const [loserSearch, setLoserSearch] = useState('')
   const [survivor, setSurvivor] = useState(null)
   const [loser, setLoser] = useState(null)
-  const [fieldChoices, setFieldChoices] = useState({}) // { fieldName: 'survivor' | 'loser' | 'custom', customValue?: any }
+  const [fieldChoices, setFieldChoices] = useState({})
   const [similarityReason, setSimilarityReason] = useState('')
-  const [referenceCounts, setReferenceCounts] = useState(null) // { studio, box_items }
+  const [referenceCounts, setReferenceCounts] = useState(null)
   const [merging, setMerging] = useState(false)
   const [mergeStatus, setMergeStatus] = useState('')
 
-  // Fields to compare side-by-side
   const COMPARE_FIELDS = [
     'description', 'vintage', 'region', 'country', 'colour',
     'bottle_format', 'bottle_volume', 'quantity',
@@ -1037,14 +1015,12 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
     ? wines.filter(w => w.id !== survivor?.id && [w.description, w.vintage, w.region, w.source_id].join(' ').toLowerCase().includes(loserSearch.toLowerCase())).slice(0, 8)
     : []
 
-  // Initialise field choices when both wines picked
   useEffect(() => {
     if (!survivor || !loser) { setFieldChoices({}); setReferenceCounts(null); return }
     const initial = {}
     for (const f of COMPARE_FIELDS) {
       const sVal = survivor[f]
       const lVal = loser[f]
-      // Default: keep survivor if it has a value; else take loser's value
       if (sVal !== null && sVal !== undefined && sVal !== '') {
         initial[f] = 'survivor'
       } else if (lVal !== null && lVal !== undefined && lVal !== '') {
@@ -1054,7 +1030,6 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
       }
     }
     setFieldChoices(initial)
-    // Fetch reference counts for the loser
     checkReferences(loser.id, loser.source_id)
   }, [survivor?.id, loser?.id])
 
@@ -1079,19 +1054,9 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
     }
   }
 
-  function selectSurvivor(w) {
-    setSurvivor(w)
-    setSurvivorSearch('')
-  }
-
-  function selectLoser(w) {
-    setLoser(w)
-    setLoserSearch('')
-  }
-
-  function setChoice(field, choice) {
-    setFieldChoices(prev => ({ ...prev, [field]: choice }))
-  }
+  function selectSurvivor(w) { setSurvivor(w); setSurvivorSearch('') }
+  function selectLoser(w) { setLoser(w); setLoserSearch('') }
+  function setChoice(field, choice) { setFieldChoices(prev => ({ ...prev, [field]: choice })) }
 
   function getMergedValues() {
     if (!survivor || !loser) return {}
@@ -1113,26 +1078,17 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
     setMergeStatus('Starting merge…')
 
     try {
-      // 1. Collect studio rows that will be migrated
       setMergeStatus('Identifying studio entries to migrate…')
-      const { data: studioRows } = await supabase
-        .from('studio')
-        .select('id')
-        .eq('wine_id', loser.id)
+      const { data: studioRows } = await supabase.from('studio').select('id').eq('wine_id', loser.id)
       const migratedStudioIds = (studioRows || []).map(r => r.id)
 
-      // 2. Collect box_items rows that will be updated (by source_id)
       setMergeStatus('Identifying box items to migrate…')
       let migratedBoxItemIds = []
       if (loser.source_id) {
-        const { data: boxRows } = await supabase
-          .from('box_items')
-          .select('id')
-          .eq('source_id', loser.source_id)
+        const { data: boxRows } = await supabase.from('box_items').select('id').eq('source_id', loser.source_id)
         migratedBoxItemIds = (boxRows || []).map(r => r.id)
       }
 
-      // 3. Write audit record FIRST so we can recover if something fails
       setMergeStatus('Writing audit record…')
       const auditPayload = {
         survivor_id: survivor.id,
@@ -1147,43 +1103,29 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
       const { error: auditError } = await supabase.from('wine_merges').insert(auditPayload)
       if (auditError) throw new Error('Audit write failed: ' + auditError.message)
 
-      // 4. Update survivor with merged field values
       setMergeStatus('Updating survivor record…')
       const mergedValues = getMergedValues()
-      // Remove keys whose value didn't change to avoid unnecessary writes
       const updatePayload = {}
       for (const [k, v] of Object.entries(mergedValues)) {
         if (v !== survivor[k]) updatePayload[k] = v
       }
       if (Object.keys(updatePayload).length > 0) {
-        const { error: updateError } = await supabase
-          .from('wines')
-          .update(updatePayload)
-          .eq('id', survivor.id)
+        const { error: updateError } = await supabase.from('wines').update(updatePayload).eq('id', survivor.id)
         if (updateError) throw new Error('Survivor update failed: ' + updateError.message)
       }
 
-      // 5. Reassign studio rows to survivor
       if (migratedStudioIds.length > 0) {
         setMergeStatus(`Reassigning ${migratedStudioIds.length} studio entries…`)
-        const { error: studioError } = await supabase
-          .from('studio')
-          .update({ wine_id: survivor.id })
-          .eq('wine_id', loser.id)
+        const { error: studioError } = await supabase.from('studio').update({ wine_id: survivor.id }).eq('wine_id', loser.id)
         if (studioError) throw new Error('Studio migration failed: ' + studioError.message)
       }
 
-      // 6. Update box_items source_id
       if (migratedBoxItemIds.length > 0 && loser.source_id) {
         setMergeStatus(`Updating ${migratedBoxItemIds.length} box items…`)
-        const { error: boxError } = await supabase
-          .from('box_items')
-          .update({ source_id: survivor.source_id || null })
-          .eq('source_id', loser.source_id)
+        const { error: boxError } = await supabase.from('box_items').update({ source_id: survivor.source_id || null }).eq('source_id', loser.source_id)
         if (boxError) throw new Error('Box items migration failed: ' + boxError.message)
       }
 
-      // 7. Delete the loser
       setMergeStatus('Deleting duplicate record…')
       const { error: deleteError } = await supabase.from('wines').delete().eq('id', loser.id)
       if (deleteError) throw new Error('Loser delete failed: ' + deleteError.message)
@@ -1205,7 +1147,6 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
     return String(v)
   }
 
-  // Which fields differ — highlight those
   const differingFields = survivor && loser
     ? COMPARE_FIELDS.filter(f => String(survivor[f] ?? '') !== String(loser[f] ?? ''))
     : []
@@ -1220,25 +1161,18 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
         </div>
 
         <div style={{ padding: '24px' }}>
-
           <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)', marginBottom: '20px', lineHeight: 1.6 }}>
             Pick two wines — the <strong>survivor</strong> (kept) and the <strong>loser</strong> (deleted). For each field, choose which value wins. Any studio entries and box items pointing at the loser will be migrated to the survivor. A full JSON snapshot is saved to the audit log before anything is deleted.
           </div>
 
-          {/* Two-up wine pickers */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
-
             {/* Survivor picker */}
             <div style={{ border: '1px solid rgba(45,106,79,0.3)', background: 'rgba(45,106,79,0.04)', padding: '14px' }}>
               <div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#2d6a4f', marginBottom: '8px' }}>1. Wine to KEEP (survivor)</div>
               {!survivor ? (
                 <>
-                  <input
-                    value={survivorSearch}
-                    onChange={e => setSurvivorSearch(e.target.value)}
-                    placeholder="Search wine name, vintage, region…"
-                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
-                  />
+                  <input value={survivorSearch} onChange={e => setSurvivorSearch(e.target.value)} placeholder="Search wine name, vintage, region…"
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                   {survivorResults.length > 0 && (
                     <div style={{ border: '1px solid var(--border)', borderTop: 'none', background: 'var(--white)', maxHeight: '220px', overflowY: 'auto' }}>
                       {survivorResults.map(w => (
@@ -1256,9 +1190,7 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
               ) : (
                 <div>
                   <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 500 }}>{survivor.description}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>
-                    {survivor.vintage} · {survivor.source} · {survivor.source_id || 'no ID'}
-                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>{survivor.vintage} · {survivor.source} · {survivor.source_id || 'no ID'}</div>
                   <button onClick={() => setSurvivor(null)} disabled={merging}
                     style={{ marginTop: '6px', background: 'none', border: 'none', fontSize: '10px', color: '#2d6a4f', cursor: merging ? 'not-allowed' : 'pointer', fontFamily: 'DM Mono, monospace', padding: 0 }}>✕ change</button>
                 </div>
@@ -1270,12 +1202,8 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
               <div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#c0392b', marginBottom: '8px' }}>2. Wine to DELETE (loser)</div>
               {!loser ? (
                 <>
-                  <input
-                    value={loserSearch}
-                    onChange={e => setLoserSearch(e.target.value)}
-                    placeholder="Search wine name, vintage, region…"
-                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
-                  />
+                  <input value={loserSearch} onChange={e => setLoserSearch(e.target.value)} placeholder="Search wine name, vintage, region…"
+                    style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                   {loserResults.length > 0 && (
                     <div style={{ border: '1px solid var(--border)', borderTop: 'none', background: 'var(--white)', maxHeight: '220px', overflowY: 'auto' }}>
                       {loserResults.map(w => (
@@ -1293,9 +1221,7 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
               ) : (
                 <div>
                   <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 500 }}>{loser.description}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>
-                    {loser.vintage} · {loser.source} · {loser.source_id || 'no ID'}
-                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>{loser.vintage} · {loser.source} · {loser.source_id || 'no ID'}</div>
                   <button onClick={() => setLoser(null)} disabled={merging}
                     style={{ marginTop: '6px', background: 'none', border: 'none', fontSize: '10px', color: '#c0392b', cursor: merging ? 'not-allowed' : 'pointer', fontFamily: 'DM Mono, monospace', padding: 0 }}>✕ change</button>
                 </div>
@@ -1303,7 +1229,7 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
             </div>
           </div>
 
-          {/* Reference counts warning */}
+          {/* Reference counts */}
           {survivor && loser && referenceCounts && (
             <div style={{ background: referenceCounts.studio + referenceCounts.box_items > 0 ? 'rgba(184,148,42,0.08)' : 'rgba(45,106,79,0.06)', border: `1px solid ${referenceCounts.studio + referenceCounts.box_items > 0 ? 'rgba(184,148,42,0.3)' : 'rgba(45,106,79,0.2)'}`, padding: '12px 14px', marginBottom: '16px', fontSize: '11px', fontFamily: 'DM Mono, monospace' }}>
               <div style={{ letterSpacing: '0.1em', textTransform: 'uppercase', color: referenceCounts.studio + referenceCounts.box_items > 0 ? '#7a5e10' : '#2d6a4f', marginBottom: '6px' }}>
@@ -1315,13 +1241,12 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
             </div>
           )}
 
-          {/* Field-by-field comparison */}
+          {/* Field comparison table */}
           {survivor && loser && (
             <div style={{ marginBottom: '20px' }}>
               <div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '10px' }}>
                 Field-by-field choice · {differingFields.length} field{differingFields.length === 1 ? '' : 's'} differ
               </div>
-
               <div style={{ border: '1px solid var(--border)', background: 'var(--white)', overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                   <thead>
@@ -1375,14 +1300,9 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
                 Similarity reason <span style={{ color: 'var(--wine)' }}>*</span>
                 <span style={{ textTransform: 'none', letterSpacing: 0, marginLeft: '6px', color: 'var(--muted)', fontSize: '10px' }}>(for later pattern analysis — e.g. "naming convention", "accent differences", "missing vintage")</span>
               </label>
-              <input
-                type="text"
-                value={similarityReason}
-                onChange={e => setSimilarityReason(e.target.value)}
-                placeholder="Why were these duplicates?"
-                disabled={merging}
-                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
-              />
+              <input type="text" value={similarityReason} onChange={e => setSimilarityReason(e.target.value)}
+                placeholder="Why were these duplicates?" disabled={merging}
+                style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
           )}
 
