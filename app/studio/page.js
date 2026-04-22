@@ -734,6 +734,7 @@ export default function StudioPage() {
               <tr style={{ background: 'var(--ink)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'left', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('name')}>Wine {sortIcon('name')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'left', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('colour')}>Colour {sortIcon('colour')}</th>
+                <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 400 }}>Size</th>
                 <th style={{ padding: '10px 8px', textAlign: 'center', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('quantity')}>Qty {sortIcon('quantity')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'right', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('dp_price')}>DP {sortIcon('dp_price')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'right', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('sale_price')}>Sale Price {sortIcon('sale_price')}</th>
@@ -796,7 +797,7 @@ export default function StudioPage() {
                                 />
                               )
                             ) : (
-                              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: 'var(--ink)', lineHeight: 1.3 }}>
+                              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: 'var(--ink)', lineHeight: 1.3, fontWeight: isMagnum(s.bottle_size) ? 700 : 400 }}>
                                 {name}
                                 {alert && <span title={alert.tooltip} style={{ marginLeft: '4px', fontSize: '11px' }}>{alert.icon}</span>}
                                 {buyerNote && <span style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--muted)' }}>✎</span>}
@@ -811,6 +812,11 @@ export default function StudioPage() {
 
                       {/* Colour */}
                       <td style={{ padding: '10px 8px', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{colour}</td>
+
+                      {/* Size */}
+                      <td style={{ padding: '10px 8px', fontSize: '11px', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap', color: isMagnum(s.bottle_size) ? 'var(--wine)' : 'var(--muted)', fontWeight: isMagnum(s.bottle_size) ? 600 : 400 }}>
+                        {isMagnum(s.bottle_size) ? '150cl' : s.bottle_size === '37.5' ? '37.5cl' : s.bottle_size === '300' ? '300cl' : '75cl'}
+                      </td>
 
                       {/* Qty */}
                       <td style={{ padding: '10px 8px', textAlign: 'center' }}>
@@ -885,7 +891,7 @@ export default function StudioPage() {
                     {/* Expanded notes + WS price row */}
                     {isExpanded && (
                       <tr style={{ background: 'var(--cream)' }}>
-                        <td colSpan={10} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
+                        <td colSpan={11} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', flexWrap: 'wrap' }}>
 
                             {/* Wine Notes (→ wines.buyer_note) */}
