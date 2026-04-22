@@ -269,9 +269,9 @@ export default function ConsignmentPage() {
 
       {/* Nav */}
       <div className="no-print" style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
-    <button onClick={() => router.push('/admin')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Cellar</button>
+    <button onClick={() => router.push('/studio')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Cellar</button>
         <div style={{ display: 'flex', gap: '2px', overflowX: 'auto', flexShrink: 1 }}>
-          {[['Inventory', '/admin'], ['Studio', '/studio'], ['Boxes', '/boxes'], ['Buyer', '/buyer'], ['Bottles On Hand', '/local'], ['Consignment', '/consignment']].map(([label, path]) => (
+          {[['Studio', '/studio'], ['Bonded Storage', '/admin'], ['Boxes', '/boxes'], ['Buyer', '/buyer'], ['Bottles On Hand', '/local'], ['Consignment', '/consignment']].map(([label, path]) => (
             <button key={path} onClick={() => router.push(path)} style={{ background: path === '/consignment' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/consignment' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 10px', borderRadius: '2px', flexShrink: 0 }}>{label}</button>
           ))}
         </div>
@@ -360,7 +360,7 @@ export default function ConsignmentPage() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                   <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: colourDot(item.colour), flexShrink: 0 }}></span>
                                   <div>
-                                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500, lineHeight: 1.3 }}>{item.description}</div>
+                                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: item.bottle_size === '150' ? 700 : 500, lineHeight: 1.3 }}>{item.description}</div>
                                     {item.source_id && <div style={{ fontSize: '9px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>{item.source_id}</div>}
                                     {item.notes && <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '1px' }}>{item.notes}</div>}
                                   </div>
@@ -414,7 +414,7 @@ export default function ConsignmentPage() {
                           {activeSales.map(s => (
                             <tr key={s.id} style={{ borderBottom: '1px solid #ede6d6', background: !s.invoiced ? 'rgba(192,57,43,0.03)' : 'transparent' }}>
                               <td style={{ padding: '9px 12px', minWidth: '160px' }}>
-                                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500 }}>{s.description}</div>
+                                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: s.bottle_size === '150' ? 700 : 500 }}>{s.description}</div>
                                 {s.vintage && <div style={{ fontSize: '10px', color: 'var(--muted)' }}>{s.vintage}</div>}
                                 {s.notes && <div style={{ fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic' }}>{s.notes}</div>}
                               </td>
