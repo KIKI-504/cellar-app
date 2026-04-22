@@ -107,7 +107,7 @@ function generateInvoicePDF(invoiceNumber, buyerInfo, boxes, itemsByBox, issuedD
       itemsHTML += `
         <tr class="item-row">
           <td class="desc-cell">
-            <div class="wine-name">${wp}${item.wine_vintage ? ' ' + item.wine_vintage : ''}</div>
+            <div class="wine-name" style="${item.bottle_size === '150' ? 'font-weight:700;' : ''}">${wp}${item.wine_vintage ? ' ' + item.wine_vintage : ''}</div>
             ${pp ? `<div class="wine-prod">${pp}</div>` : ''}
             <div class="wine-meta">${bottleSize}</div>
           </td>
@@ -306,7 +306,7 @@ function PullListView({ box, items, onClose }) {
                 <div>
                   <div style={{ display:'flex', alignItems:'baseline', gap:'8px', flexWrap:'wrap' }}>
                     <span style={{ display:'inline-block', width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), flexShrink:0 }}></span>
-                    <span className="wname" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', fontWeight:500 }}>{wp}</span>
+                    <span className="wname" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', fontWeight: item.bottle_size === '150' ? 700 : 500 }}>{wp}</span>
                     {item.wine_vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', color:'var(--muted)' }}>{item.wine_vintage}</span>}
                   </div>
                   {pp && <div className="wprod" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', color:'var(--ink)', marginTop:'2px', marginLeft:'16px' }}>{pp}</div>}
@@ -1379,7 +1379,7 @@ export default function BoxPage() {
                         <div>
                           <div style={{ display:'flex', alignItems:'center', gap:'7px', flexWrap:'wrap' }}>
                             <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), display:'inline-block', flexShrink:0 }}></span>
-                            <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{wp}</span>
+                            <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight: item.bottle_size === '150' ? 700 : 500 }}>{wp}</span>
                             {item.wine_vintage && <span style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>{item.wine_vintage}</span>}
                             {item.quantity > 1 && <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', background:'var(--ink)', color:'#d4ad45', padding:'1px 5px', borderRadius:'2px' }}>×{item.quantity}</span>}
                           </div>
