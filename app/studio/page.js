@@ -99,6 +99,7 @@ function printLabel(s) {
   const parts = name.split(',')
   const wineName = parts.length > 1 ? parts.slice(0, -1).join(',').trim() : name
   const producer = parts.length > 1 ? parts[parts.length - 1].trim() : ''
+  const mag = isMagnum(s.bottle_size)
 
   const dp = s.dp_price
     ? parseFloat(s.dp_price).toFixed(2)
@@ -116,6 +117,7 @@ function printLabel(s) {
 
   const block = `
     <div class="label-copy">
+      ${mag ? `<div class="line magnum">MAGNUM</div>` : ''}
       <div class="line vintage">${vintage}</div>
       <div class="line wine">${wineName}</div>
       ${producer ? `<div class="line producer">${producer}</div>` : ''}
@@ -132,7 +134,7 @@ function printLabel(s) {
 <style>
   @page { size: 4in 6in; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { width: 4in; height: 6in; font-family: Arial, Helvetica, sans-serif; display: flex; flex-direction: column; padding-top: 0.25in; box-sizing: border-box; }
+  body { width: 4in; height: 6in; font-family: Arial, Helvetica, sans-serif; display: flex; flex-direction: column; }
   .label-copy {
     width: 4in;
     height: 3in;
@@ -140,11 +142,13 @@ function printLabel(s) {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 0.2in 0.25in;
+    padding: 0.25in 0.25in;
     border-bottom: 1px dashed #ccc;
+    box-sizing: border-box;
   }
   .label-copy:last-child { border-bottom: none; }
   .line { text-align: center; line-height: 1.2; width: 100%; }
+  .magnum { font-size: 18pt; font-weight: 900; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 4pt; border: 2px solid #000; padding: 2pt 8pt; display: inline-block; width: auto; }
   .vintage { font-size: 28pt; font-weight: 900; letter-spacing: 0.05em; margin-bottom: 4pt; }
   .wine { font-size: 22pt; font-weight: 700; margin-bottom: 2pt; }
   .producer { font-size: 18pt; font-weight: 700; margin-bottom: 6pt; }
