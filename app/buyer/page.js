@@ -13,6 +13,14 @@ function formatBottleSize(volume, format) {
   return '75cl'
 }
 
+function bottleSortKey(volume, format) {
+  const s = formatBottleSize(volume, format)
+  if (s === '37.5cl') return 37.5
+  if (s === '150cl') return 150
+  if (s === '300cl') return 300
+  return 75
+}
+
 export default function BuyerPage() {
   const router = useRouter()
   const [wines, setWines] = useState([])
@@ -22,6 +30,8 @@ export default function BuyerPage() {
   const [filterColour, setFilterColour] = useState('')
   const [filterRegion, setFilterRegion] = useState('')
   const [filterWomen, setFilterWomen] = useState(false)
+  const [sortCol, setSortCol] = useState('description')
+  const [sortDir, setSortDir] = useState('asc')
   const [hearts, setHearts] = useState({})
   const [userName, setUserName] = useState('')
   const [expanded, setExpanded] = useState({})
@@ -50,6 +60,16 @@ export default function BuyerPage() {
     setLoading(false)
   }
 
+  function cycleSort(field) {
+    if (sortCol === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(field); setSortDir('asc') }
+  }
+
+  function sortIcon(field) {
+    if (sortCol !== field) return <span style={{ opacity: 0.4, fontSize: '9px' }}>↕</span>
+    return <span style={{ fontSize: '9px' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+  }
+
   useEffect(() => {
     let result = [...wines]
     if (filterColour) result = result.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
@@ -59,8 +79,22 @@ export default function BuyerPage() {
       const q = search.toLowerCase()
       result = result.filter(w => [w.description, w.region, w.country, w.vintage].join(' ').toLowerCase().includes(q))
     }
+    result.sort((a, b) => {
+      let av, bv
+      if (sortCol === 'description') { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
+      else if (sortCol === 'vintage') { av = a.vintage || ''; bv = b.vintage || '' }
+      else if (sortCol === 'colour') { av = (a.colour || '').toLowerCase(); bv = (b.colour || '').toLowerCase() }
+      else if (sortCol === 'region') { av = (a.region || '').toLowerCase(); bv = (b.region || '').toLowerCase() }
+      else if (sortCol === 'format') { av = bottleSortKey(a.bottle_volume, a.bottle_format); bv = bottleSortKey(b.bottle_volume, b.bottle_format) }
+      else if (sortCol === 'quantity') { av = parseInt(a.quantity) || 0; bv = parseInt(b.quantity) || 0 }
+      else if (sortCol === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
+      else if (sortCol === 'ws') { av = parseFloat(a.ws_lowest_per_bottle) || 0; bv = parseFloat(b.ws_lowest_per_bottle) || 0 }
+      else { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
+      if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
+      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+    })
     setFiltered(result)
-  }, [wines, search, filterColour, filterRegion, filterWomen])
+  }, [wines, search, filterColour, filterRegion, filterWomen, sortCol, sortDir])
 
   function toggleHeart(id) {
     setHearts(prev => {
@@ -152,7 +186,7 @@ export default function BuyerPage() {
 
       <div style={{ padding: '24px 28px' }}>
         {/* Filters */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Colours</option>
@@ -172,6 +206,17 @@ export default function BuyerPage() {
           )}
         </div>
 
+        {/* Sort bar */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginRight: '2px' }}>Sort:</span>
+          {[['description','Wine'],['vintage','Vintage'],['colour','Colour'],['region','Region'],['format','Format'],['quantity','Qty'],['sale_price','Price'],['ws','WS Avg']].map(([col, label]) => (
+            <button key={col} onClick={() => cycleSort(col)}
+              style={{ background: sortCol === col ? 'var(--ink)' : 'var(--white)', color: sortCol === col ? '#d4ad45' : 'var(--muted)', border: '1px solid var(--border)', padding: '5px 10px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+              {label} {sortIcon(col)}
+            </button>
+          ))}
+        </div>
+
         <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '16px', letterSpacing: '0.05em' }}>
           {filtered.length} wine{filtered.length !== 1 ? 's' : ''} available
           {womenCount > 0 && !filterWomen && <span style={{ marginLeft: '12px', color: '#9b3a4a' }}>♀ {womenCount} women-led producer{womenCount !== 1 ? 's' : ''}</span>}
@@ -179,29 +224,18 @@ export default function BuyerPage() {
 
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, marginBottom: '8px', color: 'var(--ink)' }}>No wines available</div>
-            <div style={{ fontSize: '12px' }}>Check back soon — the selection is updated regularly.</div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', marginBottom: '8px' }}>No wines match your filters</div>
+            <div style={{ fontSize: '12px', fontFamily: 'DM Mono, monospace' }}>Try adjusting your search or filters</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
-            {/* Table header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 100px 80px 40px', gap: '0', background: 'var(--ink)', color: 'rgba(253,250,245,0.5)', padding: '10px 16px', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-              <div>Wine</div>
-              <div>Size</div>
-              <div style={{ textAlign: 'center' }}>Qty</div>
-              <div style={{ textAlign: 'right' }}>Price / btl</div>
-              <div style={{ textAlign: 'right' }}>WS Avg</div>
-              <div></div>
-            </div>
-
             {filtered.map(w => {
               const hearted = !!hearts[w.id]
               const qty = hearts[w.id] || 1
-              const maxQty = parseInt(w.quantity) || 99
+              const maxQty = parseInt(w.quantity) || 1
               const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
               const size = formatBottleSize(w.bottle_volume, w.bottle_format)
               const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
-              // WS avg DP = (ws + duty) * 1.2
               const duty = (size === '150cl' || size === '300cl') ? 6 : 3
               const wsDp = ws ? (ws + duty) * 1.2 : null
               const salePrice = parseFloat(w.sale_price)
