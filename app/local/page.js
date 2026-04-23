@@ -12,6 +12,14 @@ function isMagnum(size) {
 
 function dutyForSize(size) { return isMagnum(size) ? 6 : 3 }
 
+function bottleSortKey(size) {
+  const s = String(size || '').toLowerCase().replace(/\s/g, '')
+  if (s.includes('37.5') || s.includes('half')) return 37.5
+  if (isMagnum(s)) return 150
+  if (s.includes('300') || s.includes('double')) return 300
+  return 75
+}
+
 export default function LocalPage() {
   const [stage, setStage] = useState('pin')
   const [pinInput, setPinInput] = useState('')
@@ -23,6 +31,8 @@ export default function LocalPage() {
   const [search, setSearch] = useState('')
   const [filterColour, setFilterColour] = useState('')
   const [expandedNote, setExpandedNote] = useState(null)
+  const [sortCol, setSortCol] = useState('name')
+  const [sortDir, setSortDir] = useState('asc')
 
   function handlePin() {
     if (pinInput === LOCAL_PIN) {
@@ -62,10 +72,20 @@ export default function LocalPage() {
   function getWineName(s) { return s.wines?.description || s.unlinked_description || 'Unknown wine' }
   function getWineVintage(s) { return s.wines?.vintage || s.unlinked_vintage || '' }
   function getWineRegion(s) { return s.wines?.region || '' }
-  function getWineColour(s) { return s.wines?.colour || '' }
+  function getWineColour(s) { return s.wines?.colour || s.colour || '' }
   function getPrice(s) {
     const p = s.sale_price ?? s.dp_price
     return p ? parseFloat(p) : null
+  }
+
+  function cycleSort(field) {
+    if (sortCol === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(field); setSortDir('asc') }
+  }
+
+  function sortIcon(field) {
+    if (sortCol !== field) return <span style={{ opacity: 0.4, fontSize: '9px' }}>↕</span>
+    return <span style={{ fontSize: '9px' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
   function sendWishlist() {
@@ -87,14 +107,29 @@ export default function LocalPage() {
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${body}`
   }
 
-  const filtered = wines.filter(s => {
-    if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
-    if (search) {
-      const q = search.toLowerCase()
-      return [getWineName(s), getWineVintage(s), getWineRegion(s)].join(' ').toLowerCase().includes(q)
-    }
-    return true
-  })
+  const filtered = wines
+    .filter(s => {
+      if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
+      if (search) {
+        const q = search.toLowerCase()
+        return [getWineName(s), getWineVintage(s), getWineRegion(s)].join(' ').toLowerCase().includes(q)
+      }
+      return true
+    })
+    .sort((a, b) => {
+      let av, bv
+      if (sortCol === 'name') { av = getWineName(a).toLowerCase(); bv = getWineName(b).toLowerCase() }
+      else if (sortCol === 'vintage') { av = getWineVintage(a); bv = getWineVintage(b) }
+      else if (sortCol === 'colour') { av = getWineColour(a).toLowerCase(); bv = getWineColour(b).toLowerCase() }
+      else if (sortCol === 'region') { av = getWineRegion(a).toLowerCase(); bv = getWineRegion(b).toLowerCase() }
+      else if (sortCol === 'format') { av = bottleSortKey(a.bottle_size || a.wines?.bottle_volume); bv = bottleSortKey(b.bottle_size || b.wines?.bottle_volume) }
+      else if (sortCol === 'quantity') { av = a.quantity || 0; bv = b.quantity || 0 }
+      else if (sortCol === 'price') { av = getPrice(a) || 0; bv = getPrice(b) || 0 }
+      else if (sortCol === 'ws') { av = parseFloat(a.wines?.ws_lowest_per_bottle) || 0; bv = parseFloat(b.wines?.ws_lowest_per_bottle) || 0 }
+      else { av = getWineName(a).toLowerCase(); bv = getWineName(b).toLowerCase() }
+      if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
+      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+    })
 
   const wishlistCount = Object.keys(wishlist).length
 
@@ -154,7 +189,7 @@ export default function LocalPage() {
       <div style={{ padding: '24px' }}>
 
         {/* Filters */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
             style={{ flex: 1, minWidth: '160px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterColour} onChange={e => setFilterColour(e.target.value)}
@@ -164,6 +199,17 @@ export default function LocalPage() {
             <option value="White">White</option>
             <option value="Rosé">Rosé</option>
           </select>
+        </div>
+
+        {/* Sort bar */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginRight: '2px' }}>Sort:</span>
+          {[['name','Wine'],['vintage','Vintage'],['colour','Colour'],['region','Region'],['format','Format'],['quantity','Qty'],['price','Price'],['ws','WS Avg']].map(([col, label]) => (
+            <button key={col} onClick={() => cycleSort(col)}
+              style={{ background: sortCol === col ? 'var(--ink)' : 'var(--white)', color: sortCol === col ? '#d4ad45' : 'var(--muted)', border: '1px solid var(--border)', padding: '5px 10px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+              {label} {sortIcon(col)}
+            </button>
+          ))}
         </div>
 
         <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '16px', fontFamily: 'DM Mono, monospace' }}>
@@ -177,7 +223,7 @@ export default function LocalPage() {
           <div style={{ textAlign: 'center', padding: '60px', fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--muted)' }}>No wines available right now.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
-            {/* Table header — mirrors Buyer View */}
+            {/* Table header */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px 100px 80px 40px', gap: '0', background: 'var(--ink)', color: 'rgba(253,250,245,0.5)', padding: '10px 16px', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
               <div>Wine</div>
               <div>Size</div>
@@ -192,19 +238,17 @@ export default function LocalPage() {
               const colour = getWineColour(s)
               const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
               const price = getPrice(s)
+              const isMag = isMagnum(s.bottle_size || s.wines?.bottle_volume || '')
+              const sizeLabel = isMag ? '150cl' : s.bottle_size === '37.5' ? '37.5cl' : s.bottle_size === '300' ? '300cl' : '75cl'
+              const ws = s.wines?.ws_lowest_per_bottle ? parseFloat(s.wines.ws_lowest_per_bottle) : null
+              const duty = isMag ? 6 : 3
+              const wsDp = ws ? (ws + duty) * 1.2 : null
+              const wsDate = s.wines?.ws_price_date || null
+              const isBelowWs = wsDp && price && price < wsDp
+              const saving = isBelowWs ? (wsDp - price).toFixed(2) : null
+              const isNoteOpen = expandedNote === s.id
               const buyerNote = s.wines?.buyer_note || ''
               const restaurantSpot = s.wines?.restaurant_spot || ''
-              const isNoteOpen = expandedNote === s.id
-              const sizeLabel = isMagnum(s.bottle_size) ? '150cl' : s.bottle_size === '37.5' ? '37.5cl' : s.bottle_size === '300' ? '300cl' : '75cl'
-              const isMag = isMagnum(s.bottle_size)
-
-              // WS comparison
-              const ws = s.wines?.ws_lowest_per_bottle ? parseFloat(s.wines.ws_lowest_per_bottle) : null
-              const wsDate = s.wines?.ws_price_date || null
-              const duty = dutyForSize(s.bottle_size)
-              const wsDp = ws ? (ws + duty) * 1.2 : null
-              const isBelowWs = price && wsDp ? price < wsDp : false
-              const saving = isBelowWs ? (wsDp - price).toFixed(2) : null
 
               return (
                 <div key={s.id} style={{ background: 'var(--white)' }}>
