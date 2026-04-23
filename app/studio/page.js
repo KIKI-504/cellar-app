@@ -1,5 +1,5 @@
 'use client'
-// ✅ CORRECT VERSION — v2 — includes: isMagnum, dutyForSize, WS DP column, updateWsPrice, buyer_note, saveFlash, filterDateFrom, addWsPrice
+// ✅ CORRECT VERSION — v3 — adds vintage/region/format/ws sorts, Vin. column, producer_note + women_note in panel
 export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -55,6 +55,14 @@ function formatBottleSize(size) {
   if (s === '37.5' || s === '37.5cl' || s === '375' || s.includes('half')) return '37.5cl'
   if (s === '300' || s === '300cl' || s === '3000' || s.includes('double')) return '300cl'
   return '75cl'
+}
+
+function bottleSortKey(size) {
+  const s = String(size || '').toLowerCase().replace(/\s/g, '')
+  if (s.includes('37.5') || s.includes('half')) return 37.5
+  if (isMagnum(s)) return 150
+  if (s.includes('300') || s.includes('double')) return 300
+  return 75
 }
 
 function EditableCell({ value, onSave, type = 'text', step, min, placeholder, style, width }) {
@@ -176,7 +184,7 @@ export default function StudioPage() {
   const [showDPTotal, setShowDPTotal] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
 
-  // Move modal (kept for internal use, button removed from UI)
+  // Move modal
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [moveSearch, setMoveSearch] = useState('')
   const [moveResults, setMoveResults] = useState([])
@@ -258,7 +266,6 @@ export default function StudioPage() {
     if (!error) setStudioWines(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
-  // Updates a field on the wines table (e.g. description) and refreshes local state
   async function updateWine(studioId, wineId, field, value) {
     const { error } = await supabase.from('wines').update({ [field]: value }).eq('id', wineId)
     if (!error) {
@@ -607,15 +614,32 @@ export default function StudioPage() {
       else if (sortField === 'name') {
         av = (a.wines?.description || a.unlinked_description || '').toLowerCase()
         bv = (b.wines?.description || b.unlinked_description || '').toLowerCase()
+      } else if (sortField === 'vintage') {
+        av = a.wines?.vintage || a.unlinked_vintage || ''
+        bv = b.wines?.vintage || b.unlinked_vintage || ''
+      } else if (sortField === 'region') {
+        av = (a.wines?.region || '').toLowerCase()
+        bv = (b.wines?.region || '').toLowerCase()
+      } else if (sortField === 'bottle_size') {
+        av = bottleSortKey(a.bottle_size)
+        bv = bottleSortKey(b.bottle_size)
       } else if (sortField === 'dp_price') { av = parseFloat(a.dp_price) || 0; bv = parseFloat(b.dp_price) || 0 }
       else if (sortField === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
-      else if (sortField === 'colour') {
+      else if (sortField === 'ws_price') {
+        const aWs = a.wines?.ws_lowest_per_bottle ? parseFloat(a.wines.ws_lowest_per_bottle) : 0
+        const bWs = b.wines?.ws_lowest_per_bottle ? parseFloat(b.wines.ws_lowest_per_bottle) : 0
+        av = aWs ? (aWs + dutyForSize(a.bottle_size)) * 1.2 : 0
+        bv = bWs ? (bWs + dutyForSize(b.bottle_size)) * 1.2 : 0
+      } else if (sortField === 'colour') {
         av = (a.wines?.colour || a.colour || '').toLowerCase()
         bv = (b.wines?.colour || b.colour || '').toLowerCase()
       } else { av = a.date_moved || ''; bv = b.date_moved || '' }
-      if (av < bv) return sortDir === 'asc' ? -1 : 1
-      if (av > bv) return sortDir === 'asc' ? 1 : -1
-      return 0
+      if (typeof av === 'number') {
+        if (av < bv) return sortDir === 'asc' ? -1 : 1
+        if (av > bv) return sortDir === 'asc' ? 1 : -1
+        return 0
+      }
+      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
 
   const dpTotal = filtered.reduce((sum, s) => {
@@ -653,7 +677,7 @@ export default function StudioPage() {
         </div>
       )}
 
-      {/* Nav — Studio first, Inventory renamed to Bonded Storage */}
+      {/* Nav */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
         <button onClick={() => router.push('/studio')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}>Cellar</button>
         <div style={{ overflowX: 'auto', display: 'flex', gap: '2px', msOverflowStyle: 'none', scrollbarWidth: 'none', padding: '0 8px' }}>
@@ -734,12 +758,13 @@ export default function StudioPage() {
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'left', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('name')}>Wine {sortIcon('name')}</th>
+                <th style={{ padding: '10px 6px', textAlign: 'left', cursor: 'pointer', fontWeight: 400, whiteSpace: 'nowrap' }} onClick={() => cycleSort('vintage')}>Vin. {sortIcon('vintage')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'left', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('colour')}>Colour {sortIcon('colour')}</th>
-                <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 400 }}>Size</th>
+                <th style={{ padding: '10px 8px', textAlign: 'left', cursor: 'pointer', fontWeight: 400, whiteSpace: 'nowrap' }} onClick={() => cycleSort('bottle_size')}>Size {sortIcon('bottle_size')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'center', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('quantity')}>Qty {sortIcon('quantity')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'right', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('dp_price')}>DP {sortIcon('dp_price')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'right', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('sale_price')}>Sale Price {sortIcon('sale_price')}</th>
-                <th style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 400 }}>WS DP</th>
+                <th style={{ padding: '10px 8px', textAlign: 'right', cursor: 'pointer', fontWeight: 400 }} onClick={() => cycleSort('ws_price')}>WS DP {sortIcon('ws_price')}</th>
                 <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 400 }}>Status</th>
                 <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 400 }}>Notes</th>
                 <th style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 400 }}>Local</th>
@@ -765,6 +790,8 @@ export default function StudioPage() {
                 const wsDate = s.wines?.ws_price_date || null
                 const wsDP = ws ? ((ws + dutyForSize(s.bottle_size)) * 1.2).toFixed(2) : null
                 const buyerNote = s.wines?.buyer_note || ''
+                const producerNote = s.wines?.producer_note || ''
+                const womenNote = s.wines?.women_note || ''
                 const studioNote = s.notes || ''
 
                 return (
@@ -773,14 +800,13 @@ export default function StudioPage() {
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--cream)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'var(--white)'}>
 
-                      {/* Wine name — editable when in edit mode */}
+                      {/* Wine name */}
                       <td style={{ padding: '10px 12px', maxWidth: '280px' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                           <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: dot, flexShrink: 0, marginTop: '4px', display: 'inline-block' }}></span>
                           <div>
                             {isEditing ? (
                               s.wines ? (
-                                // Linked wine: save to wines.description (updates everywhere)
                                 <EditableCell
                                   value={s.wines.description || ''}
                                   onSave={v => updateWine(s.id, s.wines.id, 'description', v)}
@@ -789,7 +815,6 @@ export default function StudioPage() {
                                   style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 6px', outline: 'none' }}
                                 />
                               ) : (
-                                // Unlinked wine: save to studio.unlinked_description
                                 <EditableCell
                                   value={s.unlinked_description || ''}
                                   onSave={v => updateStudio(s.id, 'unlinked_description', v)}
@@ -806,11 +831,14 @@ export default function StudioPage() {
                               </div>
                             )}
                             <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '1px' }}>
-                              {vintage}{region ? ` · ${region}` : ''}{s.date_moved ? ` · ${s.date_moved}` : ''}
+                              {region ? region : ''}{s.date_moved ? ` · ${s.date_moved}` : ''}
                             </div>
                           </div>
                         </div>
                       </td>
+
+                      {/* Vintage */}
+                      <td style={{ padding: '10px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap' }}>{vintage}</td>
 
                       {/* Colour */}
                       <td style={{ padding: '10px 8px', fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{colour}</td>
@@ -839,7 +867,7 @@ export default function StudioPage() {
                           onSave={v => updateStudio(s.id, 'sale_price', v)} />
                       </td>
 
-                      {/* WS DP — market comparison */}
+                      {/* WS DP */}
                       <td style={{ padding: '10px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {wsDP ? (
                           <div>
@@ -910,8 +938,8 @@ export default function StudioPage() {
                     {/* Expanded notes + WS price row */}
                     {isExpanded && (
                       <tr style={{ background: 'var(--cream)' }}>
-                        <td colSpan={12} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', flexWrap: 'wrap' }}>
+                        <td colSpan={13} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
 
                             {/* Wine Notes (→ wines.buyer_note) */}
                             <div>
@@ -923,6 +951,30 @@ export default function StudioPage() {
                                 rows={3}
                                 style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }}
                               />
+                            </div>
+
+                            {/* Women in Wine note (→ wines.women_note, read display) */}
+                            <div>
+                              <label style={labelStyle}>♀ Women in Wine <span style={{ color: '#9b3a4a', fontWeight: 400 }}>edit in Bonded Storage</span></label>
+                              {womenNote ? (
+                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', lineHeight: 1.6, background: 'rgba(155,58,74,0.05)', border: '1px solid rgba(155,58,74,0.2)', padding: '8px 10px', minHeight: '64px' }}>
+                                  {womenNote}
+                                </div>
+                              ) : (
+                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>No women's note — add in Bonded Storage</div>
+                              )}
+                            </div>
+
+                            {/* Producer note (→ wines.producer_note, read display) */}
+                            <div>
+                              <label style={labelStyle}>📋 Producer Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>edit in Bonded Storage</span></label>
+                              {producerNote ? (
+                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', lineHeight: 1.6, background: 'var(--white)', border: '1px solid var(--border)', padding: '8px 10px', minHeight: '64px' }}>
+                                  {producerNote}
+                                </div>
+                              ) : (
+                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>No producer note — add in Bonded Storage</div>
+                              )}
                             </div>
 
                             {/* Delivery Note (→ studio.notes) */}
