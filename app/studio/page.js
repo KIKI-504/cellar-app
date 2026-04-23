@@ -1,5 +1,5 @@
 'use client'
-// ✅ CORRECT VERSION — v3 — adds vintage/region/format/ws sorts, Vin. column, producer_note + women_note in panel
+// ✅ CORRECT VERSION — v4 — women_note + producer_note editable in Studio panel
 export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -793,6 +793,7 @@ export default function StudioPage() {
                 const producerNote = s.wines?.producer_note || ''
                 const womenNote = s.wines?.women_note || ''
                 const studioNote = s.notes || ''
+                const hasWineId = !!s.wine_id
 
                 return (
                   <React.Fragment key={s.id}>
@@ -825,6 +826,7 @@ export default function StudioPage() {
                               )
                             ) : (
                               <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: 'var(--ink)', lineHeight: 1.3, fontWeight: isMagnum(s.bottle_size) ? 700 : 400 }}>
+                                {womenNote && <span title={womenNote} style={{ marginRight: '4px', fontSize: '12px', cursor: 'help' }}>♀</span>}
                                 {name}
                                 {alert && <span title={alert.tooltip} style={{ marginLeft: '4px', fontSize: '11px' }}>{alert.icon}</span>}
                                 {buyerNote && <span style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--muted)' }}>✎</span>}
@@ -953,27 +955,35 @@ export default function StudioPage() {
                               />
                             </div>
 
-                            {/* Women in Wine note (→ wines.women_note, read display) */}
+                            {/* ♀ Women in Wine (→ wines.women_note) — editable */}
                             <div>
-                              <label style={labelStyle}>♀ Women in Wine <span style={{ color: '#9b3a4a', fontWeight: 400 }}>edit in Bonded Storage</span></label>
-                              {womenNote ? (
-                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', lineHeight: 1.6, background: 'rgba(155,58,74,0.05)', border: '1px solid rgba(155,58,74,0.2)', padding: '8px 10px', minHeight: '64px' }}>
-                                  {womenNote}
-                                </div>
+                              <label style={{ ...labelStyle, color: '#9b3a4a' }}>♀ Women in Wine <span style={{ color: 'var(--muted)', fontWeight: 400 }}>shown on Buyer View</span></label>
+                              {hasWineId ? (
+                                <textarea
+                                  defaultValue={womenNote}
+                                  placeholder="Women winemaker or producer story…"
+                                  onBlur={e => { if (e.target.value !== womenNote) updateWine(s.id, s.wine_id, 'women_note', e.target.value) }}
+                                  rows={3}
+                                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }}
+                                />
                               ) : (
-                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>No women's note — add in Bonded Storage</div>
+                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>
                               )}
                             </div>
 
-                            {/* Producer note (→ wines.producer_note, read display) */}
+                            {/* Producer Note (→ wines.producer_note) — editable */}
                             <div>
-                              <label style={labelStyle}>📋 Producer Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>edit in Bonded Storage</span></label>
-                              {producerNote ? (
-                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', lineHeight: 1.6, background: 'var(--white)', border: '1px solid var(--border)', padding: '8px 10px', minHeight: '64px' }}>
-                                  {producerNote}
-                                </div>
+                              <label style={labelStyle}>📋 Producer Note</label>
+                              {hasWineId ? (
+                                <textarea
+                                  defaultValue={producerNote}
+                                  placeholder="Producer background, farming notes…"
+                                  onBlur={e => { if (e.target.value !== producerNote) updateWine(s.id, s.wine_id, 'producer_note', e.target.value) }}
+                                  rows={3}
+                                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }}
+                                />
                               ) : (
-                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>No producer note — add in Bonded Storage</div>
+                                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>
                               )}
                             </div>
 
