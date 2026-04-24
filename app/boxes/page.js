@@ -753,18 +753,9 @@ export default function BoxPage() {
   }
 
   async function fetchBoxItems(boxId) {
-    const { data, error } = await supabase
-      .from('box_items')
-      .select('*, studio:studio_id(wine_id, wines(buyer_note, women_note))')
-      .eq('box_id', boxId)
-      .order('sort_order', { ascending: true })
+    const { data, error } = await supabase.rpc('get_box_items_with_notes', { p_box_id: boxId })
     if (error) showStatus('error', 'Failed to load items: ' + error.message)
-    // Flatten buyer_note and women_note onto each item for easy access
-    setActiveItems((data || []).map(item => ({
-      ...item,
-      buyer_note: item.studio?.wines?.buyer_note || null,
-      women_note: item.studio?.wines?.women_note || null,
-    })))
+    setActiveItems(data || [])
   }
 
   async function fetchContacts() { const { data } = await supabase.from('contacts').select('*').order('name'); setContacts(data || []) }
