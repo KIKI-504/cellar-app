@@ -7,7 +7,7 @@ const LOCAL_PIN = '2222'
 
 function isMagnum(size) {
   const s = String(size || '').toLowerCase().replace(/\s/g, '')
-  return s === '150' || s === '150cl' || s === '1500' || s.includes('magnum')
+  return s === '150' || s === '150cl' || s === '1500' || s === '1500ml' || s.includes('magnum')
 }
 
 function dutyForSize(size) { return isMagnum(size) ? 6 : 3 }
@@ -34,54 +34,34 @@ export default function LocalPage() {
   const [sortDir, setSortDir] = useState('asc')
 
   function handlePin() {
-    if (pinInput === LOCAL_PIN) {
-      setPinError(false)
-      setStage('name')
-    } else {
-      setPinError(true)
-      setPinInput('')
-    }
+    if (pinInput === LOCAL_PIN) { setPinError(false); setStage('name') }
+    else { setPinError(true); setPinInput('') }
   }
 
   async function handleName() {
     if (!buyerName.trim()) return
     setLoading(true)
-    const { data } = await supabase
-      .from('studio')
-      .select('*, wines(*)')
-      .eq('include_in_local', true)
-      .eq('status', 'Available')
-      .order('created_at', { ascending: false })
-    setWines(data || [])
-    setLoading(false)
-    setStage('browse')
+    const { data } = await supabase.from('studio').select('*, wines(*)').eq('include_in_local', true).eq('status', 'Available').order('created_at', { ascending: false })
+    setWines(data || []); setLoading(false); setStage('browse')
   }
 
   function toggleWishlist(id, qty) {
-    setWishlist(prev => {
-      if (prev[id]) { const next = { ...prev }; delete next[id]; return next }
-      return { ...prev, [id]: qty }
-    })
+    setWishlist(prev => { if (prev[id]) { const next = { ...prev }; delete next[id]; return next } return { ...prev, [id]: qty } })
   }
-
-  function setWishlistQty(id, qty) {
-    setWishlist(prev => ({ ...prev, [id]: qty }))
-  }
+  function setWishlistQty(id, qty) { setWishlist(prev => ({ ...prev, [id]: qty })) }
 
   function getWineName(s) { return s.wines?.description || s.unlinked_description || 'Unknown wine' }
   function getWineVintage(s) { return s.wines?.vintage || s.unlinked_vintage || '' }
   function getWineRegion(s) { return s.wines?.region || '' }
+  function getWineCountry(s) { return s.wines?.country || '' }
   function getWineColour(s) { return s.wines?.colour || s.colour || '' }
-  function getPrice(s) {
-    const p = s.sale_price ?? s.dp_price
-    return p ? parseFloat(p) : null
-  }
+  function getWomenNote(s) { return s.wines?.women_note || '' }
+  function getPrice(s) { const p = s.sale_price ?? s.dp_price; return p ? parseFloat(p) : null }
 
   function cycleSort(field) {
     if (sortCol === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(field); setSortDir('asc') }
   }
-
   function sortIcon(field) {
     if (sortCol !== field) return <span style={{ opacity: 0.4, fontSize: '9px' }}>↕</span>
     return <span style={{ fontSize: '9px' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
@@ -89,21 +69,14 @@ export default function LocalPage() {
 
   function sendWishlist() {
     const items = Object.entries(wishlist).map(([id, qty]) => {
-      const s = wines.find(w => w.id === id)
-      if (!s) return null
+      const s = wines.find(w => w.id === id); if (!s) return null
       const price = getPrice(s)
       return `${qty} x ${getWineName(s)} ${getWineVintage(s)} — ${price ? `£${price.toFixed(2)}/bottle` : 'POA'}`
     }).filter(Boolean)
     if (!items.length) return
-    const text = [
-      `Bottles on Hand Wishlist — ${buyerName}`,
-      new Date().toLocaleDateString('en-GB'), '',
-      ...items, '',
-      `Total bottles: ${Object.values(wishlist).reduce((a, b) => a + b, 0)}`
-    ].join('\n')
+    const text = [`Bottles on Hand Wishlist — ${buyerName}`, new Date().toLocaleDateString('en-GB'), '', ...items, '', `Total bottles: ${Object.values(wishlist).reduce((a, b) => a + b, 0)}`].join('\n')
     const subject = encodeURIComponent(`Wishlist — ${buyerName} — ${new Date().toLocaleDateString('en-GB')}`)
-    const body = encodeURIComponent(text)
-    window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${body}`
+    window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(text)}`
   }
 
   const filtered = wines
@@ -111,7 +84,7 @@ export default function LocalPage() {
       if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
       if (search) {
         const q = search.toLowerCase()
-        return [getWineName(s), getWineVintage(s), getWineRegion(s)].join(' ').toLowerCase().includes(q)
+        return [getWineName(s), getWineVintage(s), getWineRegion(s), getWineCountry(s)].join(' ').toLowerCase().includes(q)
       }
       return true
     })
@@ -121,6 +94,7 @@ export default function LocalPage() {
       else if (sortCol === 'vintage') { av = getWineVintage(a); bv = getWineVintage(b) }
       else if (sortCol === 'colour') { av = getWineColour(a).toLowerCase(); bv = getWineColour(b).toLowerCase() }
       else if (sortCol === 'region') { av = getWineRegion(a).toLowerCase(); bv = getWineRegion(b).toLowerCase() }
+      else if (sortCol === 'country') { av = getWineCountry(a).toLowerCase(); bv = getWineCountry(b).toLowerCase() }
       else if (sortCol === 'format') { av = bottleSortKey(a.bottle_size || a.wines?.bottle_volume); bv = bottleSortKey(b.bottle_size || b.wines?.bottle_volume) }
       else if (sortCol === 'quantity') { av = a.quantity || 0; bv = b.quantity || 0 }
       else if (sortCol === 'price') { av = getPrice(a) || 0; bv = getPrice(b) || 0 }
@@ -138,13 +112,8 @@ export default function LocalPage() {
       <div style={{ textAlign: 'center', width: '100%', maxWidth: '320px' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em', marginBottom: '8px' }}>Bottles on Hand</div>
         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: '40px' }}>Ready to collect</div>
-        <input
-          type="password" value={pinInput}
-          onChange={e => { setPinInput(e.target.value); setPinError(false) }}
-          onKeyDown={e => e.key === 'Enter' && handlePin()}
-          placeholder="Enter PIN"
-          style={{ width: '100%', background: 'rgba(253,250,245,0.07)', border: pinError ? '1px solid #c0392b' : '1px solid rgba(253,250,245,0.15)', color: 'var(--white)', padding: '14px 16px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', textAlign: 'center', letterSpacing: '0.3em', boxSizing: 'border-box', marginBottom: '12px' }}
-        />
+        <input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(false) }} onKeyDown={e => e.key === 'Enter' && handlePin()} placeholder="Enter PIN"
+          style={{ width: '100%', background: 'rgba(253,250,245,0.07)', border: pinError ? '1px solid #c0392b' : '1px solid rgba(253,250,245,0.15)', color: 'var(--white)', padding: '14px 16px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', textAlign: 'center', letterSpacing: '0.3em', boxSizing: 'border-box', marginBottom: '12px' }} />
         {pinError && <div style={{ fontSize: '11px', color: '#c0392b', fontFamily: 'DM Mono, monospace', marginBottom: '12px' }}>Incorrect PIN</div>}
         <button onClick={handlePin} style={{ width: '100%', background: '#d4ad45', color: 'var(--ink)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer' }}>Enter</button>
       </div>
@@ -157,13 +126,8 @@ export default function LocalPage() {
       <div style={{ textAlign: 'center', width: '100%', maxWidth: '320px' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em', marginBottom: '8px' }}>Welcome</div>
         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: '40px' }}>What's your name?</div>
-        <input
-          type="text" value={buyerName}
-          onChange={e => setBuyerName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleName()}
-          placeholder="Your name"
-          style={{ width: '100%', background: 'rgba(253,250,245,0.07)', border: '1px solid rgba(253,250,245,0.15)', color: 'var(--white)', padding: '14px 16px', fontFamily: 'DM Mono, monospace', fontSize: '14px', outline: 'none', textAlign: 'center', boxSizing: 'border-box', marginBottom: '12px' }}
-        />
+        <input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleName()} placeholder="Your name"
+          style={{ width: '100%', background: 'rgba(253,250,245,0.07)', border: '1px solid rgba(253,250,245,0.15)', color: 'var(--white)', padding: '14px 16px', fontFamily: 'DM Mono, monospace', fontSize: '14px', outline: 'none', textAlign: 'center', boxSizing: 'border-box', marginBottom: '12px' }} />
         <button onClick={handleName} style={{ width: '100%', background: '#d4ad45', color: 'var(--ink)', border: 'none', padding: '14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer' }}>Browse Wines</button>
       </div>
     </div>
@@ -172,21 +136,17 @@ export default function LocalPage() {
   // Browse screen
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', paddingBottom: wishlistCount > 0 ? '80px' : '40px' }}>
-
-      {/* Nav */}
       <div style={{ background: 'var(--ink)', padding: '0 24px', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em' }}>Bottles on Hand</div>
         <button onClick={() => setStage('pin')} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
       </div>
 
-      {/* Hero greeting */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '32px 24px 28px' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '42px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '4px' }}>Cheers, {buyerName}!</div>
         <div style={{ fontSize: '11px', color: 'rgba(253,250,245,0.5)', letterSpacing: '0.1em' }}>Available for immediate collection — heart wines to build your wishlist</div>
       </div>
 
       <div style={{ padding: '24px' }}>
-
         {/* Filters */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
@@ -197,13 +157,15 @@ export default function LocalPage() {
             <option value="Red">Red</option>
             <option value="White">White</option>
             <option value="Rosé">Rosé</option>
+            <option value="Sparkling">Sparkling</option>
+            <option value="Sweet">Sweet</option>
           </select>
         </div>
 
-        {/* Sort bar */}
+        {/* Sort bar — now includes Country */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginRight: '2px' }}>Sort:</span>
-          {[['name','Wine'],['vintage','Vintage'],['colour','Colour'],['region','Region'],['format','Format'],['quantity','Qty'],['price','Price'],['ws','WS Avg']].map(([col, label]) => (
+          {[['name','Wine'],['vintage','Vintage'],['colour','Colour'],['region','Region'],['country','Country'],['format','Format'],['quantity','Qty'],['price','Price'],['ws','WS Avg']].map(([col, label]) => (
             <button key={col} onClick={() => cycleSort(col)}
               style={{ background: sortCol === col ? 'var(--ink)' : 'var(--white)', color: sortCol === col ? '#d4ad45' : 'var(--muted)', border: '1px solid var(--border)', padding: '5px 10px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
               {label} {sortIcon(col)}
@@ -235,7 +197,7 @@ export default function LocalPage() {
             {filtered.map(s => {
               const inWishlist = !!wishlist[s.id]
               const colour = getWineColour(s)
-              const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
+              const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : colour?.toLowerCase().includes('spark') ? '#a8c4d4' : '#aaa'
               const price = getPrice(s)
               const isMag = isMagnum(s.bottle_size || s.wines?.bottle_volume || '')
               const sizeLabel = isMag ? '150cl' : s.bottle_size === '37.5' ? '37.5cl' : s.bottle_size === '300' ? '300cl' : '75cl'
@@ -246,31 +208,32 @@ export default function LocalPage() {
               const isBelowWs = wsDp && price && price < wsDp
               const saving = isBelowWs ? (wsDp - price).toFixed(2) : null
               const buyerNote = s.wines?.buyer_note || ''
+              const womenNote = getWomenNote(s)
               const restaurantSpot = s.wines?.restaurant_spot || ''
+              const country = getWineCountry(s)
+              const region = getWineRegion(s)
+              const locationParts = [region, country].filter(Boolean)
 
               return (
                 <div key={s.id} style={{ background: 'var(--white)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px 100px 80px 40px', gap: '0', padding: '14px 16px', alignItems: 'start', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
 
-                    {/* Wine name col — notes shown inline */}
+                    {/* Wine name col */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                         <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '2px' }}></span>
+                        {womenNote && <span title={womenNote} style={{ fontSize: '13px', cursor: 'help', flexShrink: 0, color: '#9b3a4a' }}>♀</span>}
                         <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', lineHeight: 1.3, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--muted)', paddingLeft: '13px', marginBottom: buyerNote ? '6px' : '0' }}>
                         <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--wine)', marginRight: '6px' }}>{getWineVintage(s)}</span>
-                        {getWineRegion(s)}
+                        {locationParts.join(' · ')}
                       </div>
                       {buyerNote && (
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.55, paddingLeft: '13px', opacity: 0.85 }}>
-                          {buyerNote}
-                        </div>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.55, paddingLeft: '13px', opacity: 0.85 }}>{buyerNote}</div>
                       )}
                       {restaurantSpot && (
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#8b2535', letterSpacing: '0.05em', paddingLeft: '13px', marginTop: '4px' }}>
-                          {restaurantSpot}
-                        </div>
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#8b2535', letterSpacing: '0.05em', paddingLeft: '13px', marginTop: '4px' }}>{restaurantSpot}</div>
                       )}
                     </div>
 
@@ -281,11 +244,9 @@ export default function LocalPage() {
                     <div style={{ textAlign: 'center', paddingTop: '2px' }}>
                       {inWishlist ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                          <button onClick={() => setWishlistQty(s.id, Math.max(1, (wishlist[s.id] || 1) - 1))}
-                            style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
+                          <button onClick={() => setWishlistQty(s.id, Math.max(1, (wishlist[s.id] || 1) - 1))} style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
                           <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 500, minWidth: '16px', textAlign: 'center' }}>{wishlist[s.id]}</span>
-                          <button onClick={() => setWishlistQty(s.id, Math.min(s.quantity, (wishlist[s.id] || 1) + 1))}
-                            style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
+                          <button onClick={() => setWishlistQty(s.id, Math.min(s.quantity, (wishlist[s.id] || 1) + 1))} style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
                         </div>
                       ) : (
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity} avail</span>
@@ -294,39 +255,23 @@ export default function LocalPage() {
 
                     {/* Price col */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>
-                        {price ? `£${price.toFixed(2)}` : 'POA'}
-                      </div>
-                      {isBelowWs && (
-                        <div style={{ fontSize: '9px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>−£{saving} vs WS avg</div>
-                      )}
-                      {inWishlist && price && (
-                        <div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>
-                      )}
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
+                      {isBelowWs && (<div style={{ fontSize: '9px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>−£{saving} vs WS avg</div>)}
+                      {inWishlist && price && (<div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>)}
                     </div>
 
                     {/* WS avg col */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
                       {isBelowWs ? (
-                        <div>
-                          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#2a7a4b', fontWeight: 600, letterSpacing: '0.04em' }}>Lower Than WS</div>
-                          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
-                        </div>
+                        <div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#2a7a4b', fontWeight: 600, letterSpacing: '0.04em' }}>Lower Than WS</div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div></div>
                       ) : wsDp ? (
-                        <div>
-                          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
-                          {wsDate && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--border)' }}>{wsDate}</div>}
-                        </div>
-                      ) : (
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--border)' }}>—</div>
-                      )}
+                        <div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>{wsDate && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--border)' }}>{wsDate}</div>}</div>
+                      ) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--border)' }}>—</div>)}
                     </div>
 
                     {/* Heart col */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
-                      <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>
-                        {inWishlist ? '❤️' : '🤍'}
-                      </button>
+                      <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>{inWishlist ? '❤️' : '🤍'}</button>
                     </div>
                   </div>
                 </div>
@@ -339,9 +284,7 @@ export default function LocalPage() {
       {/* Wishlist bar */}
       {wishlistCount > 0 && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100 }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--white)' }}>
-            {wishlistCount} wine{wishlistCount > 1 ? 's' : ''} · {Object.values(wishlist).reduce((a, b) => a + b, 0)} bottles
-          </div>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--white)' }}>{wishlistCount} wine{wishlistCount > 1 ? 's' : ''} · {Object.values(wishlist).reduce((a, b) => a + b, 0)} bottles</div>
           <button onClick={sendWishlist} style={{ background: '#d4ad45', color: 'var(--ink)', border: 'none', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Wishlist</button>
         </div>
       )}
