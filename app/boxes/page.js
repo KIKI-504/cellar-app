@@ -201,38 +201,37 @@ function ContactsModal({ contacts, onAdd, onUpdate, onDelete, onClose }) {
   }
 
   const FIELDS = [
-    ['name',  'Name *',         'e.g. Belinda Hughes'],
-    ['phone', 'Phone',          '+44 7700 900000'],
-    ['email', 'Email',          'belinda@example.com'],
-    ['note',  'Note',           'Prefers Burgundy, budget ~£500…'],
+    ['name',  'Name *',  'e.g. Belinda Hughes'],
+    ['phone', 'Phone',   '+44 7700 900000'],
+    ['email', 'Email',   'belinda@example.com'],
+    ['note',  'Note',    'Prefers Burgundy, budget ~£500…'],
   ]
 
-  function ContactForm({ isEdit }) {
-    return (
-      <div style={{ display:'flex', flexDirection:'column', gap:'7px' }}>
-        {FIELDS.map(([field, label, ph]) => (
-          <div key={field}>
-            <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'3px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</label>
-            <input value={form[field]} onChange={e => updateForm(field, e.target.value)} placeholder={ph}
-              onKeyDown={e => e.key === 'Enter' && field !== 'note' && handleSave()}
-              style={{ width:'100%', border:'1px solid var(--border)', background: isEdit ? 'var(--cream)' : 'var(--white)', padding:'7px 10px', fontFamily:'DM Mono,monospace', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
-          </div>
-        ))}
-        <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
-          <button onClick={handleSave} disabled={!form.name.trim() || saving}
-            style={{ background: form.name.trim() ? (isEdit ? 'var(--ink)' : 'var(--wine)') : '#ccc', color:'var(--white)', border:'none', padding:'8px 16px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor: form.name.trim() ? 'pointer' : 'not-allowed' }}>
-            {saving ? 'Saving…' : isEdit ? 'Save Changes' : '+ Add Contact'}
-          </button>
-          {(isEdit || contacts.length > 0) && (
-            <button onClick={isEdit ? cancelEdit : () => { setShowForm(false); setForm({ name:'', phone:'', email:'', note:'' }) }}
-              style={{ background:'none', border:'1px solid var(--border)', padding:'8px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>
-              Cancel
-            </button>
-          )}
+  // Inlined to avoid inner-component re-mount on every keystroke
+  const formFields = (isEdit) => (
+    <div style={{ display:'flex', flexDirection:'column', gap:'7px' }}>
+      {FIELDS.map(([field, label, ph]) => (
+        <div key={field}>
+          <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'3px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</label>
+          <input value={form[field]} onChange={e => updateForm(field, e.target.value)} placeholder={ph}
+            onKeyDown={e => e.key === 'Enter' && field !== 'note' && handleSave()}
+            style={{ width:'100%', border:'1px solid var(--border)', background: isEdit ? 'var(--cream)' : 'var(--white)', padding:'7px 10px', fontFamily:'DM Mono,monospace', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
         </div>
+      ))}
+      <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
+        <button onClick={handleSave} disabled={!form.name.trim() || saving}
+          style={{ background: form.name.trim() ? (isEdit ? 'var(--ink)' : 'var(--wine)') : '#ccc', color:'var(--white)', border:'none', padding:'8px 16px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor: form.name.trim() ? 'pointer' : 'not-allowed' }}>
+          {saving ? 'Saving…' : isEdit ? 'Save Changes' : '+ Add Contact'}
+        </button>
+        {(isEdit || contacts.length > 0) && (
+          <button onClick={isEdit ? cancelEdit : () => { setShowForm(false); setForm({ name:'', phone:'', email:'', note:'' }) }}
+            style={{ background:'none', border:'1px solid var(--border)', padding:'8px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>
+            Cancel
+          </button>
+        )}
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
@@ -256,7 +255,7 @@ function ContactsModal({ contacts, onAdd, onUpdate, onDelete, onClose }) {
                       <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--wine)', letterSpacing:'0.1em', marginBottom:'10px', textTransform:'uppercase' }}>
                         Editing {c.name}
                       </div>
-                      <ContactForm isEdit={true} />
+                      {formFields(true)}
                     </div>
                   ) : (
                     <div style={{ background:'var(--white)', border:'1px solid var(--border)', padding:'10px 12px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'10px' }}>
@@ -284,7 +283,7 @@ function ContactsModal({ contacts, onAdd, onUpdate, onDelete, onClose }) {
           {showForm ? (
             <div style={{ background:'var(--white)', border:'1px solid var(--border)', padding:'14px' }}>
               <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'10px' }}>New Contact</div>
-              <ContactForm isEdit={false} />
+              {formFields(false)}
             </div>
           ) : (
             !editingId && (
