@@ -121,6 +121,7 @@ function PullListView({ box, items, onClose }) {
                     <span style={{ display:'inline-block', width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), flexShrink:0 }}></span>
                     <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', fontWeight:500 }}>{wp}</span>
                     {item.wine_vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', color:'var(--muted)' }}>{item.wine_vintage}</span>}
+                    {item.wine_bottle_size && item.wine_bottle_size !== '75' && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'#6b1e2e', fontWeight:600 }}>{item.wine_bottle_size === '150' ? 'Magnum' : item.wine_bottle_size + 'cl'}</span>}
                   </div>
                   {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', color:'var(--ink)', marginTop:'2px', marginLeft:'16px' }}>{pp}</div>}
                   {item.wine_region && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'4px', marginLeft:'16px' }}>{item.wine_region}</div>}
@@ -345,6 +346,7 @@ function AddBottleModal({ onAdd, onClose }) {
     const { error } = await onAdd({
       studio_id: selected.id||null, wine_description: selected._desc, wine_vintage: selected._vintage,
       wine_colour: selected._colour, wine_region: selected._region, dp_price: selected._dp,
+      wine_bottle_size: selected.bottle_size || selected.wines?.bottle_volume || '75',
       sale_price: salePrice ? parseFloat(salePrice) : null, quantity: qty,
       tasting_note: tastingNote||null, producer_note: producerNote||null, source_id: parentId,
     })
@@ -596,7 +598,7 @@ function MultiBottleModal({ onAddAll, onClose }) {
       const region  = w?.region||b.label.region||''
       const dp      = entry?.dp_price ? parseFloat(entry.dp_price) : null
       const sid     = entry?.id ? await ensureSourceId(entry.id, entry) : generateSourceId(desc, vintage, colour, '75')
-      return { studio_id:entry?.id||null, wine_description:desc, wine_vintage:vintage, wine_colour:colour, wine_region:region, dp_price:dp, sale_price:b.salePrice?parseFloat(b.salePrice):null, quantity:b.qty, tasting_note:b.tastingNote||null, producer_note:null, source_id:sid }
+      return { studio_id:entry?.id||null, wine_description:desc, wine_vintage:vintage, wine_colour:colour, wine_region:region, dp_price:dp, sale_price:b.salePrice?parseFloat(b.salePrice):null, quantity:b.qty, tasting_note:b.tastingNote||null, producer_note:null, source_id:sid, wine_bottle_size: entry?.bottle_size || '75' }
     }))
     const { error } = await onAddAll(items)
     if (error) { alert('Failed to add bottles: ' + error.message); setSaving(false); return }
@@ -1027,6 +1029,7 @@ export default function BoxPage() {
                               <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), display:'inline-block', flexShrink:0 }}></span>
                               <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{wp}</span>
                               {item.wine_vintage && <span style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>{item.wine_vintage}</span>}
+                              {item.wine_bottle_size && item.wine_bottle_size !== '75' && <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--wine)', fontWeight:600, border:'1px solid rgba(107,30,46,0.3)', padding:'1px 5px', borderRadius:'2px' }}>{item.wine_bottle_size === '150' ? 'MAG' : item.wine_bottle_size + 'cl'}</span>}
                               {item.quantity>1 && <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', background:'var(--ink)', color:'#d4ad45', padding:'1px 5px', borderRadius:'2px' }}>×{item.quantity}</span>}
                             </div>
                             {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginLeft:'15px', marginTop:'1px' }}>{pp}</div>}
