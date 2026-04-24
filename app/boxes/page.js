@@ -14,8 +14,7 @@ const colourDot = (colour) => {
   return '#aaa'
 }
 
-const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Sweet']
-
+// ─── Source ID generation ─────────────────────────────────────────────────────
 function generateSourceId(description, vintage, colour, bottleSize) {
   const yy = vintage ? String(vintage).slice(-2) : 'XX'
   const words = (description || '').replace(/[^a-zA-Z\s]/g, '').trim().split(/\s+/)
@@ -43,6 +42,7 @@ async function ensureSourceId(studioId, entry) {
   return pid
 }
 
+// ─── Shared normaliser ────────────────────────────────────────────────────────
 function normaliseRow(row) {
   if (!row) return row
   if (row.wine_description !== undefined) {
@@ -64,7 +64,7 @@ function normaliseRow(row) {
   return row
 }
 
-// ─── Pull List ────────────────────────────────────────────────────────────────
+// ─── Pull List print view (BUYER-SAFE: no DP cost or margin shown) ────────────
 function PullListView({ box, items, onClose }) {
   const printRef = useRef(null)
 
@@ -102,8 +102,8 @@ function PullListView({ box, items, onClose }) {
     win.onload = () => { win.contentWindow.print(); document.body.removeChild(win) }
   }
 
+  // totalDP kept for internal stats bar but not shown on printed pull list
   const totalSale    = items.reduce((s, i) => s + (parseFloat(i.sale_price) || 0) * (i.quantity || 1), 0)
-  const totalDP      = items.reduce((s, i) => s + (parseFloat(i.dp_price)   || 0) * (i.quantity || 1), 0)
   const totalBottles = items.reduce((s, i) => s + (i.quantity || 1), 0)
 
   return (
@@ -153,13 +153,15 @@ function PullListView({ box, items, onClose }) {
               </div>
             )
           })}
+          {/* BUYER-SAFE TOTALS: sale total only, no DP cost or margin */}
           <div className="tots" style={{ marginTop:'24px', paddingTop:'16px', borderTop:'2px solid #c8b89a', display:'flex', justifyContent:'flex-end', gap:'32px', flexWrap:'wrap' }}>
-            {totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Cost (DP)</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500, marginTop:'2px' }}>£{totalDP.toFixed(2)}</div></div>}
-            {totalSale - totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Margin</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500, color:'#2d6a4f', marginTop:'2px' }}>£{(totalSale-totalDP).toFixed(2)}</div></div>}
-            <div style={{ textAlign:'right' }}><div className="tlbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Total</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'22px', fontWeight:500, color:'var(--wine)', marginTop:'2px' }}>£{totalSale.toFixed(2)}</div></div>
+            <div style={{ textAlign:'right' }}>
+              <div className="tlbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Total</div>
+              <div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'22px', fontWeight:500, color:'var(--wine)', marginTop:'2px' }}>£{totalSale.toFixed(2)}</div>
+            </div>
           </div>
           {box.notes && <div style={{ marginTop:'24px', padding:'12px 16px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.25)', fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>{box.notes}</div>}
-          <div className="foot" style={{ marginTop:'40px', paddingTop:'16px', borderTop:'1px solid #ede6d6', fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c8b89a', textAlign:'center', letterSpacing:'0.1em' }}>Belle Année Wines · {new Date().getFullYear()}</div>
+          <div className="foot" style={{ marginTop:'40px', paddingTop:'16px', borderTop:'1px solid #ede6d6', fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c8b89a', textAlign:'center', letterSpacing:'0.1em' }}>BELLE ANNÉE WINES · {new Date().getFullYear()}</div>
         </div>
       </div>
     </div>
@@ -170,7 +172,6 @@ function PullListView({ box, items, onClose }) {
 function AddBottleModal({ onAdd, onClose }) {
   const [search, setSearch]             = useState('')
   const [results, setResults]           = useState([])
-  const [searched, setSearched]         = useState(false)   // true once a search has been run
   const [selected, setSelected]         = useState(null)
   const [scanMatch, setScanMatch]       = useState(null)
   const [qty, setQty]                   = useState(1)
@@ -184,27 +185,20 @@ function AddBottleModal({ onAdd, onClose }) {
   const [saving, setSaving]             = useState(false)
   const [justAdded, setJustAdded]       = useState(null)
 
-  // Manual add form (for wines not in studio)
-  const [showManual, setShowManual]             = useState(false)
-  const [manualDesc, setManualDesc]             = useState('')
-  const [manualVintage, setManualVintage]       = useState('')
-  const [manualColour, setManualColour]         = useState('')
-  const [manualRegion, setManualRegion]         = useState('')
-  const [manualSize, setManualSize]             = useState('75')
-  const [manualIBPrice, setManualIBPrice]       = useState('')
-  const [manualSalePrice, setManualSalePrice]   = useState('')
-  const [manualAddToStudio, setManualAddToStudio] = useState(true)
-  const [manualStudioQty, setManualStudioQty]   = useState(1)
-  const [manualSaving, setManualSaving]         = useState(false)
+  // B14: inline Add to Studio state
+  const [showStudioForm, setShowStudioForm] = useState(false)
+  const [studioColour, setStudioColour]     = useState('')
+  const [studioQty, setStudioQty]           = useState(1)
+  const [studioSize, setStudioSize]         = useState('75')
+  const [addingToStudio, setAddingToStudio] = useState(false)
 
   const fileRef = useRef(null)
 
   async function searchStudio(q) {
     setSearch(q)
-    if (q.length < 2) { setResults([]); setSearched(false); return }
+    if (q.length < 2) { setResults([]); return }
     const { data } = await supabase.rpc('search_studio', { search_term: q })
     setResults((data || []).map(normaliseRow))
-    setSearched(true)
   }
 
   function applyEntry(rawEntry) {
@@ -220,105 +214,12 @@ function AddBottleModal({ onAdd, onClose }) {
     }
     setSelected(built)
     setSalePrice(entry.sale_price ? String(parseFloat(entry.sale_price)) : '')
-    setTastingNote('')
-    setProducerNote('')
+    setTastingNote(w?.women_note    || '')
+    setProducerNote(w?.producer_note || '')
     setSearch('')
     setResults([])
-    setSearched(false)
     setScanMatch(null)
-    setShowManual(false)
-  }
-
-  function openManualAdd() {
-    setShowManual(true)
-    setManualDesc(search)  // pre-fill from search term
-    setManualVintage('')
-    setManualColour('')
-    setManualRegion('')
-    setManualSize('75')
-    setManualIBPrice('')
-    setManualSalePrice(salePrice)
-  }
-
-  async function saveManualWine() {
-    if (!manualDesc) return
-    setManualSaving(true)
-    try {
-      const ibPrice = manualIBPrice ? parseFloat(manualIBPrice) : null
-      const duty = manualSize === '150' ? 6 : manualSize === '37.5' ? 1.5 : 3
-      const dp = ibPrice ? ((ibPrice + duty) * 1.2).toFixed(2) : null
-      const sid = generateSourceId(manualDesc, manualVintage, manualColour, manualSize)
-      const today = new Date().toISOString().split('T')[0]
-
-      let studioRowId = null
-
-      if (manualAddToStudio) {
-        // Create wine in wines table
-        const { data: newWine, error: wineErr } = await supabase
-          .from('wines')
-          .insert({
-            source: 'Manual',
-            source_id: sid,
-            description: manualDesc,
-            vintage: manualVintage || null,
-            colour: manualColour || null,
-            region: manualRegion || null,
-            bottle_format: manualSize === '150' ? 'Magnum' : manualSize === '37.5' ? 'Half Bottle' : 'Bottle',
-            bottle_volume: manualSize,
-            quantity: String(manualStudioQty),
-            purchase_price_per_bottle: ibPrice,
-            include_in_buyer_view: false,
-          })
-          .select().single()
-        if (wineErr) throw wineErr
-
-        // Create studio row
-        const { data: newStudio, error: studioErr } = await supabase
-          .from('studio')
-          .insert({
-            wine_id: newWine.id,
-            quantity: manualStudioQty,
-            date_moved: today,
-            dp_price: dp,
-            sale_price: manualSalePrice ? parseFloat(manualSalePrice) : null,
-            status: 'Available',
-            notes: null,
-            include_in_local: false,
-            bottle_size: manualSize,
-            colour: manualColour || null,
-            source_id: sid,
-          })
-          .select().single()
-        if (studioErr) throw studioErr
-        studioRowId = newStudio.id
-      }
-
-      // Add to box
-      const { error: boxErr } = await onAdd({
-        studio_id:        studioRowId,
-        wine_description: manualDesc,
-        wine_vintage:     manualVintage,
-        wine_colour:      manualColour,
-        wine_region:      manualRegion,
-        dp_price:         dp ? parseFloat(dp) : null,
-        sale_price:       manualSalePrice ? parseFloat(manualSalePrice) : null,
-        quantity:         qty,
-        tasting_note:     tastingNote  || null,
-        producer_note:    producerNote || null,
-        source_id:        sid,
-      })
-      if (boxErr) throw boxErr
-
-      setJustAdded(manualDesc)
-      setShowManual(false)
-      setManualDesc(''); setManualVintage(''); setManualColour(''); setManualRegion('')
-      setManualSize('75'); setManualIBPrice(''); setManualSalePrice(''); setManualStudioQty(1)
-      setSearch(''); setResults([]); setSearched(false)
-      setQty(1); setSalePrice(''); setTastingNote(''); setProducerNote('')
-    } catch (err) {
-      alert('Failed: ' + err.message)
-    }
-    setManualSaving(false)
+    setShowStudioForm(false)
   }
 
   function handleImageSelect(e) {
@@ -335,6 +236,7 @@ function AddBottleModal({ onAdd, onClose }) {
     setScanning(true)
     setScanLabel(null)
     setScanMatch(null)
+    setShowStudioForm(false)
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader()
@@ -366,13 +268,35 @@ function AddBottleModal({ onAdd, onClose }) {
         if (firstWord.length > 2) {
           const { data: broader } = await supabase.rpc('search_studio', { search_term: firstWord })
           setResults((broader || []).map(normaliseRow))
-          setSearched(true)
         }
       }
     } catch (err) {
       alert('Label read failed: ' + err.message)
     }
     setScanning(false)
+  }
+
+  // B14: create a studio entry inline and immediately select it
+  async function addToStudioAndSelect() {
+    if (!scanLabel || !studioColour) return
+    setAddingToStudio(true)
+    const desc    = [scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')
+    const vintage = scanLabel.vintage || ''
+    const { data, error } = await supabase.from('studio').insert({
+      unlinked_description: desc,
+      unlinked_vintage:     vintage,
+      colour:               studioColour,
+      quantity:             studioQty,
+      bottle_size:          studioSize === '150' ? 150 : 75,
+      status:               'In Studio',
+    }).select().single()
+    if (error) {
+      alert('Failed to add to studio: ' + error.message)
+      setAddingToStudio(false)
+      return
+    }
+    applyEntry({ ...data, wines: null })
+    setAddingToStudio(false)
   }
 
   async function confirm() {
@@ -394,16 +318,38 @@ function AddBottleModal({ onAdd, onClose }) {
       producer_note:    producerNote || null,
       source_id:        parentId,
     })
-    if (error) { alert('Failed to add: ' + error.message); setSaving(false); return }
+    if (error) {
+      alert('Failed to add bottle: ' + error.message)
+      setSaving(false)
+      return
+    }
     setJustAdded(selected._desc)
-    setSelected(null); setSearch(''); setResults([]); setSearched(false)
-    setQty(1); setSalePrice(''); setTastingNote(''); setProducerNote('')
-    setImageFile(null); setImagePreview(null); setScanLabel(null); setScanMatch(null)
+    setSelected(null)
+    setSearch('')
+    setResults([])
+    setQty(1)
+    setSalePrice('')
+    setTastingNote('')
+    setProducerNote('')
+    setImageFile(null)
+    setImagePreview(null)
+    setScanLabel(null)
+    setScanMatch(null)
+    setShowStudioForm(false)
+    setStudioColour('')
+    setStudioQty(1)
+    setStudioSize('75')
     setSaving(false)
   }
 
-  const inputSt = { width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'12px', outline:'none', boxSizing:'border-box' }
-  const lblSt   = { display:'block', fontSize:'9px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace' }
+  const scanMatchDesc = scanMatch
+    ? (scanMatch.wines?.description || scanMatch.unlinked_description || '')
+    : ''
+
+  const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Sweet']
+
+  // B11: price quick-fill percentages
+  const MARGINS = [20, 25, 30]
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:250, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
@@ -416,279 +362,308 @@ function AddBottleModal({ onAdd, onClose }) {
 
         <div style={{ padding:'14px 18px 22px' }}>
 
-          {/* Just added confirmation */}
           {justAdded && (
             <div style={{ background:'rgba(45,106,79,0.1)', border:'1px solid rgba(45,106,79,0.3)', padding:'10px 14px', marginBottom:'14px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', flexWrap:'wrap' }}>
               <span style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#2d6a4f' }}>
                 ✓ Added: <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px' }}>{justAdded.split(',')[0]}</span>
               </span>
-              <button onClick={onClose} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'5px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>Done ✓</button>
+              <button onClick={onClose}
+                style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'5px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>
+                Done ✓
+              </button>
             </div>
           )}
 
-          {/* ── Manual add form ── */}
-          {showManual ? (
-            <div>
-              <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:'14px' }}>
-                <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--wine)' }}>Add Wine Manually</div>
-                <button onClick={() => setShowManual(false)} style={{ background:'none', border:'none', fontSize:'11px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace' }}>← back to search</button>
-              </div>
-
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }}>
-                <div style={{ gridColumn:'1 / -1' }}>
-                  <label style={lblSt}>Wine name *</label>
-                  <input value={manualDesc} onChange={e => setManualDesc(e.target.value)} placeholder="e.g. Château Lynch Bages" style={inputSt} />
+          {/* Photo section */}
+          {!selected && (
+            <div style={{ marginBottom:'12px' }}>
+              <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
+                Identify by photo
+              </label>
+              {!imagePreview ? (
+                <div onClick={() => fileRef.current?.click()}
+                  style={{ border:'1px dashed var(--border)', padding:'11px', textAlign:'center', cursor:'pointer', background:'var(--white)', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
+                  <span style={{ fontSize:'16px' }}>📷</span>
+                  <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', letterSpacing:'0.08em' }}>PHOTO FROM CAMERA ROLL</span>
+                  <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} />
                 </div>
-                <div>
-                  <label style={lblSt}>Vintage</label>
-                  <input value={manualVintage} onChange={e => setManualVintage(e.target.value)} placeholder="e.g. 2018" style={inputSt} />
-                </div>
-                <div>
-                  <label style={lblSt}>Colour</label>
-                  <select value={manualColour} onChange={e => setManualColour(e.target.value)} style={inputSt}>
-                    <option value="">Select…</option>
-                    {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={lblSt}>Region</label>
-                  <input value={manualRegion} onChange={e => setManualRegion(e.target.value)} placeholder="e.g. Pauillac" style={inputSt} />
-                </div>
-                <div>
-                  <label style={lblSt}>Bottle size</label>
-                  <select value={manualSize} onChange={e => setManualSize(e.target.value)} style={inputSt}>
-                    <option value="37.5">37.5cl Half</option>
-                    <option value="75">75cl Bottle</option>
-                    <option value="150">150cl Magnum</option>
-                    <option value="300">300cl Double Magnum</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={lblSt}>IB Price / btl £</label>
-                  <input type="number" step="0.01" value={manualIBPrice} onChange={e => setManualIBPrice(e.target.value)} placeholder="0.00" style={inputSt} />
-                </div>
-                <div>
-                  <label style={lblSt}>Sale price £/btl</label>
-                  <input type="number" step="0.01" value={manualSalePrice} onChange={e => setManualSalePrice(e.target.value)} placeholder="0.00" style={{ ...inputSt, border:'2px solid rgba(107,30,46,0.25)', color:'var(--wine)' }} />
-                </div>
-              </div>
-
-              {/* Studio option */}
-              <div style={{ background:'var(--white)', border:'1px solid var(--border)', padding:'12px 14px', marginBottom:'12px' }}>
-                <label style={{ display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', marginBottom: manualAddToStudio ? '10px' : '0' }}>
-                  <input type="checkbox" checked={manualAddToStudio} onChange={e => setManualAddToStudio(e.target.checked)}
-                    style={{ width:'15px', height:'15px', accentColor:'var(--wine)', cursor:'pointer' }} />
-                  <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--ink)' }}>Also add to Studio inventory</span>
-                </label>
-                {manualAddToStudio && (
-                  <div style={{ display:'flex', alignItems:'center', gap:'8px', paddingLeft:'23px' }}>
-                    <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', whiteSpace:'nowrap' }}>Quantity in studio:</label>
-                    <input type="number" min="1" value={manualStudioQty} onChange={e => setManualStudioQty(parseInt(e.target.value) || 1)}
-                      style={{ width:'60px', border:'1px solid var(--border)', background:'var(--cream)', padding:'5px 8px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center' }} />
-                  </div>
-                )}
-                {!manualAddToStudio && (
-                  <div style={{ paddingLeft:'23px', fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>
-                    Wine will be added to this box only, not to your studio inventory.
-                  </div>
-                )}
-              </div>
-
-              {/* Box entry qty + notes */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }}>
-                <div>
-                  <label style={lblSt}>Qty in this box</label>
-                  <input type="number" min="1" value={qty} onChange={e => setQty(parseInt(e.target.value) || 1)}
-                    style={{ ...inputSt, fontSize:'16px', fontWeight:600 }} />
-                </div>
-              </div>
-              <div style={{ marginBottom:'10px' }}>
-                <label style={lblSt}>Tasting note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(italic on pull list)</span></label>
-                <textarea value={tastingNote} onChange={e => setTastingNote(e.target.value)} rows={2} placeholder="Rich, concentrated…"
-                  style={{ ...inputSt, fontFamily:'Cormorant Garamond,serif', fontSize:'14px', fontStyle:'italic', resize:'vertical' }} />
-              </div>
-              <div style={{ marginBottom:'14px' }}>
-                <label style={lblSt}>Producer note</label>
-                <textarea value={producerNote} onChange={e => setProducerNote(e.target.value)} rows={2} placeholder="Optional context…"
-                  style={{ ...inputSt, resize:'vertical' }} />
-              </div>
-
-              <button onClick={saveManualWine} disabled={!manualDesc || manualSaving}
-                style={{ width:'100%', background: manualDesc ? 'var(--wine)' : '#ccc', color:'var(--white)', border:'none', padding:'13px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.15em', textTransform:'uppercase', cursor: manualDesc ? 'pointer' : 'not-allowed', fontWeight:600 }}>
-                {manualSaving ? 'Saving…' : manualAddToStudio ? '✓ Add to Studio & Box' : '✓ Add to Box Only'}
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Photo section */}
-              {!selected && (
-                <div style={{ marginBottom:'12px' }}>
-                  <label style={lblSt}>Identify by photo</label>
-                  {!imagePreview ? (
-                    <div onClick={() => fileRef.current?.click()}
-                      style={{ border:'1px dashed var(--border)', padding:'11px', textAlign:'center', cursor:'pointer', background:'var(--white)', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
-                      <span style={{ fontSize:'16px' }}>📷</span>
-                      <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', letterSpacing:'0.08em' }}>PHOTO FROM CAMERA ROLL</span>
-                      <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} />
-                    </div>
-                  ) : (
-                    <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
-                      <img src={imagePreview} alt="Label" style={{ width:'52px', height:'66px', objectFit:'cover', border:'1px solid var(--border)', flexShrink:0 }} />
-                      <div style={{ flex:1 }}>
-                        {!scanLabel && !scanning && (
-                          <button onClick={analyseImage} style={{ background:'var(--ink)', color:'#d4ad45', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer', width:'100%' }}>🔍 Read Label</button>
-                        )}
-                        {scanning && <div style={{ padding:'8px 0', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)' }}>🔍 Reading label…</div>}
-                        {scanLabel && !scanning && (
-                          <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#2d6a4f' }}>
-                            ✓ {[scanLabel.wine_name, scanLabel.producer, scanLabel.vintage].filter(Boolean).join(' · ')}
-                          </div>
-                        )}
-                        <button onClick={() => { setImageFile(null); setImagePreview(null); setScanLabel(null); setScanMatch(null) }}
-                          style={{ display:'block', marginTop:'5px', background:'none', border:'none', fontSize:'10px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace' }}>✕ Remove</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Scan match */}
-              {scanMatch && !selected && (
-                <div onClick={() => applyEntry(scanMatch)}
-                  style={{ marginBottom:'12px', background:'rgba(45,106,79,0.08)', border:'2px solid rgba(45,106,79,0.5)', padding:'14px 16px', cursor:'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(45,106,79,0.15)'}
-                  onMouseLeave={e => e.currentTarget.style.background='rgba(45,106,79,0.08)'}>
-                  <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', letterSpacing:'0.1em', marginBottom:'6px' }}>✓ MATCHED IN STUDIO — TAP TO SELECT</div>
-                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'16px', fontWeight:500 }}>
-                    {(scanMatch.wines?.description || scanMatch.unlinked_description || '').split(',')[0]}
-                  </div>
-                  <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'4px' }}>
-                    {scanMatch.wines?.vintage || scanMatch.unlinked_vintage || ''}
-                    {scanMatch.dp_price && ` · DP £${parseFloat(scanMatch.dp_price).toFixed(2)}`}
-                    {` · ${scanMatch.quantity} in studio`}
-                  </div>
-                </div>
-              )}
-
-              {/* Manual search */}
-              {!selected && (
-                <div style={{ marginBottom:'12px' }}>
-                  <label style={lblSt}>
-                    {scanMatch ? 'Or search manually' : justAdded ? 'Search for next bottle' : 'Search studio inventory'}
-                  </label>
-                  <input value={search} onChange={e => searchStudio(e.target.value)}
-                    placeholder="Start typing a wine name…"
-                    style={{ ...inputSt, fontSize:'13px' }} />
-
-                  {/* Results dropdown */}
-                  {results.length > 0 && (
-                    <div style={{ border:'1px solid var(--border)', borderTop:'none', background:'var(--white)', maxHeight:'200px', overflowY:'auto' }}>
-                      {results.map(entry => {
-                        const w = entry.wines
-                        const desc    = w?.description || entry.unlinked_description || ''
-                        const vintage = w?.vintage     || entry.unlinked_vintage     || ''
-                        const colour  = w?.colour      || entry.colour               || ''
-                        return (
-                          <div key={entry.id} onClick={() => applyEntry(entry)}
-                            style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid #ede6d6', display:'flex', alignItems:'center', gap:'8px' }}
-                            onMouseEnter={e => e.currentTarget.style.background='#f5f0e8'}
-                            onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                            <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:colourDot(colour), flexShrink:0, display:'inline-block' }}></span>
-                            <div>
-                              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px' }}>{desc}</div>
-                              <div style={{ fontSize:'10px', color:'var(--muted)', fontFamily:'DM Mono,monospace' }}>
-                                {vintage} · DP {entry.dp_price ? `£${parseFloat(entry.dp_price).toFixed(2)}` : '—'} · {entry.quantity} avail
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* Not found — offer manual add */}
-                  {searched && results.length === 0 && search.length >= 2 && (
-                    <div style={{ border:'1px solid rgba(184,148,42,0.3)', borderTop:'none', background:'rgba(184,148,42,0.06)', padding:'12px 14px' }}>
-                      <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'#7a5e10', marginBottom:'8px' }}>
-                        "{search}" not found in studio inventory.
-                      </div>
-                      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
-                        <button onClick={openManualAdd}
-                          style={{ background:'var(--ink)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                          + Add wine manually
-                        </button>
-                        <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', display:'flex', alignItems:'center' }}>
-                          Option to create in Studio inventory or add to box only
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Always-available manual add link */}
-                  {!searched && !scanMatch && !justAdded && (
-                    <div style={{ marginTop:'8px', textAlign:'right' }}>
-                      <button onClick={openManualAdd} style={{ background:'none', border:'none', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer', textDecoration:'underline' }}>
-                        Add wine not in inventory →
+              ) : (
+                <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
+                  <img src={imagePreview} alt="Label" style={{ width:'52px', height:'66px', objectFit:'cover', border:'1px solid var(--border)', flexShrink:0 }} />
+                  <div style={{ flex:1 }}>
+                    {!scanLabel && !scanning && (
+                      <button onClick={analyseImage}
+                        style={{ background:'var(--ink)', color:'#d4ad45', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer', width:'100%' }}>
+                        🔍 Read Label
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {scanning && (
+                      <div style={{ padding:'8px 0', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)' }}>🔍 Reading label…</div>
+                    )}
+                    {scanLabel && !scanning && (
+                      <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#2d6a4f' }}>
+                        ✓ {[scanLabel.wine_name, scanLabel.producer, scanLabel.vintage].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                    <button onClick={() => { setImageFile(null); setImagePreview(null); setScanLabel(null); setScanMatch(null); setShowStudioForm(false) }}
+                      style={{ display:'block', marginTop:'5px', background:'none', border:'none', fontSize:'10px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace' }}>✕ Remove</button>
+                  </div>
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Selected wine form */}
-              {selected && (
+          {/* Scan match card */}
+          {scanMatch && !selected && (
+            <div onClick={() => applyEntry(scanMatch)}
+              style={{ marginBottom:'12px', background:'rgba(45,106,79,0.08)', border:'2px solid rgba(45,106,79,0.5)', padding:'14px 16px', cursor:'pointer', borderRadius:'2px' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(45,106,79,0.15)'}
+              onMouseLeave={e => e.currentTarget.style.background='rgba(45,106,79,0.08)'}>
+              <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', letterSpacing:'0.1em', marginBottom:'6px' }}>✓ MATCHED IN STUDIO — TAP TO SELECT</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'16px', fontWeight:500 }}>
+                {scanMatchDesc.split(',')[0]}
+              </div>
+              {scanMatchDesc.includes(',') && (
+                <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px' }}>{scanMatchDesc.split(',').slice(1).join(',').trim()}</div>
+              )}
+              <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'4px' }}>
+                {scanMatch.wines?.vintage || scanMatch.unlinked_vintage || ''}
+                {scanMatch.dp_price && ` · DP £${parseFloat(scanMatch.dp_price).toFixed(2)}`}
+                {` · ${scanMatch.quantity} in studio`}
+              </div>
+            </div>
+          )}
+
+          {/* B14: Not in studio — inline Add to Studio form */}
+          {scanLabel && !scanMatch && !selected && results.length === 0 && (
+            <div style={{ marginBottom:'12px', background:'rgba(107,30,46,0.04)', border:'1px solid rgba(107,30,46,0.2)', padding:'14px 16px' }}>
+              <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--wine)', letterSpacing:'0.1em', marginBottom:'6px' }}>NOT IN STUDIO INVENTORY</div>
+
+              {!showStudioForm ? (
                 <>
-                  <div style={{ background:'rgba(107,30,46,0.06)', border:'1px solid rgba(107,30,46,0.2)', padding:'10px 12px', marginBottom:'12px' }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                      <div>
-                        <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{selected._desc.split(',')[0]}</div>
-                        {selected._desc.includes(',') && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px' }}>{selected._desc.split(',').slice(1).join(',').trim()}</div>}
-                        <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px' }}>
-                          {selected._vintage}{selected._region && ` · ${selected._region}`} · {selected.quantity} in studio · DP {selected._dp ? `£${selected._dp.toFixed(2)}` : '—'}
-                        </div>
-                      </div>
-                      <button onClick={() => { setSelected(null); setScanMatch(null) }}
-                        style={{ background:'none', border:'none', fontSize:'12px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace', flexShrink:0 }}>✕ change</button>
-                    </div>
+                  <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginBottom:'12px', lineHeight:1.5 }}>
+                    {[scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')}{scanLabel.vintage ? ` ${scanLabel.vintage}` : ''} isn't in your studio yet.
+                  </div>
+                  <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+                    <button onClick={() => setShowStudioForm(true)}
+                      style={{ background:'var(--ink)', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                      → Add to Studio first
+                    </button>
+                    <button onClick={() => {
+                      const desc = [scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')
+                      applyEntry({
+                        id: null, quantity: 0, dp_price: null, sale_price: null,
+                        bottle_size: '75', colour: scanLabel.colour || '',
+                        unlinked_description: desc, unlinked_vintage: scanLabel.vintage || '',
+                        source_id: null, wines: null,
+                      })
+                    }}
+                      style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.08em', cursor:'pointer' }}>
+                      Add to box only
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--ink)', marginBottom:'12px' }}>
+                    Adding <span style={{ color:'var(--wine)' }}>{[scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')}{scanLabel.vintage ? ` ${scanLabel.vintage}` : ''}</span> to Studio
                   </div>
 
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }}>
-                    <div>
-                      <label style={lblSt}>Quantity</label>
-                      <input type="number" min="1" value={qty} onChange={e => setQty(parseInt(e.target.value) || 1)} onFocus={e => e.target.select()}
-                        style={{ ...inputSt, fontSize:'16px', fontWeight:600 }} />
-                    </div>
-                    <div>
-                      <label style={lblSt}>Sale price (£/btl)</label>
-                      <input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)} placeholder="0.00" onFocus={e => e.target.select()}
-                        style={{ ...inputSt, border:'2px solid rgba(107,30,46,0.25)', background:'rgba(107,30,46,0.03)', fontSize:'14px', fontWeight:600, color:'var(--wine)' }} />
-                      {salePrice && selected._dp && (() => {
-                        const m = ((parseFloat(salePrice) - selected._dp) / selected._dp * 100)
-                        return <div style={{ fontSize:'10px', color: m >= 0 ? '#2d6a4f' : '#c0392b', marginTop:'3px', fontFamily:'DM Mono,monospace' }}>{m >= 0 ? '+' : ''}{m.toFixed(1)}% on DP</div>
-                      })()}
-                    </div>
-                  </div>
-
+                  {/* Colour selector */}
                   <div style={{ marginBottom:'10px' }}>
-                    <label style={lblSt}>Tasting note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(italic on pull list)</span></label>
-                    <textarea value={tastingNote} onChange={e => setTastingNote(e.target.value)} placeholder="Rich, concentrated dark fruit…" rows={3}
-                      style={{ ...inputSt, fontFamily:'Cormorant Garamond,serif', fontSize:'14px', fontStyle:'italic', resize:'vertical' }} />
+                    <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                      Colour <span style={{ color:'var(--wine)' }}>*</span>
+                    </label>
+                    <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+                      {COLOURS.map(c => (
+                        <button key={c} onClick={() => setStudioColour(c)}
+                          style={{
+                            padding:'5px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.08em',
+                            border: studioColour === c ? `2px solid ${colourDot(c)}` : '1px solid var(--border)',
+                            background: studioColour === c ? `rgba(${c === 'Red' ? '139,37,53' : c === 'White' ? '212,200,138' : c === 'Rosé' ? '212,116,138' : c === 'Sparkling' ? '168,196,212' : '196,168,90'},0.15)` : 'var(--white)',
+                            cursor:'pointer', color: studioColour === c ? 'var(--ink)' : 'var(--muted)',
+                            fontWeight: studioColour === c ? 600 : 400,
+                          }}>
+                          {c}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div style={{ marginBottom:'14px' }}>
-                    <label style={lblSt}>Producer note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(optional)</span></label>
-                    <textarea value={producerNote} onChange={e => setProducerNote(e.target.value)} placeholder="Brief context about the producer…" rows={2}
-                      style={{ ...inputSt, resize:'vertical' }} />
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'12px' }}>
+                    {/* Studio qty stepper */}
+                    <div>
+                      <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Qty in Studio</label>
+                      <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border)', background:'var(--white)', overflow:'hidden' }}>
+                        <button onClick={() => setStudioQty(q => Math.max(1, q - 1))}
+                          style={{ background:'none', border:'none', padding:'8px 12px', fontFamily:'DM Mono,monospace', fontSize:'16px', cursor:'pointer', color:'var(--ink)', lineHeight:1 }}>−</button>
+                        <span style={{ flex:1, textAlign:'center', fontFamily:'DM Mono,monospace', fontSize:'16px', fontWeight:600 }}>{studioQty}</span>
+                        <button onClick={() => setStudioQty(q => q + 1)}
+                          style={{ background:'none', border:'none', padding:'8px 12px', fontFamily:'DM Mono,monospace', fontSize:'16px', cursor:'pointer', color:'var(--ink)', lineHeight:1 }}>+</button>
+                      </div>
+                    </div>
+
+                    {/* Bottle size */}
+                    <div>
+                      <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Size</label>
+                      <div style={{ display:'flex', gap:'6px' }}>
+                        {[['75', '75cl'], ['150', 'Magnum']].map(([val, label]) => (
+                          <button key={val} onClick={() => setStudioSize(val)}
+                            style={{
+                              flex:1, padding:'8px 4px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.08em', cursor:'pointer',
+                              border: studioSize === val ? '2px solid var(--ink)' : '1px solid var(--border)',
+                              background: studioSize === val ? 'var(--ink)' : 'var(--white)',
+                              color: studioSize === val ? 'var(--white)' : 'var(--muted)',
+                            }}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
-                  <button onClick={confirm} disabled={saving}
-                    style={{ width:'100%', background:'var(--wine)', color:'var(--white)', border:'none', padding:'14px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.15em', textTransform:'uppercase', cursor:saving?'wait':'pointer', fontWeight:600 }}>
-                    {saving ? 'Adding…' : '✓ Add to Box — add another?'}
-                  </button>
+                  <div style={{ display:'flex', gap:'8px' }}>
+                    <button onClick={addToStudioAndSelect} disabled={!studioColour || addingToStudio}
+                      style={{
+                        flex:1, background: studioColour ? 'var(--wine)' : '#ccc', color:'var(--white)', border:'none',
+                        padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em',
+                        textTransform:'uppercase', cursor: studioColour ? 'pointer' : 'not-allowed',
+                      }}>
+                      {addingToStudio ? 'Adding…' : '→ Add to Studio & Select'}
+                    </button>
+                    <button onClick={() => setShowStudioForm(false)}
+                      style={{ background:'none', border:'1px solid var(--border)', padding:'10px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', cursor:'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Manual search */}
+          {!selected && (
+            <div style={{ marginBottom:'12px' }}>
+              <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
+                {scanMatch ? 'Or search manually' : justAdded ? 'Search for next bottle' : 'Search studio inventory'}
+              </label>
+              <input value={search} onChange={e => { setSearch(e.target.value); searchStudio(e.target.value) }}
+                placeholder="Start typing a wine name…"
+                style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
+              {results.length > 0 && (
+                <div style={{ border:'1px solid var(--border)', borderTop:'none', background:'var(--white)', maxHeight:'180px', overflowY:'auto' }}>
+                  {results.map(entry => {
+                    const w = entry.wines
+                    const desc    = w?.description || entry.unlinked_description || ''
+                    const vintage = w?.vintage     || entry.unlinked_vintage     || ''
+                    const colour  = w?.colour      || entry.colour               || ''
+                    return (
+                      <div key={entry.id} onClick={() => applyEntry(entry)}
+                        style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid #ede6d6', display:'flex', alignItems:'center', gap:'8px' }}
+                        onMouseEnter={e => e.currentTarget.style.background='#f5f0e8'}
+                        onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                        <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:colourDot(colour), flexShrink:0, display:'inline-block' }}></span>
+                        <div>
+                          <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px' }}>{desc}</div>
+                          <div style={{ fontSize:'10px', color:'var(--muted)', fontFamily:'DM Mono,monospace' }}>{vintage} · DP {entry.dp_price ? `£${parseFloat(entry.dp_price).toFixed(2)}` : '—'} · {entry.quantity} avail</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected wine + form */}
+          {selected && (
+            <>
+              <div style={{ background:'rgba(107,30,46,0.06)', border:'1px solid rgba(107,30,46,0.2)', padding:'10px 12px', marginBottom:'12px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{selected._desc.split(',')[0]}</div>
+                    {selected._desc.includes(',') && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px' }}>{selected._desc.split(',').slice(1).join(',').trim()}</div>}
+                    <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px' }}>
+                      {selected._vintage}{selected._region && ` · ${selected._region}`} · {selected.quantity} in studio · DP {selected._dp ? `£${selected._dp.toFixed(2)}` : '—'}
+                    </div>
+                  </div>
+                  <button onClick={() => { setSelected(null); setScanMatch(null) }}
+                    style={{ background:'none', border:'none', fontSize:'12px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace', flexShrink:0 }}>✕ change</button>
+                </div>
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }}>
+                {/* B8: Qty stepper */}
+                <div>
+                  <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Quantity</label>
+                  <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border)', background:'var(--white)', overflow:'hidden' }}>
+                    <button onClick={() => setQty(q => Math.max(1, q - 1))}
+                      style={{ background:'none', border:'none', padding:'9px 14px', fontFamily:'DM Mono,monospace', fontSize:'18px', cursor:'pointer', color:'var(--ink)', lineHeight:1, flexShrink:0 }}>−</button>
+                    <span style={{ flex:1, textAlign:'center', fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:700 }}>{qty}</span>
+                    <button onClick={() => setQty(q => q + 1)}
+                      style={{ background:'none', border:'none', padding:'9px 14px', fontFamily:'DM Mono,monospace', fontSize:'18px', cursor:'pointer', color:'var(--ink)', lineHeight:1, flexShrink:0 }}>+</button>
+                  </div>
+                </div>
+
+                {/* Sale price */}
+                <div>
+                  <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Sale price (£/btl)</label>
+                  <input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)} placeholder="0.00" onFocus={e => e.target.select()}
+                    style={{ width:'100%', border:'2px solid rgba(107,30,46,0.25)', background:'rgba(107,30,46,0.03)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:600, outline:'none', boxSizing:'border-box', color:'var(--wine)' }} />
+                  {salePrice && selected._dp && (() => {
+                    const m = ((parseFloat(salePrice) - selected._dp) / selected._dp * 100)
+                    return <div style={{ fontSize:'10px', color: m >= 0 ? '#2d6a4f' : '#c0392b', marginTop:'3px', fontFamily:'DM Mono,monospace' }}>{m >= 0 ? '+' : ''}{m.toFixed(1)}% on DP</div>
+                  })()}
+                </div>
+              </div>
+
+              {/* B11: Sale price quick-fill */}
+              {selected._dp && (
+                <div style={{ display:'flex', gap:'6px', marginBottom:'10px', alignItems:'center' }}>
+                  <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', flexShrink:0 }}>Quick:</span>
+                  {MARGINS.map(pct => {
+                    const price = (selected._dp * (1 + pct / 100)).toFixed(2)
+                    return (
+                      <button key={pct} onClick={() => setSalePrice(price)}
+                        style={{
+                          padding:'4px 9px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.06em',
+                          border: salePrice === price ? '2px solid var(--wine)' : '1px solid var(--border)',
+                          background: salePrice === price ? 'rgba(107,30,46,0.08)' : 'var(--white)',
+                          color: salePrice === price ? 'var(--wine)' : 'var(--muted)',
+                          cursor:'pointer', fontWeight: salePrice === price ? 600 : 400,
+                        }}>
+                        +{pct}% · £{price}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div style={{ marginBottom:'10px' }}>
+                <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                  Tasting note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(italic on pull list)</span>
+                </label>
+                <textarea value={tastingNote} onChange={e => setTastingNote(e.target.value)}
+                  placeholder="Rich, concentrated dark fruit with silky tannins…" rows={3}
+                  style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'Cormorant Garamond,serif', fontSize:'14px', fontStyle:'italic', outline:'none', boxSizing:'border-box', resize:'vertical' }} />
+              </div>
+
+              <div style={{ marginBottom:'14px' }}>
+                <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                  Producer note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(optional)</span>
+                </label>
+                <textarea value={producerNote} onChange={e => setProducerNote(e.target.value)}
+                  placeholder="Brief context about the producer or appellation…" rows={2}
+                  style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', outline:'none', boxSizing:'border-box', resize:'vertical' }} />
+              </div>
+
+              {/* A7: button text fixed */}
+              <button onClick={confirm} disabled={saving}
+                style={{ width:'100%', background:'var(--wine)', color:'var(--white)', border:'none', padding:'14px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.15em', textTransform:'uppercase', cursor:saving?'wait':'pointer', fontWeight:600 }}>
+                {saving ? 'Adding…' : '✓ Add to Box'}
+              </button>
             </>
           )}
         </div>
@@ -733,16 +708,29 @@ function MultiBottleModal({ onAddAll, onClose }) {
       })
       const result = await resp.json()
       if (!result.success) throw new Error(result.error)
+
       const labels = Array.isArray(result.data) ? result.data : [result.data]
+
       const enriched = await Promise.all(labels.map(async (label) => {
         const terms = [label.wine_name, label.producer, label.wine_name?.split(' ')[0]].filter(Boolean)
         let match = null
         for (const term of terms) {
           const { data } = await supabase.rpc('search_studio', { search_term: term })
-          if (data && data.length > 0) { match = normaliseRow(data[0]); break }
+          if (data && data.length > 0) {
+            match = normaliseRow(data[0])
+            break
+          }
         }
-        return { label, match, status: 'pending', salePrice: match?.sale_price ? String(parseFloat(match.sale_price)) : '', qty: 1 }
+        return {
+          label,
+          match,
+          status: 'pending',
+          salePrice: match?.sale_price ? String(parseFloat(match.sale_price)) : '',
+          qty: 1,
+          tastingNote: '', // B12: tasting note per bottle
+        }
       }))
+
       setBottles(enriched)
     } catch (err) {
       alert('Multi-label read failed: ' + err.message)
@@ -770,14 +758,25 @@ function MultiBottleModal({ onAddAll, onClose }) {
         ? await ensureSourceId(entry.id, entry)
         : generateSourceId(desc, vintage, colour, '75')
       return {
-        studio_id: entry?.id || null, wine_description: desc, wine_vintage: vintage,
-        wine_colour: colour, wine_region: region, dp_price: dp,
-        sale_price: b.salePrice ? parseFloat(b.salePrice) : null,
-        quantity: b.qty, tasting_note: null, producer_note: null, source_id: sid,
+        studio_id:        entry?.id || null,
+        wine_description: desc,
+        wine_vintage:     vintage,
+        wine_colour:      colour,
+        wine_region:      region,
+        dp_price:         dp,
+        sale_price:       b.salePrice ? parseFloat(b.salePrice) : null,
+        quantity:         b.qty,
+        tasting_note:     b.tastingNote || null, // B12
+        producer_note:    null,
+        source_id:        sid,
       }
     }))
     const { error } = await onAddAll(items)
-    if (error) { alert('Failed: ' + error.message); setSaving(false); return }
+    if (error) {
+      alert('Failed to add bottles: ' + error.message)
+      setSaving(false)
+      return
+    }
     setSaving(false)
     onClose()
   }
@@ -788,13 +787,18 @@ function MultiBottleModal({ onAddAll, onClose }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:250, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
       <div style={{ background:'var(--cream)', width:'100%', maxWidth:'560px', border:'1px solid var(--border)', marginTop:'8px' }}>
+
         <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', padding:'18px 18px 0' }}>
           <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300 }}>Multiple Bottles</div>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--muted)' }}>✕</button>
         </div>
+
         <div style={{ padding:'14px 18px 22px' }}>
+
           <div style={{ marginBottom:'14px' }}>
-            <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>Photograph all the bottles together</label>
+            <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>
+              Photograph all the bottles together
+            </label>
             {!imagePreview ? (
               <div onClick={() => fileRef.current?.click()}
                 style={{ border:'1px dashed var(--border)', padding:'20px', textAlign:'center', cursor:'pointer', background:'var(--white)', display:'flex', flexDirection:'column', alignItems:'center', gap:'6px' }}
@@ -802,6 +806,7 @@ function MultiBottleModal({ onAddAll, onClose }) {
                 onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
                 <span style={{ fontSize:'28px' }}>📷</span>
                 <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', letterSpacing:'0.08em' }}>PHOTO FROM CAMERA ROLL</span>
+                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)' }}>Labels can be at any angle</span>
                 <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} />
               </div>
             ) : (
@@ -809,11 +814,20 @@ function MultiBottleModal({ onAddAll, onClose }) {
                 <img src={imagePreview} alt="Bottles" style={{ width:'100%', maxHeight:'220px', objectFit:'contain', border:'1px solid var(--border)', background:'var(--white)' }} />
                 <div style={{ display:'flex', gap:'8px', marginTop:'8px', alignItems:'center' }}>
                   {!bottles.length && !scanning && (
-                    <button onClick={analyseMulti} style={{ background:'var(--ink)', color:'#d4ad45', border:'none', padding:'9px 16px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.12em', textTransform:'uppercase', cursor:'pointer', flex:1 }}>🔍 Read All Labels</button>
+                    <button onClick={analyseMulti}
+                      style={{ background:'var(--ink)', color:'#d4ad45', border:'none', padding:'9px 16px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.12em', textTransform:'uppercase', cursor:'pointer', flex:1 }}>
+                      🔍 Read All Labels
+                    </button>
                   )}
-                  {scanning && <div style={{ flex:1, padding:'9px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', textAlign:'center' }}>🔍 Reading labels…</div>}
+                  {scanning && (
+                    <div style={{ flex:1, padding:'9px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', textAlign:'center' }}>
+                      🔍 Reading labels…
+                    </div>
+                  )}
                   <button onClick={() => { setImageFile(null); setImagePreview(null); setBottles([]) }}
-                    style={{ background:'none', border:'1px solid var(--border)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>✕ Retake</button>
+                    style={{ background:'none', border:'1px solid var(--border)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>
+                    ✕ Retake
+                  </button>
                 </div>
               </div>
             )}
@@ -824,6 +838,7 @@ function MultiBottleModal({ onAddAll, onClose }) {
               <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'10px' }}>
                 {bottles.length} bottle{bottles.length !== 1 ? 's' : ''} detected — confirm each to add to box
               </div>
+
               <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'16px' }}>
                 {bottles.map((b, idx) => {
                   const entry = b.match
@@ -834,25 +849,40 @@ function MultiBottleModal({ onAddAll, onClose }) {
                   const dp      = entry?.dp_price ? parseFloat(entry.dp_price) : null
                   const isConfirmed = b.status === 'confirmed'
                   const isSkipped   = b.status === 'skipped'
-                  const fd = desc || '', ci = fd.indexOf(',')
+
+                  const fd = desc || ''
+                  const ci = fd.indexOf(',')
                   const wp = ci > -1 ? fd.slice(0, ci).trim() : fd
                   const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
 
                   return (
-                    <div key={idx} style={{ border:`2px solid ${isConfirmed ? 'rgba(45,106,79,0.5)' : isSkipped ? 'rgba(0,0,0,0.1)' : 'var(--border)'}`, background: isConfirmed ? 'rgba(45,106,79,0.06)' : isSkipped ? 'rgba(0,0,0,0.03)' : 'var(--white)', padding:'12px 14px', opacity: isSkipped ? 0.5 : 1 }}>
+                    <div key={idx} style={{
+                      border: `2px solid ${isConfirmed ? 'rgba(45,106,79,0.5)' : isSkipped ? 'rgba(0,0,0,0.1)' : 'var(--border)'}`,
+                      background: isConfirmed ? 'rgba(45,106,79,0.06)' : isSkipped ? 'rgba(0,0,0,0.03)' : 'var(--white)',
+                      padding:'12px 14px',
+                      opacity: isSkipped ? 0.5 : 1,
+                    }}>
                       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'8px', marginBottom:'8px' }}>
                         <div style={{ flex:1 }}>
                           <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
                             <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:colourDot(colour), display:'inline-block', flexShrink:0 }}></span>
                             <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{wp || '—'}</span>
                             {vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)' }}>{vintage}</span>}
+                            {b.label.confidence === 'low' && <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b' }}>⚠ low confidence</span>}
                           </div>
                           {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginLeft:'15px', marginTop:'1px' }}>{pp}</div>}
                           {entry ? (
-                            <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', marginLeft:'15px', marginTop:'4px' }}>✓ in studio · {entry.quantity} avail{dp ? ` · DP £${dp.toFixed(2)}` : ''}</div>
+                            <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', marginLeft:'15px', marginTop:'4px' }}>
+                              ✓ in studio · {entry.quantity} avail{dp ? ` · DP £${dp.toFixed(2)}` : ''}
+                            </div>
                           ) : (
-                            <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b', marginLeft:'15px', marginTop:'4px' }}>Not found in studio — will add to box only</div>
+                            <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b', marginLeft:'15px', marginTop:'4px' }}>
+                              Not found in studio
+                            </div>
                           )}
+                          <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginLeft:'15px', marginTop:'2px' }}>
+                            Read: {[b.label.wine_name, b.label.producer].filter(Boolean).join(', ')} {b.label.vintage || ''}
+                          </div>
                         </div>
                         {!isConfirmed && (
                           <button onClick={() => updateBottle(idx, { status: isSkipped ? 'pending' : 'skipped' })}
@@ -861,33 +891,67 @@ function MultiBottleModal({ onAddAll, onClose }) {
                           </button>
                         )}
                       </div>
+
                       {!isSkipped && (
-                        <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-                            <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Qty</label>
-                            <input type="number" min="1" value={b.qty} onChange={e => updateBottle(idx, { qty: parseInt(e.target.value) || 1 })} onFocus={e => e.target.select()}
-                              style={{ width:'48px', border:'1px solid var(--border)', background:'var(--cream)', padding:'5px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center' }} />
+                        <>
+                          <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap', marginBottom: isConfirmed ? '8px' : '0' }}>
+                            {/* B8: qty stepper in multi modal */}
+                            <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                              <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Qty</label>
+                              <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border)', background:'var(--cream)', overflow:'hidden' }}>
+                                <button onClick={() => updateBottle(idx, { qty: Math.max(1, b.qty - 1) })}
+                                  style={{ background:'none', border:'none', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'14px', cursor:'pointer', color:'var(--ink)', lineHeight:1 }}>−</button>
+                                <span style={{ padding:'4px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, minWidth:'24px', textAlign:'center' }}>{b.qty}</span>
+                                <button onClick={() => updateBottle(idx, { qty: b.qty + 1 })}
+                                  style={{ background:'none', border:'none', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'14px', cursor:'pointer', color:'var(--ink)', lineHeight:1 }}>+</button>
+                              </div>
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:'4px', flex:1 }}>
+                              <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>Sale £</label>
+                              <input type="number" step="0.01" value={b.salePrice}
+                                onChange={e => updateBottle(idx, { salePrice: e.target.value })}
+                                onFocus={e => e.target.select()}
+                                placeholder="0.00"
+                                style={{ width:'80px', border:'2px solid rgba(107,30,46,0.2)', background:'rgba(107,30,46,0.03)', padding:'5px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', color:'var(--wine)' }} />
+                              {b.salePrice && dp && (() => {
+                                const m = ((parseFloat(b.salePrice) - dp) / dp * 100)
+                                return <span style={{ fontSize:'10px', color: m >= 0 ? '#2d6a4f' : '#c0392b', fontFamily:'DM Mono,monospace' }}>{m >= 0 ? '+' : ''}{m.toFixed(0)}%</span>
+                              })()}
+                            </div>
+                            {isConfirmed ? (
+                              <button onClick={() => updateBottle(idx, { status: 'pending' })}
+                                style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>
+                                ✓ confirmed
+                              </button>
+                            ) : (
+                              <button onClick={() => updateBottle(idx, { status: 'confirmed' })}
+                                style={{ background:'none', border:'2px solid rgba(45,106,79,0.5)', color:'#2d6a4f', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>
+                                ✓ confirm
+                              </button>
+                            )}
                           </div>
-                          <div style={{ display:'flex', alignItems:'center', gap:'4px', flex:1 }}>
-                            <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>Sale £</label>
-                            <input type="number" step="0.01" value={b.salePrice} onChange={e => updateBottle(idx, { salePrice: e.target.value })} onFocus={e => e.target.select()} placeholder="0.00"
-                              style={{ width:'80px', border:'2px solid rgba(107,30,46,0.2)', background:'rgba(107,30,46,0.03)', padding:'5px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', color:'var(--wine)' }} />
-                            {b.salePrice && dp && (() => { const m = ((parseFloat(b.salePrice) - dp) / dp * 100); return <span style={{ fontSize:'10px', color: m >= 0 ? '#2d6a4f' : '#c0392b', fontFamily:'DM Mono,monospace' }}>{m >= 0 ? '+' : ''}{m.toFixed(0)}%</span> })()}
+
+                          {/* B12: tasting note per bottle */}
+                          <div style={{ marginTop:'8px' }}>
+                            <textarea
+                              value={b.tastingNote}
+                              onChange={e => updateBottle(idx, { tastingNote: e.target.value })}
+                              placeholder="Tasting note (optional — appears on pull list)…"
+                              rows={2}
+                              style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'7px 10px', fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', outline:'none', boxSizing:'border-box', resize:'vertical', color:'#3a2a1a' }} />
                           </div>
-                          {isConfirmed ? (
-                            <button onClick={() => updateBottle(idx, { status: 'pending' })} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>✓ confirmed</button>
-                          ) : (
-                            <button onClick={() => updateBottle(idx, { status: 'confirmed' })} style={{ background:'none', border:'2px solid rgba(45,106,79,0.5)', color:'#2d6a4f', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>✓ confirm</button>
-                          )}
-                        </div>
+                        </>
                       )}
                     </div>
                   )
                 })}
               </div>
+
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                 {pendingCount > 0 && confirmedCount === 0 && (
-                  <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', flex:1 }}>Confirm at least one bottle above</div>
+                  <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', flex:1 }}>
+                    Confirm at least one bottle above
+                  </div>
                 )}
                 {confirmedCount > 0 && (
                   <button onClick={confirmAll} disabled={saving}
@@ -918,6 +982,8 @@ export default function BoxPage() {
   const [showSidebar, setShowSidebar] = useState(true)
   const [saving, setSaving]           = useState(false)
   const [statusMsg, setStatusMsg]     = useState(null)
+  // A5: inline delete confirmation — stores item id awaiting confirm
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
   const [newName, setNewName]   = useState('')
   const [newBuyer, setNewBuyer] = useState('')
@@ -951,6 +1017,7 @@ export default function BoxPage() {
 
   async function openBox(box) {
     setActiveBox(box)
+    setConfirmDeleteId(null)
     await fetchBoxItems(box.id)
     if (typeof window !== 'undefined' && window.innerWidth < 700) setShowSidebar(false)
   }
@@ -962,7 +1029,11 @@ export default function BoxPage() {
       name: newName, buyer_name: newBuyer,
       buyer_email: newEmail || null, notes: newNotes || null, status: 'Draft'
     }).select().single()
-    if (error) { showStatus('error', 'Failed to create: ' + error.message); setSaving(false); return }
+    if (error) {
+      showStatus('error', 'Failed to create box: ' + error.message)
+      setSaving(false)
+      return
+    }
     await fetchBoxes()
     setShowNewBoxModal(false)
     setNewName(''); setNewBuyer(''); setNewEmail(''); setNewNotes('')
@@ -973,7 +1044,10 @@ export default function BoxPage() {
   async function addItemToBox(item) {
     if (!activeBox) return { error: new Error('No active box') }
     const { error } = await supabase.from('box_items').insert({ box_id: activeBox.id, ...item, sort_order: activeItems.length })
-    if (!error) { await fetchBoxItems(activeBox.id); await updateBoxTotals(activeBox.id) }
+    if (!error) {
+      await fetchBoxItems(activeBox.id)
+      await updateBoxTotals(activeBox.id)
+    }
     return { error }
   }
 
@@ -981,14 +1055,18 @@ export default function BoxPage() {
     if (!activeBox || !items.length) return { error: null }
     const rows = items.map((item, i) => ({ box_id: activeBox.id, ...item, sort_order: activeItems.length + i }))
     const { error } = await supabase.from('box_items').insert(rows)
-    if (!error) { await fetchBoxItems(activeBox.id); await updateBoxTotals(activeBox.id) }
+    if (!error) {
+      await fetchBoxItems(activeBox.id)
+      await updateBoxTotals(activeBox.id)
+    }
     return { error }
   }
 
+  // A5: removeItem no longer uses native confirm() — inline confirmation handles that
   async function removeItem(itemId) {
-    if (!confirm('Remove this bottle?')) return
     const { error } = await supabase.from('box_items').delete().eq('id', itemId)
-    if (error) { showStatus('error', 'Failed to remove: ' + error.message); return }
+    if (error) { showStatus('error', 'Failed to remove item: ' + error.message); return }
+    setConfirmDeleteId(null)
     await fetchBoxItems(activeBox.id)
     await updateBoxTotals(activeBox.id)
   }
@@ -1016,26 +1094,21 @@ export default function BoxPage() {
       }
     }
     const { error } = await supabase.from('boxes').update({ status: 'Confirmed' }).eq('id', activeBox.id)
-    if (error) { showStatus('error', 'Failed to confirm: ' + error.message); setSaving(false); return }
+    if (error) {
+      showStatus('error', 'Failed to confirm box: ' + error.message)
+      setSaving(false)
+      return
+    }
     setActiveBox(prev => ({ ...prev, status: 'Confirmed' }))
     await fetchBoxes()
     setSaving(false)
     showStatus('success', `"${activeBox.name}" confirmed — studio quantities updated.`)
   }
 
-  async function reopenBox() {
-    if (!activeBox) return
-    const { error } = await supabase.from('boxes').update({ status: 'Draft' }).eq('id', activeBox.id)
-    if (error) { showStatus('error', 'Failed to reopen: ' + error.message); return }
-    setActiveBox(prev => ({ ...prev, status: 'Draft' }))
-    setBoxes(prev => prev.map(b => b.id === activeBox.id ? { ...b, status: 'Draft' } : b))
-    showStatus('success', `"${activeBox.name}" reopened for editing. Note: studio quantities already deducted — adjust manually if needed.`, 6000)
-  }
-
   async function deleteBox(boxId) {
-    if (!confirm('Delete this box and all its items?')) return
+    if (!confirm('Delete this box?')) return
     const { error } = await supabase.from('boxes').delete().eq('id', boxId)
-    if (error) { showStatus('error', 'Failed to delete: ' + error.message); return }
+    if (error) { showStatus('error', 'Failed to delete box: ' + error.message); return }
     if (activeBox?.id === boxId) { setActiveBox(null); setActiveItems([]) }
     await fetchBoxes()
     if (typeof window !== 'undefined' && window.innerWidth < 700) setShowSidebar(true)
@@ -1045,6 +1118,9 @@ export default function BoxPage() {
   const totalBottles = activeItems.reduce((s, i) => s + (i.quantity || 1), 0)
   const totalSale    = activeItems.reduce((s, i) => s + (parseFloat(i.sale_price) || 0) * (i.quantity || 1), 0)
   const totalDP      = activeItems.reduce((s, i) => s + (parseFloat(i.dp_price)   || 0) * (i.quantity || 1), 0)
+
+  // A1: "Bottles On Hand" replaces "Local Sales"
+  const NAV = [['Inventory','/admin'],['Studio','/studio'],['Box Builder','/boxes'],['Labels','/labels'],['Buyer View','/buyer'],['Bottles On Hand','/local'],['Consignment', '/consignment']]
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
@@ -1059,7 +1135,7 @@ export default function BoxPage() {
       <div style={{ background:'var(--ink)', color:'var(--white)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 14px', height:'52px', position:'fixed', top:0, left:0, width:'100%', zIndex:100, boxSizing:'border-box' }}>
         <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300, letterSpacing:'0.1em', color:'#d4ad45', flexShrink:0, marginRight:'8px' }}>Cellar</div>
         <div style={{ display:'flex', gap:'1px', overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
-          {[['Studio','/studio'],['Bonded Storage','/admin'],['Box Builder','/boxes'],['Buyer View','/buyer'],['Bottles On Hand','/local'],['Consignment','/consignment']].map(([label, path]) => (
+          {NAV.map(([label, path]) => (
             <button key={path} onClick={() => router.push(path)}
               style={{ background: path === '/boxes' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/boxes' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border:'none', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer', padding:'6px 8px', borderRadius:'2px', whiteSpace:'nowrap', flexShrink:0 }}>
               {label}
@@ -1070,9 +1146,15 @@ export default function BoxPage() {
           style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono,monospace', fontSize:'9px', cursor:'pointer', padding:'4px 8px', flexShrink:0, marginLeft:'6px' }}>Out</button>
       </div>
 
-      {/* Status toast */}
+      {/* Inline status toast */}
       {statusMsg && (
-        <div style={{ position:'fixed', top:'60px', left:'50%', transform:'translateX(-50%)', zIndex:400, background: statusMsg.type === 'success' ? 'rgba(45,106,79,0.95)' : 'rgba(192,57,43,0.95)', color:'var(--white)', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.05em', border:'1px solid rgba(255,255,255,0.15)', whiteSpace:'nowrap', pointerEvents:'none', maxWidth:'90vw', overflow:'hidden', textOverflow:'ellipsis' }}>
+        <div style={{
+          position:'fixed', top:'60px', left:'50%', transform:'translateX(-50%)', zIndex:400,
+          background: statusMsg.type === 'success' ? 'rgba(45,106,79,0.95)' : 'rgba(192,57,43,0.95)',
+          color:'var(--white)', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'12px',
+          letterSpacing:'0.05em', border:'1px solid rgba(255,255,255,0.15)', whiteSpace:'nowrap',
+          pointerEvents:'none',
+        }}>
           {statusMsg.type === 'success' ? '✓ ' : '✕ '}{statusMsg.text}
         </div>
       )}
@@ -1088,6 +1170,7 @@ export default function BoxPage() {
               <button onClick={() => setShowNewBoxModal(true)}
                 style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'5px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>+ New</button>
             </div>
+
             {boxes.length === 0 ? (
               <div style={{ padding:'20px', textAlign:'center', border:'1px dashed var(--border)', background:'var(--white)' }}>
                 <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', color:'var(--muted)', marginBottom:'10px' }}>No boxes yet</div>
@@ -1113,6 +1196,7 @@ export default function BoxPage() {
 
         {/* Main */}
         <div style={{ padding:'16px' }}>
+
           {!showSidebar && (
             <button onClick={() => { setShowSidebar(true); setActiveBox(null) }}
               style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', marginBottom:'14px' }}>
@@ -1138,45 +1222,46 @@ export default function BoxPage() {
                     <span style={{ marginLeft:'10px', color:statusColour(activeBox.status), fontWeight:500 }}>{activeBox.status}</span>
                   </div>
                 </div>
-                <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-                  {/* Add/edit buttons — always visible */}
-                  <button onClick={() => setShowAddBottle(true)}
-                    style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                    + One Bottle
-                  </button>
-                  <button onClick={() => setShowMultiBottle(true)}
-                    style={{ background:'none', border:'1px solid var(--wine)', color:'var(--wine)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                    📷 Multi
-                  </button>
-                  {activeItems.length > 0 && (
-                    <button onClick={() => setShowPullList(true)}
-                      style={{ background:'none', border:'1px solid var(--ink)', color:'var(--ink)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                      🖨 Pull List
-                    </button>
+
+                {/* A6: grouped button bar — add actions / box actions / danger */}
+                <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center' }}>
+                  {/* Add actions */}
+                  {activeBox.status === 'Draft' && (
+                    <div style={{ display:'flex', gap:'6px' }}>
+                      <button onClick={() => setShowAddBottle(true)}
+                        style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                        + Add Bottle
+                      </button>
+                      <button onClick={() => setShowMultiBottle(true)}
+                        style={{ background:'none', border:'1px solid var(--wine)', color:'var(--wine)', padding:'8px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                        📷 Multi
+                      </button>
+                    </div>
                   )}
-                  {/* Confirm — only when Draft */}
-                  {activeBox.status === 'Draft' && activeItems.length > 0 && (
-                    <button onClick={confirmBox} disabled={saving}
-                      style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                      {saving ? 'Saving…' : '✓ Confirm'}
-                    </button>
-                  )}
-                  {/* Reopen — only when Confirmed */}
-                  {activeBox.status === 'Confirmed' && (
-                    <button onClick={reopenBox}
-                      style={{ background:'none', border:'1px solid #b8942a', color:'#7a5e10', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
-                      ✏ Reopen
-                    </button>
-                  )}
-                  <button onClick={() => deleteBox(activeBox.id)}
-                    style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕</button>
+                  {/* Box actions */}
+                  <div style={{ display:'flex', gap:'6px' }}>
+                    {activeItems.length > 0 && (
+                      <button onClick={() => setShowPullList(true)}
+                        style={{ background:'none', border:'1px solid var(--ink)', color:'var(--ink)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                        🖨 Pull List
+                      </button>
+                    )}
+                    {activeBox.status === 'Draft' && activeItems.length > 0 && (
+                      <button onClick={confirmBox} disabled={saving}
+                        style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                        {saving ? 'Saving…' : '✓ Confirm'}
+                      </button>
+                    )}
+                    <button onClick={() => deleteBox(activeBox.id)}
+                      style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕</button>
+                  </div>
                 </div>
               </div>
 
-              {/* Stats bar */}
+              {/* Stats bar — DP + margin visible internally, never on print */}
               {activeItems.length > 0 && (
                 <div style={{ display:'flex', gap:'16px', padding:'10px 14px', background:'var(--white)', border:'1px solid var(--border)', marginBottom:'12px', fontSize:'11px', flexWrap:'wrap' }}>
-                  {[['bottles', totalBottles], ['cost', `£${totalDP.toFixed(2)}`], ['sale', `£${totalSale.toFixed(2)}`], ['margin', `£${(totalSale-totalDP).toFixed(2)}`]].map(([label, val]) => (
+                  {[['bottles', totalBottles], ['cost (dp)', `£${totalDP.toFixed(2)}`], ['sale', `£${totalSale.toFixed(2)}`], ['margin', `£${(totalSale-totalDP).toFixed(2)}`]].map(([label, val]) => (
                     <div key={label} style={{ display:'flex', gap:'5px', alignItems:'baseline' }}>
                       <span style={{ fontWeight:600, color:'var(--wine)', fontSize:'13px', fontFamily:'DM Mono,monospace' }}>{val}</span>
                       <span style={{ color:'var(--muted)' }}>{label}</span>
@@ -1188,7 +1273,7 @@ export default function BoxPage() {
               {/* Items list */}
               {activeItems.length === 0 ? (
                 <div style={{ padding:'36px', textAlign:'center', border:'1px dashed var(--border)', background:'var(--white)' }}>
-                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', color:'var(--muted)' }}>No bottles yet — tap + One Bottle to start</div>
+                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', color:'var(--muted)' }}>No bottles yet — tap + Add Bottle to start</div>
                 </div>
               ) : (
                 <div style={{ border:'1px solid var(--border)', background:'var(--white)' }}>
@@ -1200,15 +1285,15 @@ export default function BoxPage() {
                     const margin = item.sale_price && item.dp_price
                       ? ((parseFloat(item.sale_price) - parseFloat(item.dp_price)) / parseFloat(item.dp_price) * 100).toFixed(1)
                       : null
+                    const isAwaitingDelete = confirmDeleteId === item.id
                     return (
-                      <div key={item.id} style={{ padding:'12px 14px', borderBottom: idx < activeItems.length-1 ? '1px solid #ede6d6' : 'none', display:'grid', gridTemplateColumns:'1fr auto', gap:'10px', alignItems:'start' }}>
+                      <div key={item.id} style={{ padding:'12px 14px', borderBottom: idx < activeItems.length-1 ? '1px solid #ede6d6' : 'none', display:'grid', gridTemplateColumns:'1fr auto', gap:'10px', alignItems:'start', background: isAwaitingDelete ? 'rgba(192,57,43,0.04)' : 'transparent' }}>
                         <div>
                           <div style={{ display:'flex', alignItems:'center', gap:'7px', flexWrap:'wrap' }}>
                             <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), display:'inline-block', flexShrink:0 }}></span>
                             <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{wp}</span>
                             {item.wine_vintage && <span style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>{item.wine_vintage}</span>}
                             {item.quantity > 1 && <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', background:'var(--ink)', color:'#d4ad45', padding:'1px 5px', borderRadius:'2px' }}>×{item.quantity}</span>}
-                            {!item.studio_id && <span style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'#b8942a', background:'rgba(184,148,42,0.1)', padding:'1px 5px', borderRadius:'2px', letterSpacing:'0.06em' }}>not in studio</span>}
                           </div>
                           {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginLeft:'15px', marginTop:'1px' }}>{pp}</div>}
                           {item.wine_region && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginLeft:'15px', marginTop:'2px' }}>{item.wine_region}</div>}
@@ -1221,9 +1306,22 @@ export default function BoxPage() {
                           </div>
                           {item.dp_price && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>DP £{parseFloat(item.dp_price).toFixed(2)}</div>}
                           {margin && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color: parseFloat(margin) >= 0 ? '#2d6a4f' : '#c0392b' }}>{parseFloat(margin) >= 0 ? '+' : ''}{margin}%</div>}
-                          {/* Remove always available — not just on Draft */}
-                          <button onClick={() => removeItem(item.id)}
-                            style={{ background:'none', border:'none', color:'var(--muted)', fontSize:'11px', cursor:'pointer', marginTop:'2px', fontFamily:'DM Mono,monospace' }}>✕</button>
+
+                          {/* A5: inline delete confirmation */}
+                          {activeBox.status === 'Draft' && (
+                            isAwaitingDelete ? (
+                              <div style={{ display:'flex', gap:'4px', alignItems:'center', marginTop:'4px' }}>
+                                <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b', whiteSpace:'nowrap' }}>Remove?</span>
+                                <button onClick={() => removeItem(item.id)}
+                                  style={{ background:'#c0392b', color:'var(--white)', border:'none', padding:'3px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.06em' }}>Yes</button>
+                                <button onClick={() => setConfirmDeleteId(null)}
+                                  style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'3px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer' }}>No</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setConfirmDeleteId(item.id)}
+                                style={{ background:'none', border:'none', color:'var(--muted)', fontSize:'11px', cursor:'pointer', marginTop:'2px', fontFamily:'DM Mono,monospace' }}>✕</button>
+                            )
+                          )}
                         </div>
                       </div>
                     )
