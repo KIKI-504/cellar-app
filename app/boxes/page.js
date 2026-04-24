@@ -66,10 +66,9 @@ function PullListView({ box, items, onClose }) {
   const printRef = useRef(null)
   function handlePrint() {
     const content = printRef.current.innerHTML
-    const win = document.createElement('iframe')
-    win.style.display = 'none'
-    document.body.appendChild(win)
-    win.contentDocument.write(`<!DOCTYPE html><html><head>
+    const printWin = window.open('', '_blank', 'width=800,height=900')
+    if (!printWin) { alert('Please allow popups to print'); return }
+    printWin.document.write(`<!DOCTYPE html><html><head>
       <meta charset="utf-8"><title>${box.name}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400&display=swap');
@@ -85,8 +84,9 @@ function PullListView({ box, items, onClose }) {
         .foot{margin-top:40px;padding-top:16px;border-top:1px solid #ede6d6;font-size:10px;font-family:'DM Mono',monospace;color:#c8b89a;text-align:center}
         @media print{body{padding:20px}}
       </style></head><body>${content}</body></html>`)
-    win.contentDocument.close()
-    win.onload = () => { win.contentWindow.print(); document.body.removeChild(win) }
+    printWin.document.close()
+    printWin.focus()
+    setTimeout(() => { printWin.print(); printWin.close() }, 500)
   }
   const totalSale    = items.reduce((s, i) => s + (parseFloat(i.sale_price) || 0) * (i.quantity || 1), 0)
   const totalBottles = items.reduce((s, i) => s + (i.quantity || 1), 0)
@@ -722,6 +722,8 @@ export default function BoxPage() {
   const [saving, setSaving]                   = useState(false)
   const [statusMsg, setStatusMsg]             = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [editingBox, setEditingBox]           = useState(false)
+  const [boxEditDraft, setBoxEditDraft]       = useState({ name:'', buyer_name:'', buyer_email:'', notes:'' })
   const [editingItemId, setEditingItemId]     = useState(null)
   const [editDraft, setEditDraft]             = useState({ qty:1, salePrice:'', tastingNote:'' })
   const [contacts, setContacts]               = useState([])
@@ -799,6 +801,21 @@ export default function BoxPage() {
     const { error } = await supabase.from('box_items').update({ quantity:editDraft.qty, sale_price:editDraft.salePrice?parseFloat(editDraft.salePrice):null, tasting_note:editDraft.tastingNote||null }).eq('id', itemId)
     if (error) { showStatus('error', 'Failed to save: ' + error.message); return }
     setEditingItemId(null); await fetchBoxItems(activeBox.id); await updateBoxTotals(activeBox.id); showStatus('success', 'Changes saved.')
+  }
+
+  async function saveBoxEdit() {
+    if (!boxEditDraft.name || !boxEditDraft.buyer_name) return
+    const { error } = await supabase.from('boxes').update({
+      name:        boxEditDraft.name,
+      buyer_name:  boxEditDraft.buyer_name,
+      buyer_email: boxEditDraft.buyer_email || null,
+      notes:       boxEditDraft.notes || null,
+    }).eq('id', activeBox.id)
+    if (error) { showStatus('error', 'Failed to save: ' + error.message); return }
+    setActiveBox(prev => ({ ...prev, ...boxEditDraft, buyer_email: boxEditDraft.buyer_email||null, notes: boxEditDraft.notes||null }))
+    await fetchBoxes()
+    setEditingBox(false)
+    showStatus('success', 'Box details updated.')
   }
 
   async function markAsSent() {
@@ -925,11 +942,36 @@ export default function BoxPage() {
             <div>
               <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'14px', flexWrap:'wrap', gap:'10px' }}>
                 <div>
-                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300 }}>{activeBox.name}</div>
-                  <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>
-                    {activeBox.buyer_name}{activeBox.buyer_email&&` · ${activeBox.buyer_email}`}
-                    <span style={{ marginLeft:'10px', color:statusColour(activeBox.status), fontWeight:500 }}>{activeBox.status}</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300 }}>{activeBox.name}</div>
+                    {!editingBox && (
+                      <button onClick={() => { setEditingBox(true); setBoxEditDraft({ name:activeBox.name, buyer_name:activeBox.buyer_name, buyer_email:activeBox.buyer_email||'', notes:activeBox.notes||'' }) }}
+                        title="Edit box details"
+                        style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'2px 7px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer' }}>✏</button>
+                    )}
                   </div>
+                  {editingBox ? (
+                    <div style={{ marginTop:'8px', display:'flex', flexDirection:'column', gap:'7px', maxWidth:'380px' }}>
+                      {[['Box name',boxEditDraft.name,'name'],['Buyer name',boxEditDraft.buyer_name,'buyer_name'],['Email',boxEditDraft.buyer_email,'buyer_email'],['Notes',boxEditDraft.notes,'notes']].map(([label,val,field]) => (
+                        <div key={field} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                          <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', width:'72px', flexShrink:0 }}>{label}</label>
+                          <input value={val} onChange={e => setBoxEditDraft(d => ({ ...d, [field]:e.target.value }))}
+                            style={{ flex:1, border:'1px solid var(--border)', background:'var(--white)', padding:'5px 8px', fontFamily: field==='name'?'Cormorant Garamond,serif':'DM Mono,monospace', fontSize: field==='name'?'15px':'12px', outline:'none' }} />
+                        </div>
+                      ))}
+                      <div style={{ display:'flex', gap:'6px', marginTop:'2px' }}>
+                        <button onClick={saveBoxEdit} disabled={!boxEditDraft.name||!boxEditDraft.buyer_name}
+                          style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'6px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>✓ Save</button>
+                        <button onClick={() => setEditingBox(false)}
+                          style={{ background:'none', border:'1px solid var(--border)', padding:'6px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>
+                      {activeBox.buyer_name}{activeBox.buyer_email&&` · ${activeBox.buyer_email}`}
+                      <span style={{ marginLeft:'10px', color:statusColour(activeBox.status), fontWeight:500 }}>{activeBox.status}</span>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center' }}>
                   {activeBox.status==='Draft' && (
