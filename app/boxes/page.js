@@ -125,6 +125,7 @@ function PullListView({ box, items, onClose }) {
                   {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', color:'var(--ink)', marginTop:'2px', marginLeft:'16px' }}>{pp}</div>}
                   {item.wine_region && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'4px', marginLeft:'16px' }}>{item.wine_region}</div>}
                   {item.tasting_note && <div style={{ fontSize:'13px', fontStyle:'italic', color:'#3a2a1a', marginTop:'10px', marginLeft:'16px', lineHeight:1.6 }}>"{item.tasting_note}"</div>}
+                  {item.buyer_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'#3a2a1a', marginTop:'8px', marginLeft:'16px', lineHeight:1.6, opacity:0.9 }}>{item.buyer_note}</div>}
                   {item.producer_note && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'6px', marginLeft:'16px', lineHeight:1.5 }}>{item.producer_note}</div>}
                 </div>
                 <div style={{ textAlign:'right', minWidth:'80px' }}>
@@ -750,9 +751,18 @@ export default function BoxPage() {
   }
 
   async function fetchBoxItems(boxId) {
-    const { data, error } = await supabase.from('box_items').select('*').eq('box_id', boxId).order('sort_order', { ascending: true })
+    const { data, error } = await supabase
+      .from('box_items')
+      .select('*, studio:studio_id(wine_id, wines(buyer_note, women_note))')
+      .eq('box_id', boxId)
+      .order('sort_order', { ascending: true })
     if (error) showStatus('error', 'Failed to load items: ' + error.message)
-    setActiveItems(data || [])
+    // Flatten buyer_note and women_note onto each item for easy access
+    setActiveItems((data || []).map(item => ({
+      ...item,
+      buyer_note: item.studio?.wines?.buyer_note || null,
+      women_note: item.studio?.wines?.women_note || null,
+    })))
   }
 
   async function fetchContacts() { const { data } = await supabase.from('contacts').select('*').order('name'); setContacts(data || []) }
