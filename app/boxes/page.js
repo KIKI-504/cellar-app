@@ -127,7 +127,7 @@ function PullListView({ box, items, onClose }) {
                   {item.wine_region && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'4px', marginLeft:'16px' }}>{item.wine_region}</div>}
                   {item.tasting_note && <div style={{ fontSize:'13px', fontStyle:'italic', color:'#3a2a1a', marginTop:'10px', marginLeft:'16px', lineHeight:1.6 }}>"{item.tasting_note}"</div>}
                   {item.buyer_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'#3a2a1a', marginTop:'8px', marginLeft:'16px', lineHeight:1.6, opacity:0.9 }}>{item.buyer_note}</div>}
-                  {item.producer_note && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'6px', marginLeft:'16px', lineHeight:1.5 }}>{item.producer_note}</div>}
+
                 </div>
                 <div style={{ textAlign:'right', minWidth:'80px' }}>
                   <div style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.1em' }}>per bottle</div>
@@ -244,7 +244,6 @@ function AddBottleModal({ onAdd, onClose }) {
   const [scanMatch, setScanMatch]       = useState(null)
   const [qty, setQty]                   = useState(1)
   const [tastingNote, setTastingNote]   = useState('')
-  const [producerNote, setProducerNote] = useState('')
   const [salePrice, setSalePrice]       = useState('')
   const [imageFile, setImageFile]       = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -273,7 +272,6 @@ function AddBottleModal({ onAdd, onClose }) {
     setSelected(built)
     setSalePrice(entry.sale_price ? String(parseFloat(entry.sale_price)) : '')
     setTastingNote(w?.women_note || '')
-    setProducerNote(w?.producer_note || '')
     setSearch(''); setResults([]); setScanMatch(null); setShowStudioForm(false)
   }
 
@@ -348,7 +346,7 @@ function AddBottleModal({ onAdd, onClose }) {
       wine_colour: selected._colour, wine_region: selected._region, dp_price: selected._dp,
       wine_bottle_size: selected.bottle_size || selected.wines?.bottle_volume || '75',
       sale_price: salePrice ? parseFloat(salePrice) : null, quantity: qty,
-      tasting_note: tastingNote||null, producer_note: producerNote||null, source_id: parentId,
+      tasting_note: tastingNote||null, producer_note: null, source_id: parentId,
     })
     if (error) { alert('Failed to add bottle: ' + error.message); setSaving(false); return }
     setJustAdded(selected._desc)
@@ -527,15 +525,11 @@ function AddBottleModal({ onAdd, onClose }) {
                 </div>
               )}
               <div style={{ marginBottom:'10px' }}>
-                <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Tasting note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(italic on pull list)</span></label>
+                <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(shown on pull list &amp; to buyers)</span></label>
                 <textarea value={tastingNote} onChange={e => setTastingNote(e.target.value)} placeholder="Rich, concentrated dark fruit with silky tannins…" rows={3}
                   style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'Cormorant Garamond,serif', fontSize:'14px', fontStyle:'italic', outline:'none', boxSizing:'border-box', resize:'vertical' }} />
               </div>
-              <div style={{ marginBottom:'14px' }}>
-                <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Producer note <span style={{ color:'rgba(107,30,46,0.5)', textTransform:'none', letterSpacing:0 }}>(optional)</span></label>
-                <textarea value={producerNote} onChange={e => setProducerNote(e.target.value)} placeholder="Brief context about the producer…" rows={2}
-                  style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', outline:'none', boxSizing:'border-box', resize:'vertical' }} />
-              </div>
+
               <button onClick={confirm} disabled={saving} style={{ width:'100%', background:'var(--wine)', color:'var(--white)', border:'none', padding:'14px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.15em', textTransform:'uppercase', cursor:saving?'wait':'pointer', fontWeight:600 }}>
                 {saving ? 'Adding…' : '✓ Add to Box'}
               </button>
@@ -1026,7 +1020,7 @@ export default function BoxPage() {
                             {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginLeft:'15px', marginTop:'1px' }}>{pp}</div>}
                             {item.wine_region && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginLeft:'15px', marginTop:'2px' }}>{item.wine_region}</div>}
                             {item.tasting_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', color:'#3a2a1a', marginTop:'6px', marginLeft:'15px', lineHeight:1.5 }}>"{item.tasting_note}"</div>}
-                            {item.producer_note && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px', marginLeft:'15px', lineHeight:1.4 }}>{item.producer_note}</div>}
+
                           </div>
                           <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'2px' }}>
                             <div style={{ fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:500, color:'var(--wine)' }}>{item.sale_price?`£${parseFloat(item.sale_price).toFixed(2)}`:'—'}</div>
