@@ -523,7 +523,6 @@ export default function StudioPage() {
                 const wsDate = s.wines?.ws_price_date || null
                 const wsDP = ws ? ((ws + dutyForSize(s.bottle_size)) * 1.2).toFixed(2) : null
                 const buyerNote = s.wines?.buyer_note || ''
-                const producerNote = s.wines?.producer_note || ''
                 const womenNote = s.wines?.women_note || ''
                 const studioNote = s.notes || ''
                 const hasWineId = !!s.wine_id
@@ -572,16 +571,12 @@ export default function StudioPage() {
                       <td colSpan={13} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                           <div>
-                            <label style={labelStyle}>Wine Notes <span style={{ color: '#2d6a4f', fontWeight: 400 }}>shown on Buyer View & Bottles on Hand</span></label>
+                            <label style={labelStyle}>Wine Notes <span style={{ color: '#2d6a4f', fontWeight: 400 }}>shown to buyers &amp; on pull list</span></label>
                             <textarea defaultValue={buyerNote} placeholder="Tasting notes, producer story…" onBlur={e => { if (e.target.value !== buyerNote) updateWineNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
                           </div>
                           <div>
                             <label style={{ ...labelStyle, color: '#9b3a4a' }}>♀ Women in Wine <span style={{ color: 'var(--muted)', fontWeight: 400 }}>shown on Buyer View</span></label>
                             {hasWineId ? (<textarea defaultValue={womenNote} placeholder="Women winemaker or producer story…" onBlur={e => { if (e.target.value !== womenNote) updateWine(s.id, s.wine_id, 'women_note', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
-                          </div>
-                          <div>
-                            <label style={labelStyle}>📋 Producer Note</label>
-                            {hasWineId ? (<textarea defaultValue={producerNote} placeholder="Producer background, farming notes…" onBlur={e => { if (e.target.value !== producerNote) updateWine(s.id, s.wine_id, 'producer_note', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
                           </div>
                           <div>
                             <label style={labelStyle}>Delivery Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>studio only</span></label>
