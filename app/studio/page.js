@@ -136,6 +136,12 @@ export default function StudioPage() {
     if (!error) setStudioWines(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
+  async function updateWineNote(wineId, value) {
+    if (!wineId) return
+    const { error } = await supabase.from('wines').update({ buyer_note: value || null }).eq('id', wineId)
+    if (!error) setStudioWines(prev => prev.map(s => s.wine_id === wineId ? { ...s, wines: { ...s.wines, buyer_note: value || null } } : s))
+  }
+
   async function deleteStudio(id) {
     if (!confirm('Remove this entry from studio inventory?')) return
     const { error } = await supabase.from('studio').delete().eq('id', id)
@@ -388,6 +394,11 @@ export default function StudioPage() {
         bv = (b.wines?.colour || b.colour || '').toLowerCase()
       } else if (sortField === 'local') {
         av = a.include_in_local ? 1 : 0; bv = b.include_in_local ? 1 : 0
+      } else if (sortField === 'vintage') {
+        av = parseInt(a.wines?.vintage || a.unlinked_vintage || '0') || 0
+        bv = parseInt(b.wines?.vintage || b.unlinked_vintage || '0') || 0
+      } else if (sortField === 'size') {
+        av = parseFloat(a.bottle_size || '75'); bv = parseFloat(b.bottle_size || '75')
       } else { av = a.date_moved || ''; bv = b.date_moved || '' }
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
@@ -433,7 +444,7 @@ export default function StudioPage() {
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={openScanModal} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📷 Scan Bottle</button>
-            <button onClick={() => setShowMoveModal(true)} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Move to Studio</button>
+
             <button onClick={openAddModal} style={{ background: 'none', border: '1px solid var(--ink)', color: 'var(--ink)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>✎ Add Wine</button>
             <button onClick={() => router.push('/boxes')} style={{ background: 'none', border: '1px solid #2d6a4f', color: '#2d6a4f', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📦 Box Builder</button>
           </div>
@@ -478,6 +489,10 @@ export default function StudioPage() {
             <option value="dp_price:desc">DP price ↓</option>
             <option value="sale_price:asc">Sale price ↑</option>
             <option value="sale_price:desc">Sale price ↓</option>
+            <option value="vintage:asc">Vintage ↑ (old → new)</option>
+            <option value="vintage:desc">Vintage ↓ (new → old)</option>
+            <option value="size:asc">Size: small → large</option>
+            <option value="size:desc">Size: large → small</option>
             <option value="local:desc">Bottles on Hand first</option>
             <option value="local:asc">Not on Hand first</option>
           </select>
@@ -642,14 +657,42 @@ export default function StudioPage() {
                   </tr>
                   {isDetailOpen && (
                     <tr key={s.id + '-detail'} style={{ borderBottom: '1px solid #ede6d6', background: 'rgba(107,30,46,0.03)' }}>
-                      <td colSpan={13} style={{ padding: '8px 20px 12px 36px' }}>
-                        <div style={{ display: 'flex', gap: '28px', fontSize: '11px', fontFamily: 'DM Mono, monospace', flexWrap: 'wrap' }}>
+                      <td colSpan={13} style={{ padding: '10px 20px 16px 36px' }}>
+                        {/* Price strip */}
+                        <div style={{ display: 'flex', gap: '28px', fontSize: '11px', fontFamily: 'DM Mono, monospace', flexWrap: 'wrap', marginBottom: '14px' }}>
                           {ibPrice && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>IB price</span><div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{ibPrice}</div></div>}
                           {s.dp_price && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>DP price</span><div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>£{parseFloat(s.dp_price).toFixed(2)}</div></div>}
                           {s.sale_price && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Sale price</span><div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wine)', marginTop: '2px' }}>£{parseFloat(s.sale_price).toFixed(2)}</div></div>}
                           {s.dp_price && s.sale_price && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Margin on DP</span><div style={{ fontSize: '13px', fontWeight: 600, color: '#2d6a4f', marginTop: '2px' }}>{((parseFloat(s.sale_price) - parseFloat(s.dp_price)) / parseFloat(s.dp_price) * 100).toFixed(1)}%</div></div>}
                           <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Bottle size</span><div style={{ fontSize: '13px', marginTop: '2px' }}>{s.bottle_size || '75'}cl</div></div>
                           {s.date_moved && <div><span style={{ color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '9px' }}>Date moved</span><div style={{ fontSize: '13px', marginTop: '2px' }}>{s.date_moved}</div></div>}
+                        </div>
+                        {/* Notes — always editable, no edit mode required */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', borderTop: '1px solid #ede6d6', paddingTop: '12px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
+                              Wine Note <span style={{ color: 'rgba(107,30,46,0.5)', textTransform: 'none', letterSpacing: 0 }}>(shown to buyers)</span>
+                            </label>
+                            <EditableCell
+                              value={w?.buyer_note || ''}
+                              onSave={v => updateWineNote(w?.id, v)}
+                              placeholder="Add a tasting note or description…"
+                              style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '6px 8px', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontStyle: 'italic', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                              width="100%"
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px', fontFamily: 'DM Mono, monospace' }}>
+                              Delivery Note <span style={{ color: 'rgba(107,30,46,0.5)', textTransform: 'none', letterSpacing: 0 }}>(studio only)</span>
+                            </label>
+                            <EditableCell
+                              value={s.notes || ''}
+                              onSave={v => updateStudio(s.id, 'notes', v || null)}
+                              placeholder="Case notes, provenance, storage details…"
+                              style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '6px 8px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                              width="100%"
+                            />
+                          </div>
                         </div>
                       </td>
                     </tr>
