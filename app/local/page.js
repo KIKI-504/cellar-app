@@ -18,25 +18,6 @@ function bottleSortKey(size) {
   return 75
 }
 
-// Responsive helpers — detect mobile via window width at render time
-// We use a simple CSS-in-JS approach with a hook so it re-evaluates on resize
-function useIsMobile() {
-  const [mobile, setMobile] = useState(false)
-  if (typeof window !== 'undefined') {
-    // Set immediately on first render without useEffect to avoid flash
-    const check = () => window.innerWidth < 768
-    if (mobile !== check()) {
-      // Will correct on next render — acceptable for layout switching
-    }
-  }
-  // Use useEffect for resize listener
-  if (typeof window !== 'undefined') {
-    const handler = () => setMobile(window.innerWidth < 768)
-    // Only add listener once — guarded by a module-level flag pattern below
-  }
-  return mobile
-}
-
 export default function LocalPage() {
   const [stage, setStage] = useState('pin')
   const [pinInput, setPinInput] = useState('')
@@ -51,10 +32,28 @@ export default function LocalPage() {
   const [sortDir, setSortDir] = useState('asc')
   const [tooltip, setTooltip] = useState(null)
   const [isMobile, setIsMobile] = useState(false)
+  // Notes state — mobile only
+  const [showAllNotes, setShowAllNotes] = useState(false)
+  const [expandedNotes, setExpandedNotes] = useState(new Set())
 
-  // Detect mobile on mount and resize
   if (typeof window !== 'undefined' && !isMobile && window.innerWidth < 768) {
     setIsMobile(true)
+  }
+
+  function toggleNoteExpanded(id) {
+    setExpandedNotes(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // When global toggle turns ON, clear individual expansions (redundant)
+  // When it turns OFF, also clear individual expansions so state is clean
+  function toggleShowAllNotes() {
+    setShowAllNotes(prev => !prev)
+    setExpandedNotes(new Set())
   }
 
   function handlePin() {
@@ -118,24 +117,23 @@ export default function LocalPage() {
     })
     .sort((a, b) => {
       let av, bv
-      if (sortCol === 'name')      { av = getWineName(a).toLowerCase();    bv = getWineName(b).toLowerCase() }
-      else if (sortCol === 'vintage')   { av = getWineVintage(a);               bv = getWineVintage(b) }
-      else if (sortCol === 'colour')    { av = getWineColour(a).toLowerCase();  bv = getWineColour(b).toLowerCase() }
-      else if (sortCol === 'region')    { av = getWineRegion(a).toLowerCase();  bv = getWineRegion(b).toLowerCase() }
-      else if (sortCol === 'country')   { av = getWineCountry(a).toLowerCase(); bv = getWineCountry(b).toLowerCase() }
-      else if (sortCol === 'format')    { av = bottleSortKey(a.bottle_size || a.wines?.bottle_volume); bv = bottleSortKey(b.bottle_size || b.wines?.bottle_volume) }
-      else if (sortCol === 'quantity')  { av = a.quantity || 0;                 bv = b.quantity || 0 }
-      else if (sortCol === 'price')     { av = getPrice(a) || 0;               bv = getPrice(b) || 0 }
-      else if (sortCol === 'ws')        { av = parseFloat(a.wines?.ws_lowest_per_bottle) || 0; bv = parseFloat(b.wines?.ws_lowest_per_bottle) || 0 }
+      if (sortCol === 'name')          { av = getWineName(a).toLowerCase();    bv = getWineName(b).toLowerCase() }
+      else if (sortCol === 'vintage')  { av = getWineVintage(a);               bv = getWineVintage(b) }
+      else if (sortCol === 'colour')   { av = getWineColour(a).toLowerCase();  bv = getWineColour(b).toLowerCase() }
+      else if (sortCol === 'region')   { av = getWineRegion(a).toLowerCase();  bv = getWineRegion(b).toLowerCase() }
+      else if (sortCol === 'country')  { av = getWineCountry(a).toLowerCase(); bv = getWineCountry(b).toLowerCase() }
+      else if (sortCol === 'format')   { av = bottleSortKey(a.bottle_size || a.wines?.bottle_volume); bv = bottleSortKey(b.bottle_size || b.wines?.bottle_volume) }
+      else if (sortCol === 'quantity') { av = a.quantity || 0;                 bv = b.quantity || 0 }
+      else if (sortCol === 'price')    { av = getPrice(a) || 0;               bv = getPrice(b) || 0 }
+      else if (sortCol === 'ws')       { av = parseFloat(a.wines?.ws_lowest_per_bottle) || 0; bv = parseFloat(b.wines?.ws_lowest_per_bottle) || 0 }
       else { av = getWineName(a).toLowerCase(); bv = getWineName(b).toLowerCase() }
       if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
 
   const wishlistCount = Object.keys(wishlist).length
-
-  // Desktop column header helper
   const GRID_DESKTOP = '2fr 90px 90px 60px 60px 80px 60px 110px 36px'
+
   function colHeader(field, label, align = 'left') {
     const active = sortCol === field
     return (
@@ -153,7 +151,6 @@ export default function LocalPage() {
     )
   }
 
-  // Sort pills for mobile
   const SORT_OPTIONS = [
     ['name', 'Wine'], ['region', 'Region'], ['country', 'Country'],
     ['vintage', 'Vintage'], ['colour', 'Colour'], ['format', 'Size'],
@@ -162,7 +159,7 @@ export default function LocalPage() {
 
   // PIN screen
   if (stage === 'pin') return (
-    <div style={{ minHeight: '100vh', minHeight: '100dvh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div style={{ textAlign: 'center', width: '100%', maxWidth: '320px' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em', marginBottom: '8px' }}>Bottles on Hand</div>
         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: '40px' }}>Ready to collect</div>
@@ -179,7 +176,7 @@ export default function LocalPage() {
 
   // Name screen
   if (stage === 'name') return (
-    <div style={{ minHeight: '100vh', minHeight: '100dvh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div style={{ textAlign: 'center', width: '100%', maxWidth: '320px' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em', marginBottom: '8px' }}>Welcome</div>
         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: '40px' }}>What's your name?</div>
@@ -193,13 +190,12 @@ export default function LocalPage() {
     </div>
   )
 
-  // ─── BROWSE SCREEN ───────────────────────────────────────────────────────────
+  // BROWSE SCREEN
   return (
     <div
-      style={{ minHeight: '100vh', minHeight: '100dvh', background: 'var(--cream)', paddingBottom: wishlistCount > 0 ? 'calc(80px + env(safe-area-inset-bottom))' : 'calc(40px + env(safe-area-inset-bottom))' }}
+      style={{ minHeight: '100dvh', background: 'var(--cream)', paddingBottom: wishlistCount > 0 ? 'calc(80px + env(safe-area-inset-bottom))' : 'calc(40px + env(safe-area-inset-bottom))' }}
       onClick={() => setTooltip(null)}
     >
-
       {/* Women in Wine tooltip */}
       {tooltip && (
         <div style={{
@@ -210,8 +206,7 @@ export default function LocalPage() {
           padding: '12px 16px', maxWidth: '240px',
           fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.55,
           boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-          pointerEvents: 'none',
-          borderLeft: '3px solid #9b3a4a',
+          pointerEvents: 'none', borderLeft: '3px solid #9b3a4a',
         }}>
           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#9b3a4a', marginBottom: '6px' }}>Women in Wine</div>
           {tooltip.text}
@@ -236,14 +231,12 @@ export default function LocalPage() {
         {/* Search + colour filter */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
           <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search wines, region, country…"
             style={{ flex: 1, minWidth: '0', border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', boxSizing: 'border-box', width: isMobile ? '100%' : 'auto' }}
           />
           <select
-            value={filterColour}
-            onChange={e => setFilterColour(e.target.value)}
+            value={filterColour} onChange={e => setFilterColour(e.target.value)}
             style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', minHeight: '48px', width: isMobile ? '100%' : 'auto' }}
           >
             <option value="">All Colours</option>
@@ -255,7 +248,7 @@ export default function LocalPage() {
           </select>
         </div>
 
-        {/* ── MOBILE: horizontally scrollable sort pills ── */}
+        {/* MOBILE: sort pills + Notes toggle */}
         {isMobile && (
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '14px', marginLeft: '-16px', marginRight: '-16px', paddingLeft: '16px', paddingRight: '16px' }}>
             <div style={{ display: 'flex', gap: '6px', width: 'max-content', paddingBottom: '4px' }}>
@@ -270,11 +263,26 @@ export default function LocalPage() {
                     cursor: 'pointer', letterSpacing: '0.06em', whiteSpace: 'nowrap',
                     minHeight: '36px', display: 'inline-flex', alignItems: 'center', gap: '3px',
                   }}>
-                    {label}
-                    {active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                    {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </button>
                 )
               })}
+              {/* Divider */}
+              <div style={{ width: '1px', background: 'var(--border)', margin: '4px 2px', flexShrink: 0 }} />
+              {/* Notes global toggle */}
+              <button
+                onClick={toggleShowAllNotes}
+                style={{
+                  background: showAllNotes ? 'var(--wine)' : 'var(--white)',
+                  color: showAllNotes ? 'var(--white)' : 'var(--muted)',
+                  border: showAllNotes ? '1px solid var(--wine)' : '1px solid var(--border)',
+                  padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px',
+                  cursor: 'pointer', letterSpacing: '0.06em', whiteSpace: 'nowrap',
+                  minHeight: '36px', display: 'inline-flex', alignItems: 'center', gap: '5px',
+                }}
+              >
+                <span style={{ fontSize: '13px' }}>✦</span> Notes {showAllNotes ? 'on' : 'off'}
+              </button>
             </div>
           </div>
         )}
@@ -290,7 +298,7 @@ export default function LocalPage() {
         ) : isMobile ? (
 
           // ══════════════════════════════════════════════
-          // MOBILE LAYOUT — card per wine
+          // MOBILE LAYOUT
           // ══════════════════════════════════════════════
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {filtered.map(s => {
@@ -315,6 +323,11 @@ export default function LocalPage() {
               const country = getWineCountry(s)
               const locationParts = [region, country].filter(Boolean)
 
+              // Note visibility logic
+              const hasNote = !!(buyerNote || restaurantSpot)
+              const noteVisible = hasNote && (showAllNotes || expandedNotes.has(s.id))
+              const noteHinted = hasNote && !showAllNotes && !expandedNotes.has(s.id)
+
               return (
                 <div key={s.id} style={{
                   background: 'var(--white)',
@@ -333,7 +346,6 @@ export default function LocalPage() {
                       )}
                       <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', lineHeight: 1.3, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
                     </div>
-                    {/* Heart — large tap target */}
                     <button
                       onClick={() => toggleWishlist(s.id, 1)}
                       style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', lineHeight: 1, padding: '4px', flexShrink: 0, minWidth: '44px', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -341,7 +353,7 @@ export default function LocalPage() {
                   </div>
 
                   {/* Row 2: vintage · region · country · size */}
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: buyerNote || restaurantSpot ? '8px' : '10px', paddingLeft: '16px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: '10px', paddingLeft: '16px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
                     {getWineVintage(s) && <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--wine)' }}>{getWineVintage(s)}</span>}
                     {getWineVintage(s) && locationParts.length > 0 && <span style={{ opacity: 0.4 }}>·</span>}
                     {locationParts.length > 0 && <span>{locationParts.join(' · ')}</span>}
@@ -349,18 +361,37 @@ export default function LocalPage() {
                     <span style={{ fontWeight: isMag ? 600 : 400, color: isMag ? 'var(--ink)' : 'var(--muted)' }}>{sizeLabel}</span>
                   </div>
 
-                  {/* Buyer note */}
-                  {buyerNote && (
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.6, paddingLeft: '16px', opacity: 0.85, marginBottom: '10px' }}>{buyerNote}</div>
-                  )}
-                  {restaurantSpot && (
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#8b2535', letterSpacing: '0.05em', paddingLeft: '16px', marginBottom: '10px' }}>{restaurantSpot}</div>
+                  {/* Note — shown if noteVisible */}
+                  {noteVisible && (
+                    <div style={{ paddingLeft: '16px', marginBottom: '10px' }}>
+                      {buyerNote && (
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.6, opacity: 0.85, marginBottom: restaurantSpot ? '6px' : 0 }}>{buyerNote}</div>
+                      )}
+                      {restaurantSpot && (
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#8b2535', letterSpacing: '0.05em' }}>{restaurantSpot}</div>
+                      )}
+                      {/* Collapse button — only when note is individually expanded, not globally shown */}
+                      {!showAllNotes && expandedNotes.has(s.id) && (
+                        <button
+                          onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }}
+                          style={{ marginTop: '6px', background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em' }}
+                        >▲ hide note</button>
+                      )}
+                    </div>
                   )}
 
-                  {/* Row 3: price left, WS right, qty + stepper */}
+                  {/* Note hint — tap to expand, only when globally off and note not yet expanded */}
+                  {noteHinted && (
+                    <div style={{ paddingLeft: '16px', marginBottom: '10px' }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }}
+                        style={{ background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em', opacity: 0.7 }}
+                      >▼ note</button>
+                    </div>
+                  )}
+
+                  {/* Row 3: price + stepper left, WS right */}
                   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px', paddingLeft: '16px' }}>
-
-                    {/* Price + qty stepper */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div>
                         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
@@ -370,17 +401,15 @@ export default function LocalPage() {
                       </div>
                       {inWishlist && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <button onClick={() => setWishlistQty(s.id, Math.max(1, (wishlist[s.id] || 1) - 1))} style={{ width: '36px', height: '36px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
+                          <button onClick={() => setWishlistQty(s.id, Math.max(1, (wishlist[s.id] || 1) - 1))} style={{ width: '36px', height: '36px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
                           <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '15px', fontWeight: 500, minWidth: '20px', textAlign: 'center' }}>{wishlist[s.id]}</span>
-                          <button onClick={() => setWishlistQty(s.id, Math.min(s.quantity, (wishlist[s.id] || 1) + 1))} style={{ width: '36px', height: '36px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
+                          <button onClick={() => setWishlistQty(s.id, Math.min(s.quantity, (wishlist[s.id] || 1) + 1))} style={{ width: '36px', height: '36px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                         </div>
                       )}
                       {!inWishlist && (
                         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity} avail</div>
                       )}
                     </div>
-
-                    {/* WS column — right aligned */}
                     {wsDp ? (
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
                         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: 500 }}>WS £{wsDp.toFixed(2)}</div>
@@ -400,16 +429,10 @@ export default function LocalPage() {
         ) : (
 
           // ══════════════════════════════════════════════
-          // DESKTOP LAYOUT — sortable table with columns
+          // DESKTOP LAYOUT — unchanged
           // ══════════════════════════════════════════════
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
-            {/* Sticky sortable header */}
-            <div style={{
-              display: 'grid', gridTemplateColumns: GRID_DESKTOP,
-              background: 'var(--ink)', padding: '12px 16px',
-              position: 'sticky', top: '52px', zIndex: 50,
-              borderBottom: '2px solid rgba(212,173,69,0.3)',
-            }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--ink)', padding: '12px 16px', position: 'sticky', top: '52px', zIndex: 50, borderBottom: '2px solid rgba(212,173,69,0.3)' }}>
               {colHeader('name',     'Wine')}
               {colHeader('region',   'Region')}
               {colHeader('country',  'Country')}
@@ -420,7 +443,6 @@ export default function LocalPage() {
               {colHeader('ws',       'WS UK Avg',   'right')}
               <div></div>
             </div>
-
             {filtered.map(s => {
               const inWishlist = !!wishlist[s.id]
               const colour = getWineColour(s)
@@ -441,11 +463,9 @@ export default function LocalPage() {
               const restaurantSpot = s.wines?.restaurant_spot || ''
               const region = getWineRegion(s)
               const country = getWineCountry(s)
-
               return (
                 <div key={s.id} style={{ background: 'var(--white)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '14px 16px', alignItems: 'start', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
-                    {/* Wine name */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                         <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '2px' }}></span>
@@ -458,13 +478,9 @@ export default function LocalPage() {
                       {buyerNote && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.55, paddingLeft: '13px', opacity: 0.85, marginTop: '4px' }}>{buyerNote}</div>}
                       {restaurantSpot && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#8b2535', letterSpacing: '0.05em', paddingLeft: '13px', marginTop: '4px' }}>{restaurantSpot}</div>}
                     </div>
-                    {/* Region */}
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', paddingTop: '3px', paddingRight: '8px' }}>{region || '—'}</div>
-                    {/* Country */}
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', paddingTop: '3px', paddingRight: '8px' }}>{country || '—'}</div>
-                    {/* Size */}
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--ink)', fontWeight: isMag ? 600 : 400, paddingTop: '2px' }}>{sizeLabel}</div>
-                    {/* Qty */}
                     <div style={{ textAlign: 'center', paddingTop: '2px' }}>
                       {inWishlist ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
@@ -476,16 +492,13 @@ export default function LocalPage() {
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity}</span>
                       )}
                     </div>
-                    {/* Price */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
                       {inWishlist && price && <div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>}
                     </div>
-                    {/* Vintage */}
                     <div style={{ textAlign: 'right', paddingTop: '4px' }}>
                       <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: 'var(--wine)' }}>{getWineVintage(s)}</span>
                     </div>
-                    {/* WS UK Avg */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
                       {wsDp ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
@@ -498,7 +511,6 @@ export default function LocalPage() {
                         </div>
                       ) : <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--border)' }}>—</div>}
                     </div>
-                    {/* Heart */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
                       <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>{inWishlist ? '❤️' : '🤍'}</button>
                     </div>
@@ -510,16 +522,9 @@ export default function LocalPage() {
         )}
       </div>
 
-      {/* Wishlist bar — safe area padding for iPhone home bar */}
+      {/* Wishlist bar */}
       {wishlistCount > 0 && (
-        <div style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0,
-          background: 'var(--ink)',
-          padding: '14px 24px',
-          paddingBottom: 'calc(14px + env(safe-area-inset-bottom))',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          zIndex: 100,
-        }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', padding: '14px 24px', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100 }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--white)' }}>
             {wishlistCount} wine{wishlistCount > 1 ? 's' : ''} · {Object.values(wishlist).reduce((a, b) => a + b, 0)} bottles
           </div>
