@@ -1020,6 +1020,7 @@ export default function BoxPage() {
                             {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginLeft:'15px', marginTop:'1px' }}>{pp}</div>}
                             {item.wine_region && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginLeft:'15px', marginTop:'2px' }}>{item.wine_region}</div>}
                             {item.tasting_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', color:'#3a2a1a', marginTop:'6px', marginLeft:'15px', lineHeight:1.5 }}>"{item.tasting_note}"</div>}
+                            {item.buyer_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'#3a2a1a', marginTop:'6px', marginLeft:'15px', lineHeight:1.6, opacity:0.85 }}>{item.buyer_note}</div>}
 
                           </div>
                           <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'2px' }}>
