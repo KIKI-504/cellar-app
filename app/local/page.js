@@ -32,6 +32,7 @@ export default function LocalPage() {
   const [filterColour, setFilterColour] = useState('')
   const [sortCol, setSortCol] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
+  const [tooltip, setTooltip] = useState(null) // { id, text, x, y }
 
   function handlePin() {
     if (pinInput === LOCAL_PIN) { setPinError(false); setStage('name') }
@@ -62,9 +63,10 @@ export default function LocalPage() {
     if (sortCol === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(field); setSortDir('asc') }
   }
-  function sortIcon(field) {
-    if (sortCol !== field) return <span style={{ opacity: 0.4, fontSize: '9px' }}>↕</span>
-    return <span style={{ fontSize: '9px' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+
+  function SortArrow({ field }) {
+    if (sortCol !== field) return <span style={{ opacity: 0.35, fontSize: '10px', marginLeft: '3px' }}>↕</span>
+    return <span style={{ fontSize: '10px', marginLeft: '3px', color: '#d4ad45' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
   function sendWishlist() {
@@ -106,6 +108,37 @@ export default function LocalPage() {
 
   const wishlistCount = Object.keys(wishlist).length
 
+  // Column header style helper
+  function colHeader(field, label, align = 'left') {
+    const active = sortCol === field
+    return (
+      <div
+        onClick={() => cycleSort(field)}
+        style={{
+          textAlign: align,
+          cursor: 'pointer',
+          userSelect: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '3px',
+          justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+          fontFamily: 'DM Mono, monospace',
+          fontSize: '11px',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: active ? '#d4ad45' : 'rgba(253,250,245,0.65)',
+          fontWeight: active ? 600 : 400,
+          transition: 'color 0.15s',
+          padding: '0',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+        <SortArrow field={field} />
+      </div>
+    )
+  }
+
   // PIN screen
   if (stage === 'pin') return (
     <div style={{ minHeight: '100vh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -135,7 +168,26 @@ export default function LocalPage() {
 
   // Browse screen
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--cream)', paddingBottom: wishlistCount > 0 ? '80px' : '40px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--cream)', paddingBottom: wishlistCount > 0 ? '80px' : '40px' }} onClick={() => setTooltip(null)}>
+
+      {/* Custom tooltip portal */}
+      {tooltip && (
+        <div style={{
+          position: 'fixed', zIndex: 9999,
+          left: Math.min(tooltip.x, window.innerWidth - 240),
+          top: tooltip.y + 12,
+          background: 'var(--ink)', color: 'var(--white)',
+          padding: '10px 14px', maxWidth: '220px',
+          fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+          pointerEvents: 'none',
+          borderLeft: '3px solid #9b3a4a',
+        }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#9b3a4a', marginBottom: '5px' }}>Women in Wine</div>
+          {tooltip.text}
+        </div>
+      )}
+
       <div style={{ background: 'var(--ink)', padding: '0 24px', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em' }}>Bottles on Hand</div>
         <button onClick={() => setStage('pin')} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
@@ -143,13 +195,14 @@ export default function LocalPage() {
 
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '32px 24px 28px' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '42px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '4px' }}>Cheers, {buyerName}!</div>
-        <div style={{ fontSize: '11px', color: 'rgba(253,250,245,0.5)', letterSpacing: '0.1em' }}>Available for immediate collection — heart wines to build your wishlist</div>
+        <div style={{ fontSize: '11px', color: 'rgba(253,250,245,0.5)', letterSpacing: '0.1em', marginBottom: '6px' }}>Available for immediate collection — heart wines to build your wishlist</div>
+        <div style={{ fontSize: '11px', color: 'rgba(253,250,245,0.75)', letterSpacing: '0.05em', fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>Prices shown include DUTY, VAT and DELIVERY</div>
       </div>
 
       <div style={{ padding: '24px' }}>
         {/* Filters */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, region, country…"
             style={{ flex: 1, minWidth: '160px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterColour} onChange={e => setFilterColour(e.target.value)}
             style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
@@ -162,19 +215,8 @@ export default function LocalPage() {
           </select>
         </div>
 
-        {/* Sort bar — now includes Country */}
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginRight: '2px' }}>Sort:</span>
-          {[['name','Wine'],['vintage','Vintage'],['colour','Colour'],['region','Region'],['country','Country'],['format','Format'],['quantity','Qty'],['price','Price'],['ws','WS Avg']].map(([col, label]) => (
-            <button key={col} onClick={() => cycleSort(col)}
-              style={{ background: sortCol === col ? 'var(--ink)' : 'var(--white)', color: sortCol === col ? '#d4ad45' : 'var(--muted)', border: '1px solid var(--border)', padding: '5px 10px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-              {label} {sortIcon(col)}
-            </button>
-          ))}
-        </div>
-
         <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '16px', fontFamily: 'DM Mono, monospace' }}>
-          {filtered.length} wine{filtered.length !== 1 ? 's' : ''} available
+          {filtered.length} wine{filtered.length !== 1 ? 's' : ''} available — click any column heading to sort
         </div>
 
         {/* Wine list */}
@@ -184,13 +226,25 @@ export default function LocalPage() {
           <div style={{ textAlign: 'center', padding: '60px', fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: 'var(--muted)' }}>No wines available right now.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
-            {/* Table header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px 100px 80px 40px', gap: '0', background: 'var(--ink)', color: 'rgba(253,250,245,0.5)', padding: '10px 16px', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-              <div>Wine</div>
-              <div>Size</div>
-              <div style={{ textAlign: 'center' }}>Qty</div>
-              <div style={{ textAlign: 'right' }}>Price / btl</div>
-              <div style={{ textAlign: 'right' }}>WS Avg</div>
+
+            {/* Clickable table header */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 60px 60px 80px 60px 110px 36px',
+              gap: '0',
+              background: 'var(--ink)',
+              padding: '12px 16px',
+              position: 'sticky',
+              top: '52px',
+              zIndex: 50,
+              borderBottom: '2px solid rgba(212,173,69,0.3)',
+            }}>
+              {colHeader('name', 'Wine')}
+              {colHeader('format', 'Size')}
+              {colHeader('quantity', 'Qty', 'center')}
+              {colHeader('price', 'Price / btl', 'right')}
+              {colHeader('vintage', 'Vintage', 'right')}
+              {colHeader('ws', 'WS UK Avg', 'right')}
               <div></div>
             </div>
 
@@ -206,7 +260,6 @@ export default function LocalPage() {
               const wsDp = ws ? (ws + duty) * 1.2 : null
               const wsDate = s.wines?.ws_price_date || null
               const isBelowWs = wsDp && price && price < wsDp
-              const saving = isBelowWs ? (wsDp - price).toFixed(2) : null
               const buyerNote = s.wines?.buyer_note || ''
               const womenNote = getWomenNote(s)
               const restaurantSpot = s.wines?.restaurant_spot || ''
@@ -216,17 +269,32 @@ export default function LocalPage() {
 
               return (
                 <div key={s.id} style={{ background: 'var(--white)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px 100px 80px 40px', gap: '0', padding: '14px 16px', alignItems: 'start', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 60px 60px 80px 60px 110px 36px',
+                    gap: '0',
+                    padding: '14px 16px',
+                    alignItems: 'start',
+                    borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent'
+                  }}>
 
                     {/* Wine name col */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                         <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '2px' }}></span>
-                        {womenNote && <span title={womenNote} style={{ fontSize: '13px', cursor: 'help', flexShrink: 0, color: '#9b3a4a' }}>♀</span>}
+                        {womenNote && (
+                          <span
+                            onClick={e => {
+                              e.stopPropagation()
+                              setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY })
+                            }}
+                            style={{ fontSize: '14px', cursor: 'pointer', flexShrink: 0, color: '#9b3a4a', lineHeight: 1 }}
+                            title=""
+                          >♀</span>
+                        )}
                         <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', lineHeight: 1.3, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--muted)', paddingLeft: '13px', marginBottom: buyerNote ? '6px' : '0' }}>
-                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--wine)', marginRight: '6px' }}>{getWineVintage(s)}</span>
                         {locationParts.join(' · ')}
                       </div>
                       {buyerNote && (
@@ -249,24 +317,37 @@ export default function LocalPage() {
                           <button onClick={() => setWishlistQty(s.id, Math.min(s.quantity, (wishlist[s.id] || 1) + 1))} style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
                         </div>
                       ) : (
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity} avail</span>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity}</span>
                       )}
                     </div>
 
                     {/* Price col */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
-                      {isBelowWs && (<div style={{ fontSize: '9px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>−£{saving} vs WS avg</div>)}
-                      {inWishlist && price && (<div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>)}
+                      {inWishlist && price && (
+                        <div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>
+                      )}
                     </div>
 
-                    {/* WS avg col */}
+                    {/* Vintage col */}
+                    <div style={{ textAlign: 'right', paddingTop: '4px' }}>
+                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: 'var(--wine)' }}>{getWineVintage(s)}</span>
+                    </div>
+
+                    {/* WS UK Avg col — price → date → above/below label */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
-                      {isBelowWs ? (
-                        <div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#2a7a4b', fontWeight: 600, letterSpacing: '0.04em' }}>Lower Than WS</div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div></div>
-                      ) : wsDp ? (
-                        <div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>{wsDate && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--border)' }}>{wsDate}</div>}</div>
-                      ) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--border)' }}>—</div>)}
+                      {wsDp ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: 500 }}>£{wsDp.toFixed(2)}</div>
+                          {wsDate && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'rgba(0,0,0,0.3)' }}>{wsDate}</div>}
+                          {isBelowWs
+                            ? <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#2a7a4b', fontWeight: 600, letterSpacing: '0.02em' }}>below WS UK avg</div>
+                            : <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#b94040', fontWeight: 600, letterSpacing: '0.02em' }}>above WS UK avg</div>
+                          }
+                        </div>
+                      ) : (
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--border)' }}>—</div>
+                      )}
                     </div>
 
                     {/* Heart col */}
