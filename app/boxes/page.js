@@ -67,6 +67,39 @@ function sizeBadge(size) {
 }
 
 // ─── Clients Modal ────────────────────────────────────────────────────────────
+// FIX: EditForm moved out of nested function to prevent React remount on every keystroke
+function ClientEditFields({ draft, setDraft, onSave, onCancel, isNew, saving, editingName }) {
+  const inputStyle = (field) => ({
+    width:'100%', border:'1px solid var(--border)', background:'var(--white)',
+    padding:'7px 10px',
+    fontFamily: field==='name'?'Cormorant Garamond,serif':'DM Mono,monospace',
+    fontSize: field==='name'?'15px':'12px',
+    outline:'none', boxSizing:'border-box'
+  })
+  return (
+    <div style={{ background: isNew ? 'var(--white)' : 'rgba(107,30,46,0.04)', border: isNew ? '1px dashed var(--border)' : '2px solid rgba(107,30,46,0.2)', padding:'14px', marginBottom:'10px' }}>
+      <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--wine)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'10px' }}>
+        {isNew ? 'New Client' : `Editing ${editingName}`}
+      </div>
+      {[['Name *','name','text'],['Email','email','email'],['Phone','phone','tel'],['Note','note','text']].map(([label, field, type]) => (
+        <div key={field} style={{ marginBottom:'8px' }}>
+          <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'3px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</label>
+          <input type={type} value={draft[field] || ''} onChange={e => setDraft(d => ({...d, [field]: e.target.value}))}
+            onKeyDown={e => e.key === 'Enter' && field !== 'note' && onSave()}
+            style={inputStyle(field)} />
+        </div>
+      ))}
+      <div style={{ display:'flex', gap:'8px', marginTop:'8px' }}>
+        <button onClick={onSave} disabled={!draft.name?.trim() || saving}
+          style={{ background: draft.name?.trim() ? 'var(--ink)' : '#ccc', color:'var(--white)', border:'none', padding:'7px 16px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor: draft.name?.trim() ? 'pointer' : 'not-allowed' }}>
+          {saving ? 'Saving…' : isNew ? '+ Add Client' : '✓ Save'}
+        </button>
+        <button onClick={onCancel} style={{ background:'none', border:'1px solid var(--border)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
 function ClientsModal({ contacts, onClose, onRefresh }) {
   const [editingId, setEditingId] = useState(null)
   const [showNew, setShowNew] = useState(false)
@@ -81,7 +114,7 @@ function ClientsModal({ contacts, onClose, onRefresh }) {
   function cancelEdit() { setEditingId(null); setDraft({ name:'', email:'', phone:'', note:'' }) }
 
   async function save(isNew) {
-    if (!draft.name.trim()) return
+    if (!draft.name?.trim()) return
     setSaving(true)
     if (isNew) {
       await supabase.from('contacts').insert({ name: draft.name, email: draft.email||null, phone: draft.phone||null, note: draft.note||null })
@@ -101,33 +134,7 @@ function ClientsModal({ contacts, onClose, onRefresh }) {
     await onRefresh()
   }
 
-  const fields = [['Name *','name','text'],['Email','email','email'],['Phone','phone','tel'],['Note','note','text']]
-
-  function EditForm({ isNew }) {
-    return (
-      <div style={{ background: isNew ? 'var(--white)' : 'rgba(107,30,46,0.04)', border: isNew ? '1px dashed var(--border)' : '2px solid rgba(107,30,46,0.2)', padding:'14px', marginBottom:'10px' }}>
-        <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--wine)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'10px' }}>
-          {isNew ? 'New Client' : `Editing ${contacts.find(c=>c.id===editingId)?.name}`}
-        </div>
-        {fields.map(([label, field, type]) => (
-          <div key={field} style={{ marginBottom:'8px' }}>
-            <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'3px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</label>
-            <input type={type} value={draft[field]} onChange={e => setDraft(d => ({...d, [field]: e.target.value}))}
-              onKeyDown={e => e.key === 'Enter' && field !== 'note' && save(isNew)}
-              style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'7px 10px', fontFamily: field==='name'?'Cormorant Garamond,serif':'DM Mono,monospace', fontSize: field==='name'?'15px':'12px', outline:'none', boxSizing:'border-box' }} />
-          </div>
-        ))}
-        <div style={{ display:'flex', gap:'8px', marginTop:'8px' }}>
-          <button onClick={() => save(isNew)} disabled={!draft.name.trim()||saving}
-            style={{ background: draft.name.trim()?'var(--ink)':'#ccc', color:'var(--white)', border:'none', padding:'7px 16px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor: draft.name.trim()?'pointer':'not-allowed' }}>
-            {saving ? 'Saving…' : isNew ? '+ Add Client' : '✓ Save'}
-          </button>
-          <button onClick={() => { isNew ? setShowNew(false) : cancelEdit() }}
-            style={{ background:'none', border:'1px solid var(--border)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
-        </div>
-      </div>
-    )
-  }
+  const editingName = editingId ? (contacts.find(c => c.id === editingId)?.name || '') : ''
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
@@ -139,7 +146,13 @@ function ClientsModal({ contacts, onClose, onRefresh }) {
         <div style={{ padding:'16px 20px' }}>
           {contacts.map(c => (
             <div key={c.id} style={{ marginBottom:'8px' }}>
-              {editingId === c.id ? <EditForm isNew={false} /> : (
+              {editingId === c.id ? (
+                <ClientEditFields
+                  draft={draft} setDraft={setDraft}
+                  onSave={() => save(false)} onCancel={cancelEdit}
+                  isNew={false} saving={saving} editingName={editingName}
+                />
+              ) : (
                 <div style={{ background:'var(--white)', border:'1px solid var(--border)', padding:'10px 12px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'10px' }}>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'16px', fontWeight:500 }}>{c.name}</div>
@@ -154,7 +167,13 @@ function ClientsModal({ contacts, onClose, onRefresh }) {
               )}
             </div>
           ))}
-          {showNew ? <EditForm isNew={true} /> : (
+          {showNew ? (
+            <ClientEditFields
+              draft={draft} setDraft={setDraft}
+              onSave={() => save(true)} onCancel={() => { setShowNew(false); setDraft({ name:'', email:'', phone:'', note:'' }) }}
+              isNew={true} saving={saving} editingName=''
+            />
+          ) : (
             <button onClick={() => { setShowNew(true); setEditingId(null); setDraft({ name:'', email:'', phone:'', note:'' }) }}
               style={{ width:'100%', background:'none', border:'1px dashed var(--border)', padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', cursor:'pointer', textAlign:'center', letterSpacing:'0.08em' }}>
               + Add Client
@@ -680,7 +699,13 @@ export default function BoxPage() {
     setLoading(true)
     const { data, error } = await supabase.from('boxes').select('*').order('created_at', { ascending: false })
     if (error) showStatus('error', 'Failed to load boxes: ' + error.message)
-    setBoxes(data || []); setLoading(false)
+    const loaded = data || []
+    setBoxes(loaded); setLoading(false)
+    // Auto-open the most recent box if none is active
+    if (loaded.length > 0) {
+      setActiveBox(loaded[0])
+      fetchBoxItemsById(loaded[0].id)
+    }
   }
 
   async function fetchContacts() {
@@ -688,14 +713,14 @@ export default function BoxPage() {
     setContacts(data || [])
   }
 
-  async function fetchBoxItems(boxId) {
+  async function fetchBoxItemsById(boxId) {
     const { data, error } = await supabase.rpc('get_box_items_with_notes', { p_box_id: boxId })
     if (error) showStatus('error', 'Failed to load items: ' + error.message)
     setActiveItems(data || [])
   }
 
   async function openBox(box) {
-    setActiveBox(box); await fetchBoxItems(box.id)
+    setActiveBox(box); await fetchBoxItemsById(box.id)
     if (typeof window !== 'undefined' && window.innerWidth < 700) setShowSidebar(false)
   }
 
@@ -711,7 +736,7 @@ export default function BoxPage() {
   async function addItemToBox(item) {
     if (!activeBox) return { error: new Error('No active box') }
     const { error } = await supabase.from('box_items').insert({ box_id:activeBox.id, ...item, sort_order:activeItems.length })
-    if (!error) { await fetchBoxItems(activeBox.id); await updateBoxTotals(activeBox.id) }
+    if (!error) { await fetchBoxItemsById(activeBox.id); await updateBoxTotals(activeBox.id) }
     return { error }
   }
 
@@ -719,7 +744,7 @@ export default function BoxPage() {
     if (!activeBox || !items.length) return { error:null }
     const rows = items.map((item, i) => ({ box_id:activeBox.id, ...item, sort_order:activeItems.length+i }))
     const { error } = await supabase.from('box_items').insert(rows)
-    if (!error) { await fetchBoxItems(activeBox.id); await updateBoxTotals(activeBox.id) }
+    if (!error) { await fetchBoxItemsById(activeBox.id); await updateBoxTotals(activeBox.id) }
     return { error }
   }
 
@@ -727,7 +752,7 @@ export default function BoxPage() {
     if (!confirm('Remove this bottle?')) return
     const { error } = await supabase.from('box_items').delete().eq('id', itemId)
     if (error) { showStatus('error', 'Failed to remove item: ' + error.message); return }
-    await fetchBoxItems(activeBox.id); await updateBoxTotals(activeBox.id)
+    await fetchBoxItemsById(activeBox.id); await updateBoxTotals(activeBox.id)
   }
 
   // FIX 2: update quantity inline on existing items
