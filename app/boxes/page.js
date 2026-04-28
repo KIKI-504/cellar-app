@@ -28,13 +28,12 @@ async function ensureSourceId(studioId, entry) {
   if (entry.source_id) return entry.source_id
   const w = entry.wines
   let pid
-  if (w?.source_id) {
-    pid = w.source_id
-  } else {
-    const desc    = w?.description || entry.unlinked_description || ''
-    const vintage = w?.vintage     || entry.unlinked_vintage     || ''
-    const colour  = w?.colour      || entry.colour               || ''
-    const size    = entry.bottle_size || '75'
+  if (w?.source_id) { pid = w.source_id }
+  else {
+    const desc = w?.description || entry.unlinked_description || ''
+    const vintage = w?.vintage || entry.unlinked_vintage || ''
+    const colour = w?.colour || entry.colour || ''
+    const size = entry.bottle_size || '75'
     pid = generateSourceId(desc, vintage, colour, size)
   }
   await supabase.from('studio').update({ source_id: pid }).eq('id', studioId)
@@ -47,16 +46,11 @@ function normaliseRow(row) {
     return {
       ...row,
       wines: row.wine_description ? {
-        id:                        row.wine_id,
-        description:               row.wine_description,
-        vintage:                   row.wine_vintage,
-        colour:                    row.wine_colour,
-        region:                    row.wine_region,
+        id: row.wine_id, description: row.wine_description, vintage: row.wine_vintage,
+        colour: row.wine_colour, region: row.wine_region,
         purchase_price_per_bottle: row.wine_purchase_price,
-        women_note:                row.wine_women_note,
-        producer_note:             row.wine_producer_note,
-        source_id:                 row.wine_source_id,
-        buyer_note:                row.buyer_note,
+        women_note: row.wine_women_note, producer_note: row.wine_producer_note,
+        source_id: row.wine_source_id, buyer_note: row.buyer_note,
       } : null,
     }
   }
@@ -69,7 +63,107 @@ function sizeBadge(size) {
   if (s === '150' || s.toLowerCase().includes('magnum')) return 'MAG'
   if (s === '37.5') return '37.5cl'
   if (s === '300') return '300cl'
-  return null // don't show badge for standard 75cl
+  return null
+}
+
+// ─── Clients Modal ────────────────────────────────────────────────────────────
+function ClientsModal({ contacts, onClose, onRefresh }) {
+  const [editingId, setEditingId] = useState(null)
+  const [showNew, setShowNew] = useState(false)
+  const [draft, setDraft] = useState({ name:'', email:'', phone:'', note:'' })
+  const [saving, setSaving] = useState(false)
+
+  function startEdit(c) {
+    setEditingId(c.id)
+    setDraft({ name: c.name||'', email: c.email||'', phone: c.phone||'', note: c.note||'' })
+    setShowNew(false)
+  }
+  function cancelEdit() { setEditingId(null); setDraft({ name:'', email:'', phone:'', note:'' }) }
+
+  async function save(isNew) {
+    if (!draft.name.trim()) return
+    setSaving(true)
+    if (isNew) {
+      await supabase.from('contacts').insert({ name: draft.name, email: draft.email||null, phone: draft.phone||null, note: draft.note||null })
+      setShowNew(false)
+    } else {
+      await supabase.from('contacts').update({ name: draft.name, email: draft.email||null, phone: draft.phone||null, note: draft.note||null }).eq('id', editingId)
+      setEditingId(null)
+    }
+    setDraft({ name:'', email:'', phone:'', note:'' })
+    await onRefresh()
+    setSaving(false)
+  }
+
+  async function del(id, name) {
+    if (!confirm(`Delete ${name}? Their boxes will remain.`)) return
+    await supabase.from('contacts').delete().eq('id', id)
+    await onRefresh()
+  }
+
+  const fields = [['Name *','name','text'],['Email','email','email'],['Phone','phone','tel'],['Note','note','text']]
+
+  function EditForm({ isNew }) {
+    return (
+      <div style={{ background: isNew ? 'var(--white)' : 'rgba(107,30,46,0.04)', border: isNew ? '1px dashed var(--border)' : '2px solid rgba(107,30,46,0.2)', padding:'14px', marginBottom:'10px' }}>
+        <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--wine)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'10px' }}>
+          {isNew ? 'New Client' : `Editing ${contacts.find(c=>c.id===editingId)?.name}`}
+        </div>
+        {fields.map(([label, field, type]) => (
+          <div key={field} style={{ marginBottom:'8px' }}>
+            <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'3px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</label>
+            <input type={type} value={draft[field]} onChange={e => setDraft(d => ({...d, [field]: e.target.value}))}
+              onKeyDown={e => e.key === 'Enter' && field !== 'note' && save(isNew)}
+              style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'7px 10px', fontFamily: field==='name'?'Cormorant Garamond,serif':'DM Mono,monospace', fontSize: field==='name'?'15px':'12px', outline:'none', boxSizing:'border-box' }} />
+          </div>
+        ))}
+        <div style={{ display:'flex', gap:'8px', marginTop:'8px' }}>
+          <button onClick={() => save(isNew)} disabled={!draft.name.trim()||saving}
+            style={{ background: draft.name.trim()?'var(--ink)':'#ccc', color:'var(--white)', border:'none', padding:'7px 16px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor: draft.name.trim()?'pointer':'not-allowed' }}>
+            {saving ? 'Saving…' : isNew ? '+ Add Client' : '✓ Save'}
+          </button>
+          <button onClick={() => { isNew ? setShowNew(false) : cancelEdit() }}
+            style={{ background:'none', border:'1px solid var(--border)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'480px', border:'1px solid var(--border)', marginTop:'8px' }}>
+        <div style={{ background:'var(--ink)', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 20px' }}>
+          <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.15em', color:'rgba(253,250,245,0.5)', textTransform:'uppercase' }}>Clients · {contacts.length}</span>
+          <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'5px 10px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕ Close</button>
+        </div>
+        <div style={{ padding:'16px 20px' }}>
+          {contacts.map(c => (
+            <div key={c.id} style={{ marginBottom:'8px' }}>
+              {editingId === c.id ? <EditForm isNew={false} /> : (
+                <div style={{ background:'var(--white)', border:'1px solid var(--border)', padding:'10px 12px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'10px' }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'16px', fontWeight:500 }}>{c.name}</div>
+                    <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>{[c.phone,c.email].filter(Boolean).join(' · ')||'—'}</div>
+                    {c.note && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px', fontStyle:'italic' }}>{c.note}</div>}
+                  </div>
+                  <div style={{ display:'flex', gap:'4px', flexShrink:0 }}>
+                    <button onClick={() => startEdit(c)} style={{ background:'none', border:'1px solid var(--border)', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>✏</button>
+                    <button onClick={() => del(c.id, c.name)} style={{ background:'none', border:'none', padding:'4px 6px', fontFamily:'DM Mono,monospace', fontSize:'12px', color:'var(--muted)', cursor:'pointer' }}>✕</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {showNew ? <EditForm isNew={true} /> : (
+            <button onClick={() => { setShowNew(true); setEditingId(null); setDraft({ name:'', email:'', phone:'', note:'' }) }}
+              style={{ width:'100%', background:'none', border:'1px dashed var(--border)', padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', cursor:'pointer', textAlign:'center', letterSpacing:'0.08em' }}>
+              + Add Client
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── Pull List ────────────────────────────────────────────────────────────────
@@ -88,22 +182,17 @@ function PullListView({ box, items, onClose }) {
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:'Cormorant Garamond',serif;color:#1a1008;background:#fff;padding:40px}
         .hdr{border-bottom:1px solid #c8b89a;padding-bottom:20px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:flex-end}
-        .hdr-title{font-size:28px;font-weight:300;letter-spacing:0.05em}
-        .hdr-sub{font-size:12px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:4px}
-        .card{padding:18px 0;border-bottom:1px solid #ede6d6;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start}
-        .card:last-child{border-bottom:none}
-        .wname{font-size:18px;font-weight:500;line-height:1.2}
-        .wprod{font-size:14px;color:#3a2a1a;margin-top:2px}
+        .hdr-title{font-size:28px;font-weight:300;letter-spacing:0.05em}.hdr-sub{font-size:12px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:4px}
+        .card{padding:18px 0;border-bottom:1px solid #ede6d6;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start}.card:last-child{border-bottom:none}
+        .wname{font-size:18px;font-weight:500;line-height:1.2}.wprod{font-size:14px;color:#3a2a1a;margin-top:2px}
         .wmeta{font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:6px}
         .tnote{font-size:13px;font-style:italic;color:#3a2a1a;margin-top:10px;line-height:1.6}
         .bnote{font-size:13px;color:#3a2a1a;margin-top:8px;line-height:1.6;opacity:0.9}
         .wnote{font-size:13px;font-style:italic;color:#6b1e2e;margin-top:6px;line-height:1.6}
-        .pblk{text-align:right;min-width:80px}
-        .plbl{font-size:9px;font-family:'DM Mono',monospace;color:#7a6652;text-transform:uppercase;letter-spacing:0.1em}
+        .pblk{text-align:right;min-width:80px}.plbl{font-size:9px;font-family:'DM Mono',monospace;color:#7a6652;text-transform:uppercase;letter-spacing:0.1em}
         .pval{font-size:16px;font-weight:500;color:#6b1e2e;margin-top:2px}
         .tots{margin-top:24px;padding-top:16px;border-top:2px solid #c8b89a;display:flex;justify-content:flex-end;gap:32px}
-        .tlbl{font-size:9px;font-family:'DM Mono',monospace;color:#7a6652;text-transform:uppercase;letter-spacing:0.1em}
-        .tval{font-size:20px;font-weight:500;margin-top:2px}
+        .tlbl{font-size:9px;font-family:'DM Mono',monospace;color:#7a6652;text-transform:uppercase;letter-spacing:0.1em}.tval{font-size:20px;font-weight:500;margin-top:2px}
         .foot{margin-top:40px;padding-top:16px;border-top:1px solid #ede6d6;font-size:10px;font-family:'DM Mono',monospace;color:#c8b89a;text-align:center}
         @media print{body{padding:20px}}
       </style></head><body>${content}</body></html>`)
@@ -111,9 +200,9 @@ function PullListView({ box, items, onClose }) {
     setTimeout(() => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }, 600)
   }
 
-  const totalSale    = items.reduce((s, i) => s + (parseFloat(i.sale_price) || 0) * (i.quantity || 1), 0)
-  const totalDP      = items.reduce((s, i) => s + (parseFloat(i.dp_price)   || 0) * (i.quantity || 1), 0)
-  const totalBottles = items.reduce((s, i) => s + (i.quantity || 1), 0)
+  const totalSale = items.reduce((s, i) => s + (parseFloat(i.sale_price)||0) * (i.quantity||1), 0)
+  const totalDP = items.reduce((s, i) => s + (parseFloat(i.dp_price)||0) * (i.quantity||1), 0)
+  const totalBottles = items.reduce((s, i) => s + (i.quantity||1), 0)
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.85)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
@@ -171,11 +260,11 @@ function PullListView({ box, items, onClose }) {
             )
           })}
           <div className="tots" style={{ marginTop:'24px', paddingTop:'16px', borderTop:'2px solid #c8b89a', display:'flex', justifyContent:'flex-end', gap:'32px', flexWrap:'wrap' }}>
-            {totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'#7a6652', textTransform:'uppercase', letterSpacing:'0.1em' }}>Cost (DP)</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500, marginTop:'2px' }}>£{totalDP.toFixed(2)}</div></div>}
-            {totalSale - totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'#7a6652', textTransform:'uppercase', letterSpacing:'0.1em' }}>Margin</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500, color:'#2d6a4f', marginTop:'2px' }}>£{(totalSale-totalDP).toFixed(2)}</div></div>}
-            <div style={{ textAlign:'right' }}><div className="tlbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'#7a6652', textTransform:'uppercase', letterSpacing:'0.1em' }}>Total</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'22px', fontWeight:500, color:'#6b1e2e', marginTop:'2px' }}>£{totalSale.toFixed(2)}</div></div>
+            {totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl">Cost (DP)</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500 }}>£{totalDP.toFixed(2)}</div></div>}
+            {totalSale - totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl">Margin</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500, color:'#2d6a4f' }}>£{(totalSale-totalDP).toFixed(2)}</div></div>}
+            <div style={{ textAlign:'right' }}><div className="tlbl">Total</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'22px', fontWeight:500, color:'var(--wine)' }}>£{totalSale.toFixed(2)}</div></div>
           </div>
-          {box.notes && <div style={{ marginTop:'24px', padding:'12px 16px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.25)', fontSize:'12px', fontFamily:'DM Mono,monospace', color:'#7a6652' }}>{box.notes}</div>}
+          {box.notes && <div style={{ marginTop:'24px', padding:'12px 16px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.25)', fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>{box.notes}</div>}
           <div className="foot" style={{ marginTop:'40px', paddingTop:'16px', borderTop:'1px solid #ede6d6', fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c8b89a', textAlign:'center', letterSpacing:'0.1em' }}>BELLE ANNÉE WINES · {new Date().getFullYear()}</div>
         </div>
       </div>
@@ -185,20 +274,20 @@ function PullListView({ box, items, onClose }) {
 
 // ─── Add Bottle Modal ─────────────────────────────────────────────────────────
 function AddBottleModal({ onAdd, onClose }) {
-  const [search, setSearch]           = useState('')
-  const [results, setResults]         = useState([])
-  const [selected, setSelected]       = useState(null)
-  const [scanMatch, setScanMatch]     = useState(null)
-  const [qty, setQty]                 = useState(1)
+  const [search, setSearch] = useState('')
+  const [results, setResults] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [scanMatch, setScanMatch] = useState(null)
+  const [qty, setQty] = useState(1)
   const [tastingNote, setTastingNote] = useState('')
   const [producerNote, setProducerNote] = useState('')
-  const [salePrice, setSalePrice]     = useState('')
-  const [imageFile, setImageFile]     = useState(null)
+  const [salePrice, setSalePrice] = useState('')
+  const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [scanning, setScanning]       = useState(false)
-  const [scanLabel, setScanLabel]     = useState(null)
-  const [saving, setSaving]           = useState(false)
-  const [justAdded, setJustAdded]     = useState(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanLabel, setScanLabel] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [justAdded, setJustAdded] = useState(null)
   const fileRef = useRef(null)
 
   async function searchStudio(q) {
@@ -213,99 +302,66 @@ function AddBottleModal({ onAdd, onClose }) {
     const w = entry.wines
     const built = {
       ...entry,
-      _desc:    w?.description || entry.unlinked_description || '',
-      _vintage: w?.vintage     || entry.unlinked_vintage     || '',
-      _colour:  w?.colour      || entry.colour               || '',
-      _region:  w?.region      || '',
-      _dp:      entry.dp_price ? parseFloat(entry.dp_price)  : null,
+      _desc: w?.description || entry.unlinked_description || '',
+      _vintage: w?.vintage || entry.unlinked_vintage || '',
+      _colour: w?.colour || entry.colour || '',
+      _region: w?.region || '',
+      _dp: entry.dp_price ? parseFloat(entry.dp_price) : null,
     }
     setSelected(built)
     setSalePrice(entry.sale_price ? String(parseFloat(entry.sale_price)) : '')
-    setTastingNote('')         // FIX: was incorrectly pre-filling with women_note
+    setTastingNote('')
     setProducerNote(w?.producer_note || '')
-    setSearch('')
-    setResults([])
-    setScanMatch(null)
+    setSearch(''); setResults([]); setScanMatch(null)
   }
 
   function handleImageSelect(e) {
-    const file = e.target.files[0]
-    if (!file) return
+    const file = e.target.files[0]; if (!file) return
     setImageFile(file)
-    const reader = new FileReader()
-    reader.onload = ev => setImagePreview(ev.target.result)
-    reader.readAsDataURL(file)
+    const reader = new FileReader(); reader.onload = ev => setImagePreview(ev.target.result); reader.readAsDataURL(file)
   }
 
   async function analyseImage() {
     if (!imageFile) return
     setScanning(true); setScanLabel(null); setScanMatch(null)
     try {
-      const base64 = await new Promise((res, rej) => {
-        const r = new FileReader()
-        r.onload = () => res(r.result.split(',')[1])
-        r.onerror = rej
-        r.readAsDataURL(imageFile)
-      })
-      const resp = await fetch('/api/analyse-label', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mediaType: imageFile.type })
-      })
+      const base64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(imageFile) })
+      const resp = await fetch('/api/analyse-label', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ imageBase64:base64, mediaType:imageFile.type }) })
       const result = await resp.json()
       if (!result.success) throw new Error(result.error)
-      const ex = result.data
-      setScanLabel(ex)
+      const ex = result.data; setScanLabel(ex)
       const terms = [ex.wine_name, ex.producer, ex.wine_name?.split(' ')[0]].filter(Boolean)
       let matchData = null
-      for (const term of terms) {
-        const { data } = await supabase.rpc('search_studio', { search_term: term })
-        if (data && data.length > 0) { matchData = data; break }
-      }
-      if (matchData && matchData.length > 0) {
-        setScanMatch(normaliseRow(matchData[0]))
-      } else {
-        const q = [ex.wine_name, ex.producer].filter(Boolean).join(', ')
-        setSearch(q)
+      for (const term of terms) { const { data } = await supabase.rpc('search_studio', { search_term: term }); if (data?.length > 0) { matchData = data; break } }
+      if (matchData?.length > 0) { setScanMatch(normaliseRow(matchData[0])) }
+      else {
+        const q = [ex.wine_name, ex.producer].filter(Boolean).join(', '); setSearch(q)
         const firstWord = ex.wine_name?.split(' ')[0] || ex.producer?.split(' ')[0] || ''
-        if (firstWord.length > 2) {
-          const { data: broader } = await supabase.rpc('search_studio', { search_term: firstWord })
-          setResults((broader || []).map(normaliseRow))
-        }
+        if (firstWord.length > 2) { const { data: broader } = await supabase.rpc('search_studio', { search_term: firstWord }); setResults((broader || []).map(normaliseRow)) }
       }
     } catch (err) { alert('Label read failed: ' + err.message) }
     setScanning(false)
   }
 
   async function confirm() {
-    if (!selected) return
-    setSaving(true)
-    const parentId = selected.id
-      ? await ensureSourceId(selected.id, selected)
-      : generateSourceId(selected._desc, selected._vintage, selected._colour, selected.bottle_size || '75')
+    if (!selected) return; setSaving(true)
+    const parentId = selected.id ? await ensureSourceId(selected.id, selected) : generateSourceId(selected._desc, selected._vintage, selected._colour, selected.bottle_size || '75')
     const { error } = await onAdd({
-      studio_id:        selected.id || null,
-      wine_description: selected._desc,
-      wine_vintage:     selected._vintage,
-      wine_colour:      selected._colour,
-      wine_region:      selected._region,
-      dp_price:         selected._dp,
+      studio_id: selected.id||null, wine_description: selected._desc, wine_vintage: selected._vintage,
+      wine_colour: selected._colour, wine_region: selected._region, dp_price: selected._dp,
       wine_bottle_size: selected.bottle_size || selected.wines?.bottle_volume || '75',
-      sale_price:       salePrice ? parseFloat(salePrice) : null,
-      quantity:         qty,
-      tasting_note:     tastingNote  || null,
-      producer_note:    producerNote || null,
-      source_id:        parentId,
+      sale_price: salePrice ? parseFloat(salePrice) : null, quantity: qty,
+      tasting_note: tastingNote||null, producer_note: producerNote||null, source_id: parentId,
     })
     if (error) { alert('Failed to add bottle: ' + error.message); setSaving(false); return }
     setJustAdded(selected._desc)
-    setSelected(null); setSearch(''); setResults([]); setQty(1)
-    setSalePrice(''); setTastingNote(''); setProducerNote('')
-    setImageFile(null); setImagePreview(null); setScanLabel(null); setScanMatch(null)
-    setSaving(false)
+    setSelected(null); setSearch(''); setResults([]); setQty(1); setSalePrice(''); setTastingNote(''); setProducerNote('')
+    setImageFile(null); setImagePreview(null); setScanLabel(null); setScanMatch(null); setSaving(false)
   }
 
   const scanMatchDesc = scanMatch ? (scanMatch.wines?.description || scanMatch.unlinked_description || '') : ''
-  const MARGINS = [20, 25, 30]
+  // FIX 3: Quick margins changed to 10% and 15%
+  const MARGINS = [10, 15]
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:250, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
@@ -321,7 +377,6 @@ function AddBottleModal({ onAdd, onClose }) {
               <button onClick={onClose} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'5px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>Done ✓</button>
             </div>
           )}
-          {/* Photo */}
           {!selected && (
             <div style={{ marginBottom:'12px' }}>
               <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>Identify by photo</label>
@@ -344,7 +399,6 @@ function AddBottleModal({ onAdd, onClose }) {
               )}
             </div>
           )}
-          {/* Scan match */}
           {scanMatch && !selected && (
             <div onClick={() => applyEntry(scanMatch)} style={{ marginBottom:'12px', background:'rgba(45,106,79,0.08)', border:'2px solid rgba(45,106,79,0.5)', padding:'14px 16px', cursor:'pointer' }} onMouseEnter={e => e.currentTarget.style.background='rgba(45,106,79,0.15)'} onMouseLeave={e => e.currentTarget.style.background='rgba(45,106,79,0.08)'}>
               <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#2d6a4f', letterSpacing:'0.1em', marginBottom:'6px' }}>✓ MATCHED IN STUDIO — TAP TO SELECT</div>
@@ -355,15 +409,13 @@ function AddBottleModal({ onAdd, onClose }) {
               </div>
             </div>
           )}
-          {/* Not found */}
           {scanLabel && !scanMatch && !selected && results.length === 0 && (
             <div style={{ marginBottom:'12px', background:'rgba(192,57,43,0.05)', border:'1px solid rgba(192,57,43,0.2)', padding:'12px 14px' }}>
               <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c0392b', letterSpacing:'0.1em', marginBottom:'4px' }}>NOT FOUND IN STUDIO</div>
               <div style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginBottom:'10px' }}>{[scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', ')} {scanLabel.vintage || ''} isn't in your studio inventory.</div>
-              <button onClick={() => { const desc = [scanLabel.wine_name, scanLabel.producer].filter(Boolean).join(', '); applyEntry({ id:null, quantity:0, dp_price:null, sale_price:null, bottle_size:'75', colour:scanLabel.colour||'', unlinked_description:desc, unlinked_vintage:scanLabel.vintage||'', source_id:null, wines:null }) }} style={{ background:'var(--ink)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>Add to box anyway →</button>
+              <button onClick={() => { const desc=[scanLabel.wine_name,scanLabel.producer].filter(Boolean).join(', '); applyEntry({id:null,quantity:0,dp_price:null,sale_price:null,bottle_size:'75',colour:scanLabel.colour||'',unlinked_description:desc,unlinked_vintage:scanLabel.vintage||'',source_id:null,wines:null}) }} style={{ background:'var(--ink)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>Add to box anyway →</button>
             </div>
           )}
-          {/* Search */}
           {!selected && (
             <div style={{ marginBottom:'12px' }}>
               <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>{scanMatch ? 'Or search manually' : justAdded ? 'Search for next bottle' : 'Search studio inventory'}</label>
@@ -372,15 +424,17 @@ function AddBottleModal({ onAdd, onClose }) {
                 <div style={{ border:'1px solid var(--border)', borderTop:'none', background:'var(--white)', maxHeight:'180px', overflowY:'auto' }}>
                   {results.map(entry => {
                     const w = entry.wines
-                    const desc    = w?.description || entry.unlinked_description || ''
-                    const vintage = w?.vintage     || entry.unlinked_vintage     || ''
-                    const colour  = w?.colour      || entry.colour               || ''
+                    const desc = w?.description || entry.unlinked_description || ''
+                    const vintage = w?.vintage || entry.unlinked_vintage || ''
+                    const colour = w?.colour || entry.colour || ''
                     return (
                       <div key={entry.id} onClick={() => applyEntry(entry)} style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid #ede6d6', display:'flex', alignItems:'center', gap:'8px' }} onMouseEnter={e => e.currentTarget.style.background='#f5f0e8'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                         <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:colourDot(colour), flexShrink:0, display:'inline-block' }}></span>
                         <div>
                           <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px' }}>{desc}</div>
-                          <div style={{ fontSize:'10px', color:'var(--muted)', fontFamily:'DM Mono,monospace' }}>{vintage}{sizeBadge(entry.bottle_size) ? ` · ${sizeBadge(entry.bottle_size)}` : ''} · DP {entry.dp_price ? `£${parseFloat(entry.dp_price).toFixed(2)}` : '—'} · {entry.quantity} avail</div>
+                          <div style={{ fontSize:'10px', color:'var(--muted)', fontFamily:'DM Mono,monospace' }}>
+                            {vintage}{sizeBadge(entry.bottle_size) ? ` · ${sizeBadge(entry.bottle_size)}` : ''} · DP {entry.dp_price ? `£${parseFloat(entry.dp_price).toFixed(2)}` : '—'} · {entry.quantity} avail
+                          </div>
                         </div>
                       </div>
                     )
@@ -389,7 +443,6 @@ function AddBottleModal({ onAdd, onClose }) {
               )}
             </div>
           )}
-          {/* Selected */}
           {selected && (
             <>
               <div style={{ background:'rgba(107,30,46,0.06)', border:'1px solid rgba(107,30,46,0.2)', padding:'10px 12px', marginBottom:'12px' }}>
@@ -397,7 +450,9 @@ function AddBottleModal({ onAdd, onClose }) {
                   <div>
                     <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{selected._desc.split(',')[0]}</div>
                     {selected._desc.includes(',') && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px' }}>{selected._desc.split(',').slice(1).join(',').trim()}</div>}
-                    <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px' }}>{selected._vintage}{selected._region && ` · ${selected._region}`}{sizeBadge(selected.bottle_size) ? ` · ${sizeBadge(selected.bottle_size)}` : ''} · {selected.quantity} in studio · DP {selected._dp ? `£${selected._dp.toFixed(2)}` : '—'}</div>
+                    <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px' }}>
+                      {selected._vintage}{selected._region && ` · ${selected._region}`}{sizeBadge(selected.bottle_size) ? ` · ${sizeBadge(selected.bottle_size)}` : ''} · {selected.quantity} in studio · DP {selected._dp ? `£${selected._dp.toFixed(2)}` : '—'}
+                    </div>
                   </div>
                   <button onClick={() => { setSelected(null); setScanMatch(null) }} style={{ background:'none', border:'none', fontSize:'12px', color:'var(--muted)', cursor:'pointer', fontFamily:'DM Mono,monospace', flexShrink:0 }}>✕ change</button>
                 </div>
@@ -405,19 +460,19 @@ function AddBottleModal({ onAdd, onClose }) {
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }}>
                 <div>
                   <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Quantity</label>
-                  <input type="number" min="1" value={qty} onChange={e => setQty(parseInt(e.target.value) || 1)} onFocus={e => e.target.select()} style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'16px', fontWeight:600, outline:'none', boxSizing:'border-box' }} />
+                  <input type="number" min="1" value={qty} onChange={e => setQty(parseInt(e.target.value)||1)} onFocus={e => e.target.select()} style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'16px', fontWeight:600, outline:'none', boxSizing:'border-box' }} />
                 </div>
                 <div>
                   <label style={{ display:'block', fontSize:'10px', color:'var(--muted)', marginBottom:'4px', fontFamily:'DM Mono,monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Sale price (£/btl)</label>
                   <input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)} placeholder="0.00" onFocus={e => e.target.select()} style={{ width:'100%', border:'2px solid rgba(107,30,46,0.25)', background:'rgba(107,30,46,0.03)', padding:'9px 12px', fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:600, outline:'none', boxSizing:'border-box', color:'var(--wine)' }} />
-                  {salePrice && selected._dp && (() => { const m = ((parseFloat(salePrice) - selected._dp) / selected._dp * 100); return <div style={{ fontSize:'10px', color: m >= 0 ? '#2d6a4f' : '#c0392b', marginTop:'3px', fontFamily:'DM Mono,monospace' }}>{m >= 0 ? '+' : ''}{m.toFixed(1)}% on DP</div> })()}
+                  {salePrice && selected._dp && (() => { const m=((parseFloat(salePrice)-selected._dp)/selected._dp*100); return <div style={{ fontSize:'10px', color:m>=0?'#2d6a4f':'#c0392b', marginTop:'3px', fontFamily:'DM Mono,monospace' }}>{m>=0?'+':''}{m.toFixed(1)}% on DP</div> })()}
                 </div>
               </div>
               {selected._dp && (
                 <div style={{ display:'flex', gap:'6px', marginBottom:'10px', alignItems:'center', flexWrap:'wrap' }}>
                   <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', flexShrink:0 }}>Quick:</span>
-                  {MARGINS.map(pct => { const price = (selected._dp * (1 + pct / 100)).toFixed(2); return (
-                    <button key={pct} onClick={() => setSalePrice(price)} style={{ padding:'4px 9px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.06em', border: salePrice === price ? '2px solid var(--wine)' : '1px solid var(--border)', background: salePrice === price ? 'rgba(107,30,46,0.08)' : 'var(--white)', color: salePrice === price ? 'var(--wine)' : 'var(--muted)', cursor:'pointer', fontWeight: salePrice === price ? 600 : 400 }}>+{pct}% · £{price}</button>
+                  {MARGINS.map(pct => { const price=(selected._dp*(1+pct/100)).toFixed(2); return (
+                    <button key={pct} onClick={() => setSalePrice(price)} style={{ padding:'4px 9px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.06em', border:salePrice===price?'2px solid var(--wine)':'1px solid var(--border)', background:salePrice===price?'rgba(107,30,46,0.08)':'var(--white)', color:salePrice===price?'var(--wine)':'var(--muted)', cursor:'pointer', fontWeight:salePrice===price?600:400 }}>+{pct}% · £{price}</button>
                   )})}
                 </div>
               )}
@@ -442,11 +497,11 @@ function AddBottleModal({ onAdd, onClose }) {
 
 // ─── Multi Bottle Modal ───────────────────────────────────────────────────────
 function MultiBottleModal({ onAddAll, onClose }) {
-  const [imageFile, setImageFile]       = useState(null)
+  const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [scanning, setScanning]         = useState(false)
-  const [bottles, setBottles]           = useState([])
-  const [saving, setSaving]             = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [bottles, setBottles] = useState([])
+  const [saving, setSaving] = useState(false)
   const fileRef = useRef(null)
 
   function handleImageSelect(e) {
@@ -456,8 +511,7 @@ function MultiBottleModal({ onAddAll, onClose }) {
   }
 
   async function analyseMulti() {
-    if (!imageFile) return
-    setScanning(true)
+    if (!imageFile) return; setScanning(true)
     try {
       const base64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(imageFile) })
       const resp = await fetch('/api/analyse-label', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ imageBase64:base64, mediaType:imageFile.type, mode:'multi' }) })
@@ -467,10 +521,7 @@ function MultiBottleModal({ onAddAll, onClose }) {
       const enriched = await Promise.all(labels.map(async (label) => {
         const terms = [label.wine_name, label.producer, label.wine_name?.split(' ')[0]].filter(Boolean)
         let match = null
-        for (const term of terms) {
-          const { data } = await supabase.rpc('search_studio', { search_term: term })
-          if (data && data.length > 0) { match = normaliseRow(data[0]); break }
-        }
+        for (const term of terms) { const { data } = await supabase.rpc('search_studio', { search_term: term }); if (data?.length > 0) { match = normaliseRow(data[0]); break } }
         return { label, match, status:'pending', salePrice: match?.sale_price ? String(parseFloat(match.sale_price)) : '', qty:1 }
       }))
       setBottles(enriched)
@@ -481,18 +532,16 @@ function MultiBottleModal({ onAddAll, onClose }) {
   function updateBottle(idx, patch) { setBottles(prev => prev.map((b, i) => i === idx ? { ...b, ...patch } : b)) }
 
   async function confirmAll() {
-    const toAdd = bottles.filter(b => b.status === 'confirmed')
-    if (!toAdd.length) return
-    setSaving(true)
+    const toAdd = bottles.filter(b => b.status === 'confirmed'); if (!toAdd.length) return; setSaving(true)
     const items = await Promise.all(toAdd.map(async (b) => {
       const entry = b.match; const w = entry?.wines
-      const desc    = w?.description || entry?.unlinked_description || [b.label.wine_name, b.label.producer].filter(Boolean).join(', ')
-      const vintage = w?.vintage     || entry?.unlinked_vintage     || b.label.vintage || ''
-      const colour  = w?.colour      || entry?.colour               || b.label.colour  || ''
-      const region  = w?.region      || b.label.region              || ''
-      const dp      = entry?.dp_price ? parseFloat(entry.dp_price) : null
-      const sid     = entry?.id ? await ensureSourceId(entry.id, entry) : generateSourceId(desc, vintage, colour, '75')
-      return { studio_id:entry?.id||null, wine_description:desc, wine_vintage:vintage, wine_colour:colour, wine_region:region, dp_price:dp, sale_price:b.salePrice?parseFloat(b.salePrice):null, quantity:b.qty, tasting_note:null, producer_note:null, source_id:sid, wine_bottle_size: entry?.bottle_size || '75' }
+      const desc = w?.description || entry?.unlinked_description || [b.label.wine_name, b.label.producer].filter(Boolean).join(', ')
+      const vintage = w?.vintage || entry?.unlinked_vintage || b.label.vintage || ''
+      const colour = w?.colour || entry?.colour || b.label.colour || ''
+      const region = w?.region || b.label.region || ''
+      const dp = entry?.dp_price ? parseFloat(entry.dp_price) : null
+      const sid = entry?.id ? await ensureSourceId(entry.id, entry) : generateSourceId(desc, vintage, colour, '75')
+      return { studio_id:entry?.id||null, wine_description:desc, wine_vintage:vintage, wine_colour:colour, wine_region:region, dp_price:dp, sale_price:b.salePrice?parseFloat(b.salePrice):null, quantity:b.qty, tasting_note:null, producer_note:null, source_id:sid, wine_bottle_size:entry?.bottle_size||'75' }
     }))
     const { error } = await onAddAll(items)
     if (error) { alert('Failed to add bottles: ' + error.message); setSaving(false); return }
@@ -500,7 +549,7 @@ function MultiBottleModal({ onAddAll, onClose }) {
   }
 
   const confirmedCount = bottles.filter(b => b.status === 'confirmed').length
-  const pendingCount   = bottles.filter(b => b.status === 'pending').length
+  const pendingCount = bottles.filter(b => b.status === 'pending').length
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:250, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'16px', overflowY:'auto' }}>
@@ -536,10 +585,10 @@ function MultiBottleModal({ onAddAll, onClose }) {
               <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'16px' }}>
                 {bottles.map((b, idx) => {
                   const entry = b.match; const w = entry?.wines
-                  const desc    = w?.description || entry?.unlinked_description || [b.label.wine_name, b.label.producer].filter(Boolean).join(', ')
-                  const vintage = w?.vintage     || entry?.unlinked_vintage     || b.label.vintage || ''
-                  const colour  = w?.colour      || entry?.colour               || b.label.colour  || ''
-                  const dp      = entry?.dp_price ? parseFloat(entry.dp_price) : null
+                  const desc = w?.description || entry?.unlinked_description || [b.label.wine_name, b.label.producer].filter(Boolean).join(', ')
+                  const vintage = w?.vintage || entry?.unlinked_vintage || b.label.vintage || ''
+                  const colour = w?.colour || entry?.colour || b.label.colour || ''
+                  const dp = entry?.dp_price ? parseFloat(entry.dp_price) : null
                   const isConfirmed = b.status==='confirmed'; const isSkipped = b.status==='skipped'
                   const fd=desc||''; const ci=fd.indexOf(','); const wp=ci>-1?fd.slice(0,ci).trim():fd; const pp=ci>-1?fd.slice(ci+1).trim():''
                   return (
@@ -599,18 +648,20 @@ function MultiBottleModal({ onAddAll, onClose }) {
 // ─── Main Box Builder ─────────────────────────────────────────────────────────
 export default function BoxPage() {
   const router = useRouter()
-  const [boxes, setBoxes]             = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [activeBox, setActiveBox]     = useState(null)
+  const [boxes, setBoxes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [activeBox, setActiveBox] = useState(null)
   const [activeItems, setActiveItems] = useState([])
   const [showNewBoxModal, setShowNewBoxModal] = useState(false)
-  const [showAddBottle, setShowAddBottle]     = useState(false)
+  const [showAddBottle, setShowAddBottle] = useState(false)
   const [showMultiBottle, setShowMultiBottle] = useState(false)
-  const [showPullList, setShowPullList]       = useState(false)
+  const [showPullList, setShowPullList] = useState(false)
+  const [showClients, setShowClients] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
-  const [saving, setSaving]           = useState(false)
-  const [statusMsg, setStatusMsg]     = useState(null)
-  const [newName, setNewName]   = useState('')
+  const [saving, setSaving] = useState(false)
+  const [statusMsg, setStatusMsg] = useState(null)
+  const [contacts, setContacts] = useState([])
+  const [newName, setNewName] = useState('')
   const [newBuyer, setNewBuyer] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [newNotes, setNewNotes] = useState('')
@@ -618,12 +669,11 @@ export default function BoxPage() {
   useEffect(() => {
     const role = sessionStorage.getItem('role')
     if (role !== 'admin') router.push('/')
-    else fetchBoxes()
+    else { fetchBoxes(); fetchContacts() }
   }, [])
 
   function showStatus(type, text, durationMs = 4000) {
-    setStatusMsg({ type, text })
-    setTimeout(() => setStatusMsg(null), durationMs)
+    setStatusMsg({ type, text }); setTimeout(() => setStatusMsg(null), durationMs)
   }
 
   async function fetchBoxes() {
@@ -633,7 +683,11 @@ export default function BoxPage() {
     setBoxes(data || []); setLoading(false)
   }
 
-  // KEY FIX: use get_box_items_with_notes RPC to get buyer_note + women_note
+  async function fetchContacts() {
+    const { data } = await supabase.from('contacts').select('*').order('name')
+    setContacts(data || [])
+  }
+
   async function fetchBoxItems(boxId) {
     const { data, error } = await supabase.rpc('get_box_items_with_notes', { p_box_id: boxId })
     if (error) showStatus('error', 'Failed to load items: ' + error.message)
@@ -641,14 +695,12 @@ export default function BoxPage() {
   }
 
   async function openBox(box) {
-    setActiveBox(box)
-    await fetchBoxItems(box.id)
+    setActiveBox(box); await fetchBoxItems(box.id)
     if (typeof window !== 'undefined' && window.innerWidth < 700) setShowSidebar(false)
   }
 
   async function createBox() {
-    if (!newName || !newBuyer) return
-    setSaving(true)
+    if (!newName || !newBuyer) return; setSaving(true)
     const { data, error } = await supabase.from('boxes').insert({ name:newName, buyer_name:newBuyer, buyer_email:newEmail||null, notes:newNotes||null, status:'Draft' }).select().single()
     if (error) { showStatus('error', 'Failed to create box: ' + error.message); setSaving(false); return }
     await fetchBoxes(); setShowNewBoxModal(false)
@@ -678,11 +730,20 @@ export default function BoxPage() {
     await fetchBoxItems(activeBox.id); await updateBoxTotals(activeBox.id)
   }
 
+  // FIX 2: update quantity inline on existing items
+  async function updateItemQty(itemId, newQty) {
+    if (newQty < 1) return
+    const { error } = await supabase.from('box_items').update({ quantity: newQty }).eq('id', itemId)
+    if (error) { showStatus('error', 'Failed to update quantity'); return }
+    setActiveItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: newQty } : i))
+    await updateBoxTotals(activeBox.id)
+  }
+
   async function updateBoxTotals(boxId) {
     const { data: items } = await supabase.from('box_items').select('dp_price, sale_price, quantity').eq('box_id', boxId)
     if (!items) return
-    const totalDP   = items.reduce((s, i) => s + (parseFloat(i.dp_price)   || 0) * (i.quantity || 1), 0)
-    const totalSale = items.reduce((s, i) => s + (parseFloat(i.sale_price) || 0) * (i.quantity || 1), 0)
+    const totalDP = items.reduce((s, i) => s + (parseFloat(i.dp_price)||0) * (i.quantity||1), 0)
+    const totalSale = items.reduce((s, i) => s + (parseFloat(i.sale_price)||0) * (i.quantity||1), 0)
     await supabase.from('boxes').update({ total_dp:totalDP, total_sale:totalSale }).eq('id', boxId)
     setActiveBox(prev => prev ? { ...prev, total_dp:totalDP, total_sale:totalSale } : prev)
   }
@@ -694,7 +755,7 @@ export default function BoxPage() {
     for (const item of activeItems) {
       if (item.studio_id) {
         const { data: se } = await supabase.from('studio').select('id, quantity, status').eq('id', item.studio_id).maybeSingle()
-        if (se) { const newQty = Math.max(0, (se.quantity || 0) - (item.quantity || 1)); await supabase.from('studio').update({ quantity:newQty, status:newQty<=0?'Sold':se.status }).eq('id', se.id) }
+        if (se) { const newQty=Math.max(0,(se.quantity||0)-(item.quantity||1)); await supabase.from('studio').update({ quantity:newQty, status:newQty<=0?'Sold':se.status }).eq('id', se.id) }
       }
     }
     const { error } = await supabase.from('boxes').update({ status:'Confirmed' }).eq('id', activeBox.id)
@@ -712,11 +773,24 @@ export default function BoxPage() {
     if (typeof window !== 'undefined' && window.innerWidth < 700) setShowSidebar(true)
   }
 
+  async function linkClientToBox(contactId) {
+    if (!activeBox) return
+    const contact = contacts.find(c => c.id === contactId)
+    const updates = { contact_id: contactId || null }
+    if (contact) { updates.buyer_name = contact.name; if (contact.email) updates.buyer_email = contact.email }
+    await supabase.from('boxes').update(updates).eq('id', activeBox.id)
+    setActiveBox(prev => ({ ...prev, ...updates }))
+    await fetchBoxes()
+    showStatus('success', contact ? `Linked to ${contact.name}` : 'Client unlinked')
+  }
+
   const statusColour = s => s==='Confirmed'?'#2d6a4f':s==='Sent'?'#1a5a8a':'#8a6f1e'
   const totalBottles = activeItems.reduce((s, i) => s+(i.quantity||1), 0)
-  const totalSale    = activeItems.reduce((s, i) => s+(parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
-  const totalDP      = activeItems.reduce((s, i) => s+(parseFloat(i.dp_price)||0)*(i.quantity||1), 0)
-  const NAV = [['Inventory','/admin'],['Studio','/studio'],['Box Builder','/boxes'],['Labels','/labels'],['Buyer View','/buyer'],['Bottles on Hand','/local'],['Consignment','/consignment']]
+  const totalSale = activeItems.reduce((s, i) => s+(parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
+  const totalDP = activeItems.reduce((s, i) => s+(parseFloat(i.dp_price)||0)*(i.quantity||1), 0)
+  // FIX 4: margin as percentage
+  const marginPct = totalDP > 0 ? `+${((totalSale-totalDP)/totalDP*100).toFixed(1)}%` : '—'
+  const NAV = [['Inventory','/admin'],['Studio','/studio'],['Box Builder','/boxes'],['Labels','/labels'],['Buyer View','/buyer'],['Local Sales','/local'],['Consignment','/consignment']]
 
   if (loading) return (<div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}><div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'24px', color:'var(--wine)' }}>Loading…</div></div>)
 
@@ -730,7 +804,11 @@ export default function BoxPage() {
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono,monospace', fontSize:'9px', cursor:'pointer', padding:'4px 8px', flexShrink:0, marginLeft:'6px' }}>Out</button>
       </div>
 
-      {statusMsg && (<div style={{ position:'fixed', top:'60px', left:'50%', transform:'translateX(-50%)', zIndex:400, background:statusMsg.type==='success'?'rgba(45,106,79,0.95)':'rgba(192,57,43,0.95)', color:'var(--white)', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.05em', border:'1px solid rgba(255,255,255,0.15)', whiteSpace:'nowrap', pointerEvents:'none' }}>{statusMsg.type==='success'?'✓ ':'✕ '}{statusMsg.text}</div>)}
+      {statusMsg && (
+        <div style={{ position:'fixed', top:'60px', left:'50%', transform:'translateX(-50%)', zIndex:400, background:statusMsg.type==='success'?'rgba(45,106,79,0.95)':'rgba(192,57,43,0.95)', color:'var(--white)', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'12px', letterSpacing:'0.05em', border:'1px solid rgba(255,255,255,0.15)', whiteSpace:'nowrap', pointerEvents:'none' }}>
+          {statusMsg.type==='success'?'✓ ':'✕ '}{statusMsg.text}
+        </div>
+      )}
 
       <div style={{ paddingTop:'52px', display:'grid', gridTemplateColumns:showSidebar&&!activeBox?'1fr':showSidebar?'minmax(220px,260px) 1fr':'1fr', minHeight:'calc(100vh - 52px)' }}>
 
@@ -739,7 +817,13 @@ export default function BoxPage() {
           <div style={{ borderRight:activeBox?'1px solid var(--border)':'none', padding:'16px', background:'var(--cream)' }}>
             <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:'14px' }}>
               <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300 }}>Boxes</div>
-              <button onClick={() => setShowNewBoxModal(true)} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'5px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>+ New</button>
+              <div style={{ display:'flex', gap:'6px' }}>
+                {/* FIX 1: Clients button */}
+                <button onClick={() => setShowClients(true)} style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'5px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
+                  Clients{contacts.length > 0 ? ` · ${contacts.length}` : ''}
+                </button>
+                <button onClick={() => setShowNewBoxModal(true)} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'5px 12px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>+ New</button>
+              </div>
             </div>
             {boxes.length === 0 ? (
               <div style={{ padding:'20px', textAlign:'center', border:'1px dashed var(--border)', background:'var(--white)' }}>
@@ -755,7 +839,7 @@ export default function BoxPage() {
                       <span style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:activeBox?.id===box.id?'rgba(212,173,69,0.7)':statusColour(box.status), fontWeight:500, letterSpacing:'0.08em', flexShrink:0 }}>{box.status}</span>
                     </div>
                     <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:activeBox?.id===box.id?'rgba(253,250,245,0.5)':'var(--muted)', marginTop:'2px' }}>{box.buyer_name}</div>
-                    {box.total_sale>0 && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:activeBox?.id===box.id?'rgba(212,173,69,0.7)':'var(--wine)', marginTop:'3px' }}>£{parseFloat(box.total_sale).toFixed(2)}</div>}
+                    {box.total_sale > 0 && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:activeBox?.id===box.id?'rgba(212,173,69,0.7)':'var(--wine)', marginTop:'3px' }}>£{parseFloat(box.total_sale).toFixed(2)}</div>}
                   </div>
                 ))}
               </div>
@@ -783,6 +867,16 @@ export default function BoxPage() {
                     {activeBox.buyer_name}{activeBox.buyer_email && ` · ${activeBox.buyer_email}`}
                     <span style={{ marginLeft:'10px', color:statusColour(activeBox.status), fontWeight:500 }}>{activeBox.status}</span>
                   </div>
+                  {/* FIX 1: Link to client dropdown */}
+                  {contacts.length > 0 && (
+                    <div style={{ marginTop:'6px' }}>
+                      <select value={activeBox.contact_id || ''} onChange={e => linkClientToBox(e.target.value || null)}
+                        style={{ border:'1px solid var(--border)', background:'var(--cream)', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', outline:'none', color:'var(--muted)', cursor:'pointer' }}>
+                        <option value=''>— link to client —</option>
+                        {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
                   {activeBox.status === 'Draft' && (
@@ -797,11 +891,12 @@ export default function BoxPage() {
                 </div>
               </div>
 
+              {/* FIX 4: Stats bar — margin as % only */}
               {activeItems.length > 0 && (
                 <div style={{ display:'flex', gap:'16px', padding:'10px 14px', background:'var(--white)', border:'1px solid var(--border)', marginBottom:'12px', fontSize:'11px', flexWrap:'wrap' }}>
-                  {[['bottles',totalBottles],['cost',`£${totalDP.toFixed(2)}`],['sale',`£${totalSale.toFixed(2)}`],['margin',`£${(totalSale-totalDP).toFixed(2)}`]].map(([label,val]) => (
+                  {[['bottles', totalBottles], ['cost', `£${totalDP.toFixed(2)}`], ['sale', `£${totalSale.toFixed(2)}`], ['margin', marginPct]].map(([label, val]) => (
                     <div key={label} style={{ display:'flex', gap:'5px', alignItems:'baseline' }}>
-                      <span style={{ fontWeight:600, color:'var(--wine)', fontSize:'13px', fontFamily:'DM Mono,monospace' }}>{val}</span>
+                      <span style={{ fontWeight:600, color: label==='margin' ? '#2d6a4f' : 'var(--wine)', fontSize:'13px', fontFamily:'DM Mono,monospace' }}>{val}</span>
                       <span style={{ color:'var(--muted)' }}>{label}</span>
                     </div>
                   ))}
@@ -819,12 +914,11 @@ export default function BoxPage() {
                     const ci = fd.indexOf(',')
                     const wp = ci > -1 ? fd.slice(0, ci).trim() : fd
                     const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
-                    const margin = item.sale_price && item.dp_price ? ((parseFloat(item.sale_price) - parseFloat(item.dp_price)) / parseFloat(item.dp_price) * 100).toFixed(1) : null
+                    const margin = item.sale_price && item.dp_price ? ((parseFloat(item.sale_price)-parseFloat(item.dp_price))/parseFloat(item.dp_price)*100).toFixed(1) : null
                     const badge = sizeBadge(item.wine_bottle_size)
                     return (
                       <div key={item.id} style={{ padding:'12px 14px', borderBottom:idx<activeItems.length-1?'1px solid #ede6d6':'none', display:'grid', gridTemplateColumns:'1fr auto', gap:'10px', alignItems:'start' }}>
                         <div>
-                          {/* Name row — wine name + vintage + size badge + qty badge */}
                           <div style={{ display:'flex', alignItems:'center', gap:'7px', flexWrap:'wrap' }}>
                             <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), display:'inline-block', flexShrink:0 }}></span>
                             <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{wp}</span>
@@ -845,10 +939,18 @@ export default function BoxPage() {
                           {item.producer_note && <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px', marginLeft:'15px', lineHeight:1.4 }}>{item.producer_note}</div>}
                         </div>
                         <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'2px' }}>
-                          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:500, color:'var(--wine)' }}>{item.sale_price?`£${parseFloat(item.sale_price).toFixed(2)}`:'—'}</div>
+                          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:500, color:'var(--wine)' }}>{item.sale_price ? `£${parseFloat(item.sale_price).toFixed(2)}` : '—'}</div>
                           {item.dp_price && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>DP £{parseFloat(item.dp_price).toFixed(2)}</div>}
                           {margin && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:parseFloat(margin)>=0?'#2d6a4f':'#c0392b' }}>{parseFloat(margin)>=0?'+':''}{margin}%</div>}
-                          {activeBox.status === 'Draft' && <button onClick={() => removeItem(item.id)} style={{ background:'none', border:'none', color:'var(--muted)', fontSize:'11px', cursor:'pointer', marginTop:'2px', fontFamily:'DM Mono,monospace' }}>✕</button>}
+                          {/* FIX 2: Quantity stepper on existing items */}
+                          {activeBox.status === 'Draft' && (
+                            <div style={{ display:'flex', alignItems:'center', gap:'3px', marginTop:'4px' }}>
+                              <button onClick={() => updateItemQty(item.id, (item.quantity||1) - 1)} disabled={(item.quantity||1) <= 1} style={{ width:'22px', height:'22px', border:'1px solid var(--border)', background:'var(--cream)', cursor:(item.quantity||1)>1?'pointer':'not-allowed', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', opacity:(item.quantity||1)<=1?0.4:1 }}>−</button>
+                              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', fontWeight:600, minWidth:'18px', textAlign:'center' }}>{item.quantity||1}</span>
+                              <button onClick={() => updateItemQty(item.id, (item.quantity||1) + 1)} style={{ width:'22px', height:'22px', border:'1px solid var(--border)', background:'var(--cream)', cursor:'pointer', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                              <button onClick={() => removeItem(item.id)} style={{ background:'none', border:'none', color:'var(--muted)', fontSize:'11px', cursor:'pointer', marginLeft:'2px', fontFamily:'DM Mono,monospace' }}>✕</button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -884,6 +986,7 @@ export default function BoxPage() {
       {showAddBottle   && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
       {showMultiBottle && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
       {showPullList    && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
+      {showClients     && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} />}
     </div>
   )
 }
