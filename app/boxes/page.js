@@ -676,6 +676,9 @@ export default function BoxPage() {
   const [showMultiBottle, setShowMultiBottle] = useState(false)
   const [showPullList, setShowPullList] = useState(false)
   const [showClients, setShowClients] = useState(false)
+  const [editingBox, setEditingBox] = useState(false)
+  const [boxDraft, setBoxDraft] = useState({ name:'', buyer_name:'', buyer_email:'' })
+  const [dragOverId, setDragOverId] = useState(null)
   const [showSidebar, setShowSidebar] = useState(true)
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState(null)
@@ -697,7 +700,7 @@ export default function BoxPage() {
 
   async function fetchBoxes() {
     setLoading(true)
-    const { data, error } = await supabase.from('boxes').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('boxes').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false })
     if (error) showStatus('error', 'Failed to load boxes: ' + error.message)
     const loaded = data || []
     setBoxes(loaded); setLoading(false)
@@ -809,6 +812,37 @@ export default function BoxPage() {
     showStatus('success', contact ? `Linked to ${contact.name}` : 'Client unlinked')
   }
 
+  async function saveBoxEdit() {
+    if (!boxDraft.name.trim() || !boxDraft.buyer_name.trim()) return
+    const { error } = await supabase.from('boxes').update({
+      name: boxDraft.name,
+      buyer_name: boxDraft.buyer_name,
+      buyer_email: boxDraft.buyer_email || null,
+    }).eq('id', activeBox.id)
+    if (error) { showStatus('error', 'Failed to save: ' + error.message); return }
+    setActiveBox(prev => ({ ...prev, name: boxDraft.name, buyer_name: boxDraft.buyer_name, buyer_email: boxDraft.buyer_email || null }))
+    setBoxes(prev => prev.map(b => b.id === activeBox.id ? { ...b, name: boxDraft.name, buyer_name: boxDraft.buyer_name } : b))
+    setEditingBox(false)
+    showStatus('success', 'Box updated.')
+  }
+
+  async function handleDrop(draggedId, targetId) {
+    if (draggedId === targetId) return
+    const reordered = [...boxes]
+    const fromIdx = reordered.findIndex(b => b.id === draggedId)
+    const toIdx   = reordered.findIndex(b => b.id === targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+    // Optimistic update
+    setBoxes(reordered)
+    setDragOverId(null)
+    // Persist new sort_order for all boxes
+    await Promise.all(reordered.map((b, i) =>
+      supabase.from('boxes').update({ sort_order: i }).eq('id', b.id)
+    ))
+  }
+
   const statusColour = s => s==='Confirmed'?'#2d6a4f':s==='Sent'?'#1a5a8a':'#8a6f1e'
   const totalBottles = activeItems.reduce((s, i) => s+(i.quantity||1), 0)
   const totalSale = activeItems.reduce((s, i) => s+(parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
@@ -858,7 +892,14 @@ export default function BoxPage() {
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 {boxes.map(box => (
-                  <div key={box.id} onClick={() => openBox(box)} style={{ padding:'10px 12px', background:activeBox?.id===box.id?'var(--ink)':'var(--white)', border:`1px solid ${activeBox?.id===box.id?'var(--ink)':'var(--border)'}`, cursor:'pointer' }}>
+                  <div key={box.id}
+                    onClick={() => openBox(box)}
+                    draggable
+                    onDragStart={e => { e.dataTransfer.setData('boxId', box.id); e.dataTransfer.effectAllowed = 'move' }}
+                    onDragOver={e => { e.preventDefault(); setDragOverId(box.id) }}
+                    onDragLeave={() => setDragOverId(null)}
+                    onDrop={e => { e.preventDefault(); handleDrop(e.dataTransfer.getData('boxId'), box.id) }}
+                    style={{ padding:'10px 12px', background:activeBox?.id===box.id?'var(--ink)':'var(--white)', border:`2px solid ${dragOverId===box.id?'#d4ad45':activeBox?.id===box.id?'var(--ink)':'var(--border)'}`, cursor:'grab', transition:'border-color 0.1s' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'6px' }}>
                       <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', color:activeBox?.id===box.id?'#d4ad45':'var(--ink)', fontWeight:500, lineHeight:1.2 }}>{box.name}</div>
                       <span style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:activeBox?.id===box.id?'rgba(212,173,69,0.7)':statusColour(box.status), fontWeight:500, letterSpacing:'0.08em', flexShrink:0 }}>{box.status}</span>
@@ -886,21 +927,47 @@ export default function BoxPage() {
           ) : (
             <div>
               <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'14px', flexWrap:'wrap', gap:'10px' }}>
-                <div>
-                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300 }}>{activeBox.name}</div>
-                  <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>
-                    {activeBox.buyer_name}{activeBox.buyer_email && ` · ${activeBox.buyer_email}`}
-                    <span style={{ marginLeft:'10px', color:statusColour(activeBox.status), fontWeight:500 }}>{activeBox.status}</span>
-                  </div>
-                  {/* FIX 1: Link to client dropdown */}
-                  {contacts.length > 0 && (
-                    <div style={{ marginTop:'6px' }}>
-                      <select value={activeBox.contact_id || ''} onChange={e => linkClientToBox(e.target.value || null)}
-                        style={{ border:'1px solid var(--border)', background:'var(--cream)', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', outline:'none', color:'var(--muted)', cursor:'pointer' }}>
-                        <option value=''>— link to client —</option>
-                        {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                <div style={{ flex:1, minWidth:0 }}>
+                  {editingBox ? (
+                    <div style={{ display:'flex', flexDirection:'column', gap:'6px', maxWidth:'380px' }}>
+                      {[['Box name',boxDraft.name,'name','Cormorant Garamond,serif','18px'],['Buyer name',boxDraft.buyer_name,'buyer_name','DM Mono,monospace','12px'],['Email',boxDraft.buyer_email,'buyer_email','DM Mono,monospace','12px']].map(([label,val,field,ff,fs]) => (
+                        <div key={field} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                          <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', width:'72px', flexShrink:0 }}>{label}</label>
+                          <input value={val} onChange={e => setBoxDraft(d => ({...d, [field]: e.target.value}))}
+                            onKeyDown={e => e.key === 'Enter' && saveBoxEdit()}
+                            style={{ flex:1, border:'1px solid var(--border)', background:'var(--white)', padding:'5px 8px', fontFamily:ff, fontSize:fs, outline:'none' }} />
+                        </div>
+                      ))}
+                      <div style={{ display:'flex', gap:'6px', marginTop:'2px' }}>
+                        <button onClick={saveBoxEdit} disabled={!boxDraft.name.trim() || !boxDraft.buyer_name.trim()}
+                          style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'6px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>✓ Save</button>
+                        <button onClick={() => setEditingBox(false)}
+                          style={{ background:'none', border:'1px solid var(--border)', padding:'6px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                        <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300 }}>{activeBox.name}</div>
+                        {activeBox.status === 'Draft' && (
+                          <button onClick={() => { setEditingBox(true); setBoxDraft({ name: activeBox.name, buyer_name: activeBox.buyer_name, buyer_email: activeBox.buyer_email || '' }) }}
+                            style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'2px 7px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', flexShrink:0 }}>✏</button>
+                        )}
+                      </div>
+                      <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>
+                        {activeBox.buyer_name}{activeBox.buyer_email && ` · ${activeBox.buyer_email}`}
+                        <span style={{ marginLeft:'10px', color:statusColour(activeBox.status), fontWeight:500 }}>{activeBox.status}</span>
+                      </div>
+                      {contacts.length > 0 && (
+                        <div style={{ marginTop:'6px' }}>
+                          <select value={activeBox.contact_id || ''} onChange={e => linkClientToBox(e.target.value || null)}
+                            style={{ border:'1px solid var(--border)', background:'var(--cream)', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', outline:'none', color:'var(--muted)', cursor:'pointer' }}>
+                            <option value=''>— link to client —</option>
+                            {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
