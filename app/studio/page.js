@@ -529,8 +529,8 @@ export default function StudioPage() {
 
                 return (
                   <React.Fragment key={s.id}>
-                  <tr style={{ background:'var(--white)', borderBottom:'1px solid var(--border)' }} onMouseEnter={e => e.currentTarget.style.background='var(--cream)'} onMouseLeave={e => e.currentTarget.style.background='var(--white)'}>
-                    <td style={{ padding:'10px 12px', maxWidth:'280px' }}>
+<tr style={{ background:'var(--white)', borderBottom:'1px solid var(--border)', opacity: s.status === 'Sold' || s.status === 'Consumed' ? 0.55 : 1 }} onMouseEnter={e => e.currentTarget.style.background='var(--cream)'} onMouseLeave={e => e.currentTarget.style.background='var(--white)'}>
+                            <td style={{ padding:'10px 12px', maxWidth:'280px' }}>
                       <div style={{ display:'flex', alignItems:'flex-start', gap:'6px' }}>
                         <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:dot, flexShrink:0, marginTop:'4px', display:'inline-block' }}></span>
                         <div>
@@ -540,6 +540,7 @@ export default function StudioPage() {
                               {name}
                               {alert && <span title={alert.tooltip} style={{ marginLeft:'4px', fontSize:'11px' }}>{alert.icon}</span>}
                               {buyerNote && <span style={{ marginLeft:'4px', fontSize:'10px', color:'var(--muted)' }}>✎</span>}
+                                {(s.status === 'Sold' || s.status === 'Consumed') && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase', color: s.status === 'Sold' ? '#c0392b' : '#7a5e10', border: `1px solid ${s.status === 'Sold' ? 'rgba(192,57,43,0.35)' : 'rgba(122,94,16,0.35)'}`, padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>{s.status}</span>}
                             </div>
                           )}
                           <div style={{ fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{region ? region : ''}{s.date_moved ? ` · ${s.date_moved}` : ''}</div>
