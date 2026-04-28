@@ -108,7 +108,7 @@ function PullListView({ box, items, onClose }) {
         @media print{body{padding:20px}}
       </style></head><body>${content}</body></html>`)
     win.contentDocument.close()
-    win.onload = () => { win.contentWindow.print(); document.body.removeChild(win) }
+    setTimeout(() => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }, 600)
   }
 
   const totalSale    = items.reduce((s, i) => s + (parseFloat(i.sale_price) || 0) * (i.quantity || 1), 0)
