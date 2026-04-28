@@ -254,50 +254,80 @@ function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
   )
 }
 
-// ─── Create Invoice Modal ─────────────────────────────────────────────────────
-function CreateInvoiceModal({ box, onConfirm, onClose }) {
-  const [initials, setInitials] = React.useState(() => {
-    const parts = (box.buyer_name || '').trim().split(/\s+/)
+// ─── Create Invoice Modal (multi-box) ───────────────────────────────────────
+function CreateInvoiceModal({ box, allBoxes, onConfirm, onClose }) {
+  const deriveInitials = (name) => {
+    const parts = (name || '').trim().split(/\s+/)
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length-1][0]).toUpperCase()
     return parts[0]?.slice(0,2).toUpperCase() || ''
-  })
+  }
+  const [initials, setInitials] = React.useState(() => deriveInitials(box.buyer_name))
   const [saving, setSaving] = React.useState(false)
+  const eligible = allBoxes.filter(b => b.status === 'Confirmed' && !b.invoice_id && b.buyer_name === box.buyer_name)
+  const [selectedIds, setSelectedIds] = React.useState(new Set([box.id]))
+
+  function toggleBox(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) { if (next.size > 1) next.delete(id) }
+      else next.add(id)
+      return next
+    })
+  }
+
   const year = new Date().getFullYear()
-  const preview = initials.length >= 1 ? `${initials.toUpperCase()}-${year}-001` : '—'
+  const preview = initials.length >= 1 ? `${initials.toUpperCase()}-${year}-NNN` : '—'
 
   async function handleCreate() {
-    if (!initials.trim()) return
+    if (!initials.trim() || selectedIds.size === 0) return
     setSaving(true)
-    await onConfirm(initials.trim().toUpperCase())
+    await onConfirm(initials.trim().toUpperCase(), [...selectedIds])
     setSaving(false)
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:350, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}>
-      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'360px', border:'1px solid var(--border)', padding:'24px' }}>
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:350, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'420px', border:'1px solid var(--border)', padding:'24px', marginTop:'8px' }}>
         <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300, marginBottom:'6px' }}>Create Invoice</div>
         <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', marginBottom:'20px' }}>for {box.buyer_name}</div>
+        {eligible.length > 1 && (
+          <div style={{ marginBottom:'16px' }}>
+            <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'8px', fontFamily:'DM Mono,monospace' }}>Include boxes</label>
+            <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+              {eligible.map(b => (
+                <div key={b.id} onClick={() => toggleBox(b.id)} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px', background:selectedIds.has(b.id)?'rgba(107,30,46,0.06)':'var(--white)', border:selectedIds.has(b.id)?'2px solid rgba(107,30,46,0.3)':'1px solid var(--border)', cursor:'pointer' }}>
+                  <div style={{ width:'16px', height:'16px', border:selectedIds.has(b.id)?'2px solid var(--wine)':'1px solid var(--border)', background:selectedIds.has(b.id)?'var(--wine)':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    {selectedIds.has(b.id) && <span style={{ color:'var(--white)', fontSize:'11px', lineHeight:1 }}>✓</span>}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', fontWeight:500 }}>{b.name}</div>
+                    {b.total_sale > 0 && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)' }}>£{parseFloat(b.total_sale).toFixed(2)}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ marginBottom:'16px' }}>
           <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>Buyer initials</label>
           <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase().slice(0,4))} onKeyDown={e => e.key==='Enter' && handleCreate()} placeholder="e.g. NP" maxLength={4}
             style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'10px 12px', fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:600, outline:'none', letterSpacing:'0.2em', boxSizing:'border-box', textTransform:'uppercase' }} />
         </div>
         <div style={{ background:'rgba(107,30,46,0.06)', border:'1px solid rgba(107,30,46,0.15)', padding:'10px 14px', marginBottom:'20px' }}>
-          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'4px' }}>Invoice number preview</div>
+          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'4px' }}>Invoice number</div>
           <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:500, color:'var(--wine)' }}>{preview}</div>
-          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'2px' }}>auto-increments per buyer</div>
+          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'2px' }}>{selectedIds.size} box{selectedIds.size !== 1 ? 'es' : ''} selected · auto-increments per buyer</div>
         </div>
         <div style={{ display:'flex', gap:'10px' }}>
           <button onClick={onClose} style={{ flex:1, background:'none', border:'1px solid var(--border)', padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
           <button onClick={handleCreate} disabled={!initials.trim()||saving} style={{ flex:2, background:initials.trim()?'var(--wine)':'#ccc', color:'var(--white)', border:'none', padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:initials.trim()?'pointer':'not-allowed' }}>
-            {saving?'Creating…':'Create Invoice →'}
+            {saving ? 'Creating…' : `Invoice ${selectedIds.size} box${selectedIds.size !== 1 ? 'es' : ''} →`}
           </button>
         </div>
       </div>
     </div>
   )
 }
-
 
 
 // ─── Clients Modal ────────────────────────────────────────────────────────────
@@ -926,7 +956,21 @@ export default function BoxPage() {
   useEffect(() => {
     const role = sessionStorage.getItem('role')
     if (role !== 'admin') router.push('/')
-    else { fetchBoxes(); fetchContacts() }
+    else {
+      fetchContacts()
+      // Initial load: fetch boxes then open the first one
+      supabase.from('boxes').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (error) return
+          const loaded = data || []
+          setBoxes(loaded)
+          setLoading(false)
+          if (loaded.length > 0) {
+            setActiveBox(loaded[0])
+            fetchBoxItemsById(loaded[0].id)
+          }
+        })
+    }
   }, [])
 
   function showStatus(type, text, durationMs = 4000) {
@@ -939,11 +983,6 @@ export default function BoxPage() {
     if (error) showStatus('error', 'Failed to load boxes: ' + error.message)
     const loaded = data || []
     setBoxes(loaded); setLoading(false)
-    // Auto-open the most recent box if none is active
-    if (loaded.length > 0) {
-      setActiveBox(loaded[0])
-      fetchBoxItemsById(loaded[0].id)
-    }
   }
 
   async function fetchContacts() {
@@ -1051,14 +1090,26 @@ export default function BoxPage() {
     if (!invoiceId) { setActiveInvoice(null); return }
     const { data } = await supabase.from('invoices').select('*').eq('id', invoiceId).maybeSingle()
     setActiveInvoice(data || null)
+    // Load items from all boxes on this invoice
+    const { data: junctions } = await supabase.from('invoice_boxes').select('box_id').eq('invoice_id', invoiceId)
+    if (junctions?.length) {
+      const allItems = []
+      for (const { box_id } of junctions) {
+        const { data: items } = await supabase.rpc('get_box_items_with_notes', { p_box_id: box_id })
+        if (items) allItems.push(...items)
+      }
+      setActiveItems(allItems)
+    }
   }
 
-  async function createInvoice(initials) {
-    if (!activeBox) return
+  async function createInvoice(initials, boxIds) {
+    if (!activeBox || !boxIds?.length) return
     const year = new Date().getFullYear()
     const { data: invNum, error: numErr } = await supabase.rpc('next_invoice_number', { p_initials: initials, p_year: year })
     if (numErr) { showStatus('error', 'Failed to generate invoice number: ' + numErr.message); return }
-    const total = activeItems.reduce((s, i) => s + (parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
+    // Sum totals across all selected boxes
+    const selectedBoxes = boxes.filter(b => boxIds.includes(b.id))
+    const total = selectedBoxes.reduce((s, b) => s + (parseFloat(b.total_sale) || 0), 0)
     const { data: inv, error } = await supabase.from('invoices').insert({
       invoice_number: invNum, box_id: activeBox.id,
       buyer_name: activeBox.buyer_name, buyer_email: activeBox.buyer_email || null,
@@ -1066,13 +1117,25 @@ export default function BoxPage() {
       total_amount: total, status: 'unpaid',
     }).select().single()
     if (error) { showStatus('error', 'Failed to create invoice: ' + error.message); return }
-    await supabase.from('boxes').update({ invoice_id: inv.id, status: 'Invoiced' }).eq('id', activeBox.id)
+    // Write junction rows for all selected boxes
+    await supabase.from('invoice_boxes').insert(boxIds.map(bid => ({ invoice_id: inv.id, box_id: bid })))
+    // Mark all selected boxes as Invoiced
+    await Promise.all(boxIds.map(bid =>
+      supabase.from('boxes').update({ invoice_id: inv.id, status: 'Invoiced' }).eq('id', bid)
+    ))
     setActiveBox(prev => ({ ...prev, status: 'Invoiced', invoice_id: inv.id }))
     await fetchBoxes()
+    // Fetch all items from all selected boxes for the invoice view
+    const allItems = []
+    for (const bid of boxIds) {
+      const { data } = await supabase.rpc('get_box_items_with_notes', { p_box_id: bid })
+      if (data) allItems.push(...data)
+    }
+    setActiveItems(allItems)
     setActiveInvoice(inv)
     setShowCreateInvoice(false)
     setShowInvoice(true)
-    showStatus('success', `Invoice ${inv.invoice_number} created.`)
+    showStatus('success', `Invoice ${inv.invoice_number} created for ${boxIds.length} box${boxIds.length !== 1 ? 'es' : ''}.`)
   }
 
   async function markInvoicePaid(invoiceId) {
@@ -1351,7 +1414,7 @@ export default function BoxPage() {
       {showMultiBottle && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
       {showPullList    && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
       {showClients        && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} />}
-      {showCreateInvoice  && activeBox && <CreateInvoiceModal box={activeBox} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
+      {showCreateInvoice  && activeBox && <CreateInvoiceModal box={activeBox} allBoxes={boxes} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
       {showInvoice        && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} />}
     </div>
   )
