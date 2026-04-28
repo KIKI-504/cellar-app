@@ -28,12 +28,13 @@ async function ensureSourceId(studioId, entry) {
   if (entry.source_id) return entry.source_id
   const w = entry.wines
   let pid
-  if (w?.source_id) { pid = w.source_id }
-  else {
-    const desc = w?.description || entry.unlinked_description || ''
-    const vintage = w?.vintage || entry.unlinked_vintage || ''
-    const colour = w?.colour || entry.colour || ''
-    const size = entry.bottle_size || '75'
+  if (w?.source_id) {
+    pid = w.source_id
+  } else {
+    const desc    = w?.description || entry.unlinked_description || ''
+    const vintage = w?.vintage     || entry.unlinked_vintage     || ''
+    const colour  = w?.colour      || entry.colour               || ''
+    const size    = entry.bottle_size || '75'
     pid = generateSourceId(desc, vintage, colour, size)
   }
   await supabase.from('studio').update({ source_id: pid }).eq('id', studioId)
@@ -46,11 +47,16 @@ function normaliseRow(row) {
     return {
       ...row,
       wines: row.wine_description ? {
-        id: row.wine_id, description: row.wine_description, vintage: row.wine_vintage,
-        colour: row.wine_colour, region: row.wine_region,
+        id:                        row.wine_id,
+        description:               row.wine_description,
+        vintage:                   row.wine_vintage,
+        colour:                    row.wine_colour,
+        region:                    row.wine_region,
         purchase_price_per_bottle: row.wine_purchase_price,
-        women_note: row.wine_women_note, producer_note: row.wine_producer_note,
-        source_id: row.wine_source_id, buyer_note: row.buyer_note,
+        women_note:                row.wine_women_note,
+        producer_note:             row.wine_producer_note,
+        source_id:                 row.wine_source_id,
+        buyer_note:                row.buyer_note,
       } : null,
     }
   }
@@ -67,7 +73,6 @@ function sizeBadge(size) {
   return s + 'cl'
 }
 
-// ─── Invoice Modal ────────────────────────────────────────────────────────────
 function sizeBadgeLabel(size) {
   if (!size) return '75cl'
   const s = String(size)
@@ -78,6 +83,7 @@ function sizeBadgeLabel(size) {
   return s + 'cl'
 }
 
+// ─── Invoice Modal ────────────────────────────────────────────────────────────
 function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
   const [saving, setSaving] = React.useState(false)
 
@@ -157,7 +163,7 @@ function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
     document.body.appendChild(win)
     win.contentDocument.write(buildHtml())
     win.contentDocument.close()
-    setTimeout(() => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }, 600)
+    win.onload = () => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }
   }
 
   function handlePdf() {
@@ -256,7 +262,7 @@ function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
   )
 }
 
-// ─── Create Invoice Modal (multi-box) ───────────────────────────────────────
+// ─── Create Invoice Modal ─────────────────────────────────────────────────────
 function CreateInvoiceModal({ box, allBoxes, onConfirm, onClose }) {
   const deriveInitials = (name) => {
     const parts = (name || '').trim().split(/\s+/)
@@ -331,9 +337,7 @@ function CreateInvoiceModal({ box, allBoxes, onConfirm, onClose }) {
   )
 }
 
-
 // ─── Clients Modal ────────────────────────────────────────────────────────────
-// FIX: EditForm moved out of nested function to prevent React remount on every keystroke
 function ClientEditFields({ draft, setDraft, onSave, onCancel, isNew, saving, editingName }) {
   const inputStyle = (field) => ({
     width:'100%', border:'1px solid var(--border)', background:'var(--white)',
@@ -413,11 +417,7 @@ function ClientsModal({ contacts, onClose, onRefresh }) {
           {contacts.map(c => (
             <div key={c.id} style={{ marginBottom:'8px' }}>
               {editingId === c.id ? (
-                <ClientEditFields
-                  draft={draft} setDraft={setDraft}
-                  onSave={() => save(false)} onCancel={cancelEdit}
-                  isNew={false} saving={saving} editingName={editingName}
-                />
+                <ClientEditFields draft={draft} setDraft={setDraft} onSave={() => save(false)} onCancel={cancelEdit} isNew={false} saving={saving} editingName={editingName} />
               ) : (
                 <div style={{ background:'var(--white)', border:'1px solid var(--border)', padding:'10px 12px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'10px' }}>
                   <div style={{ flex:1, minWidth:0 }}>
@@ -434,11 +434,7 @@ function ClientsModal({ contacts, onClose, onRefresh }) {
             </div>
           ))}
           {showNew ? (
-            <ClientEditFields
-              draft={draft} setDraft={setDraft}
-              onSave={() => save(true)} onCancel={() => { setShowNew(false); setDraft({ name:'', email:'', phone:'', note:'' }) }}
-              isNew={true} saving={saving} editingName=''
-            />
+            <ClientEditFields draft={draft} setDraft={setDraft} onSave={() => save(true)} onCancel={() => { setShowNew(false); setDraft({ name:'', email:'', phone:'', note:'' }) }} isNew={true} saving={saving} editingName='' />
           ) : (
             <button onClick={() => { setShowNew(true); setEditingId(null); setDraft({ name:'', email:'', phone:'', note:'' }) }}
               style={{ width:'100%', background:'none', border:'1px dashed var(--border)', padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', cursor:'pointer', textAlign:'center', letterSpacing:'0.08em' }}>
@@ -451,104 +447,219 @@ function ClientsModal({ contacts, onClose, onRefresh }) {
   )
 }
 
-// ─── Pull List ────────────────────────────────────────────────────────────────
+// ─── Pull List View (with tick-select and numbered split) ─────────────────────
 function PullListView({ box, items, onClose }) {
   const printRef = useRef(null)
+  // All items ticked by default
+  const [ticked, setTicked] = useState(() => new Set(items.map(i => i.id)))
+  const [splitNum, setSplitNum] = useState('')
+  const [splitOf, setSplitOf] = useState('')
 
-  function handlePrint() {
-    const content = printRef.current.innerHTML
-    const win = document.createElement('iframe')
-    win.style.display = 'none'
-    document.body.appendChild(win)
-    win.contentDocument.write(`<!DOCTYPE html><html><head>
+  function toggleAll() {
+    if (ticked.size === items.length) setTicked(new Set())
+    else setTicked(new Set(items.map(i => i.id)))
+  }
+  function invertTick() {
+    setTicked(new Set(items.filter(i => !ticked.has(i.id)).map(i => i.id)))
+  }
+  function toggleItem(id) {
+    setTicked(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const totalSale    = items.reduce((s, i) => s + (parseFloat(i.sale_price)||0) * (i.quantity||1), 0)
+  const tickedSale   = items.filter(i => ticked.has(i.id)).reduce((s, i) => s + (parseFloat(i.sale_price)||0) * (i.quantity||1), 0)
+  const totalBottles = items.reduce((s, i) => s + (i.quantity||1), 0)
+  const tickedBottles = items.filter(i => ticked.has(i.id)).reduce((s, i) => s + (i.quantity||1), 0)
+
+  const isSplit = splitNum !== '' && splitOf !== ''
+  const isPartial = ticked.size < items.length
+
+  function buildPrintHtml() {
+    const rows = items.map(item => {
+      const isTickedItem = ticked.has(item.id)
+      const fd = item.wine_description || ''
+      const ci = fd.indexOf(',')
+      const wp = ci > -1 ? fd.slice(0, ci).trim() : fd
+      const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
+      const badge = sizeBadge(item.wine_bottle_size)
+      const dimStyle = isPartial && !isTickedItem ? 'opacity:0.35;' : ''
+      const thisLabel = isPartial && isTickedItem ? `<span style="display:inline-block;width:10px;height:10px;background:#1a1008;border-radius:2px;margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>` : isPartial ? `<span style="display:inline-block;width:10px;height:10px;border:1px solid #c8b89a;border-radius:2px;margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>` : ''
+      return `<div class="card" style="padding:18px 0;border-bottom:1px solid #ede6d6;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;${dimStyle}">
+        <div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+            ${thisLabel}<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colourDot(item.wine_colour)};flex-shrink:0;"></span>
+            <span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;">${wp}</span>
+            ${item.wine_vintage ? `<span style="font-family:'DM Mono',monospace;font-size:12px;color:#7a6652;">${item.wine_vintage}</span>` : ''}
+            ${badge ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:#6b1e2e;font-weight:600;">${badge}</span>` : ''}
+          </div>
+          ${pp ? `<div style="font-family:'Cormorant Garamond',serif;font-size:14px;color:#3a2a1a;margin-top:2px;margin-left:24px;">${pp}</div>` : ''}
+          ${item.wine_region ? `<div style="font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:4px;margin-left:24px;">${item.wine_region}</div>` : ''}
+          ${item.tasting_note ? `<div style="font-size:13px;font-style:italic;color:#3a2a1a;margin-top:10px;margin-left:24px;line-height:1.6;">"${item.tasting_note}"</div>` : ''}
+          ${item.buyer_note ? `<div style="font-family:'Cormorant Garamond',serif;font-size:13px;color:#3a2a1a;margin-top:8px;margin-left:24px;line-height:1.6;opacity:0.9;">${item.buyer_note}</div>` : ''}
+          ${item.women_note ? `<div style="display:flex;align-items:flex-start;gap:5px;margin-top:6px;margin-left:24px;"><span style="font-size:13px;color:#9b3a4a;flex-shrink:0;line-height:1.4;">♀</span><span style="font-family:'Cormorant Garamond',serif;font-size:13px;font-style:italic;color:#9b3a4a;line-height:1.6;">${item.women_note}</span></div>` : ''}
+          ${item.producer_note ? `<div style="font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:3px;margin-left:24px;line-height:1.4;">${item.producer_note}</div>` : ''}
+        </div>
+        <div style="text-align:right;min-width:80px;">
+          <div style="font-size:9px;font-family:'DM Mono',monospace;color:#7a6652;text-transform:uppercase;letter-spacing:0.1em;">per bottle</div>
+          <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:#6b1e2e;margin-top:2px;">${item.sale_price ? `£${parseFloat(item.sale_price).toFixed(2)}` : '—'}</div>
+          ${item.quantity > 1 ? `<div style="font-size:10px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:2px;">× ${item.quantity}</div>` : ''}
+        </div>
+      </div>`
+    }).join('')
+
+    const splitLabel = isSplit ? `Pull List ${splitNum} of ${splitOf}` : 'Pull List'
+    const totalLine = isPartial
+      ? `£${tickedSale.toFixed(2)} of £${totalSale.toFixed(2)} total`
+      : `£${totalSale.toFixed(2)}`
+
+    return `<!DOCTYPE html><html><head>
       <meta charset="utf-8"><title>${box.name}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:'Cormorant Garamond',serif;color:#1a1008;background:#fff;padding:40px}
-        .hdr{border-bottom:1px solid #c8b89a;padding-bottom:20px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:flex-end}
-        .hdr-title{font-size:28px;font-weight:300;letter-spacing:0.05em}.hdr-sub{font-size:12px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:4px}
-        .card{padding:18px 0;border-bottom:1px solid #ede6d6;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start}.card:last-child{border-bottom:none}
-        .wname{font-size:18px;font-weight:500;line-height:1.2}.wprod{font-size:14px;color:#3a2a1a;margin-top:2px}
-        .wmeta{font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:6px}
-        .tnote{font-size:13px;font-style:italic;color:#3a2a1a;margin-top:10px;line-height:1.6}
-        .bnote{font-size:13px;color:#3a2a1a;margin-top:8px;line-height:1.6;opacity:0.9}
-        .wnote{font-size:13px;font-style:italic;color:#6b1e2e;margin-top:6px;line-height:1.6}
-        .pblk{text-align:right;min-width:80px}.plbl{font-size:9px;font-family:'DM Mono',monospace;color:#7a6652;text-transform:uppercase;letter-spacing:0.1em}
-        .pval{font-size:16px;font-weight:500;color:#6b1e2e;margin-top:2px}
-        .tots{margin-top:24px;padding-top:16px;border-top:2px solid #c8b89a;display:flex;justify-content:flex-end;gap:32px}
-        .tlbl{font-size:9px;font-family:'DM Mono',monospace;color:#7a6652;text-transform:uppercase;letter-spacing:0.1em}.tval{font-size:20px;font-weight:500;margin-top:2px}
-        .foot{margin-top:40px;padding-top:16px;border-top:1px solid #ede6d6;font-size:10px;font-family:'DM Mono',monospace;color:#c8b89a;text-align:center}
+        .card:last-child{border-bottom:none}
         @media print{body{padding:20px}}
-      </style></head><body>${content}</body></html>`)
-    win.contentDocument.close()
-    setTimeout(() => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }, 600)
+      </style></head><body>
+      <div style="border-bottom:1px solid #c8b89a;padding-bottom:20px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:300;letter-spacing:0.05em;">${box.name}</div>
+          <div style="font-size:12px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:4px;">For ${box.buyer_name}${box.buyer_email ? ` · ${box.buyer_email}` : ''}</div>
+        </div>
+        <div style="text-align:right;font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;">
+          <div>${isPartial ? `${tickedBottles} of ${totalBottles}` : totalBottles} bottle${totalBottles !== 1 ? 's' : ''}</div>
+          <div>${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</div>
+        </div>
+      </div>
+      ${rows}
+      <div style="margin-top:24px;padding-top:16px;border-top:2px solid #c8b89a;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;letter-spacing:0.08em;text-transform:uppercase;">${splitLabel}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:#6b1e2e;">${totalLine}</div>
+      </div>
+      ${box.notes ? `<div style="margin-top:16px;padding:12px 16px;background:rgba(212,173,69,0.08);border:1px solid rgba(212,173,69,0.25);font-size:12px;font-family:'DM Mono',monospace;color:#7a6652;">${box.notes}</div>` : ''}
+      <div style="margin-top:40px;padding-top:16px;border-top:1px solid #ede6d6;font-size:10px;font-family:'DM Mono',monospace;color:#c8b89a;text-align:center;letter-spacing:0.1em;">BELLE ANNÉE WINES · ${new Date().getFullYear()}</div>
+    </body></html>`
   }
 
-  const totalSale = items.reduce((s, i) => s + (parseFloat(i.sale_price)||0) * (i.quantity||1), 0)
-  const totalDP = items.reduce((s, i) => s + (parseFloat(i.dp_price)||0) * (i.quantity||1), 0)
-  const totalBottles = items.reduce((s, i) => s + (i.quantity||1), 0)
+  function handlePrint() {
+    const html = buildPrintHtml()
+    const win = document.createElement('iframe')
+    win.style.display = 'none'
+    document.body.appendChild(win)
+    win.contentDocument.write(html)
+    win.contentDocument.close()
+    win.onload = () => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }
+  }
+
+  const allTicked = ticked.size === items.length
+  const noneTicked = ticked.size === 0
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.85)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
-      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'680px', border:'1px solid var(--border)' }}>
-        <div style={{ background:'var(--ink)', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 20px' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'700px', border:'1px solid var(--border)' }}>
+
+        {/* Header */}
+        <div style={{ background:'var(--ink)', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 20px', flexWrap:'wrap', gap:'8px' }}>
           <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.15em', color:'rgba(253,250,245,0.5)', textTransform:'uppercase' }}>Pull List Preview</span>
           <div style={{ display:'flex', gap:'8px' }}>
-            <button onClick={handlePrint} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'7px 16px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>🖨 Print</button>
+            <button onClick={handlePrint} disabled={noneTicked} style={{ background:noneTicked?'#555':'var(--wine)', color:'var(--white)', border:'none', padding:'7px 16px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:noneTicked?'not-allowed':'pointer' }}>🖨 Print</button>
             <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕ Close</button>
           </div>
         </div>
-        <div ref={printRef} style={{ padding:'36px 40px' }}>
-          <div className="hdr" style={{ borderBottom:'1px solid #c8b89a', paddingBottom:'20px', marginBottom:'28px', display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:'12px' }}>
+
+        {/* Tick controls + split numbering */}
+        <div style={{ padding:'12px 20px', background:'rgba(107,30,46,0.04)', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase' }}>Select:</span>
+            <button onClick={toggleAll} style={{ padding:'4px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', border:'1px solid var(--border)', background:allTicked?'var(--ink)':'var(--white)', color:allTicked?'var(--white)':'var(--muted)', cursor:'pointer', letterSpacing:'0.06em' }}>{allTicked ? '✓ All' : 'All'}</button>
+            <button onClick={() => setTicked(new Set())} style={{ padding:'4px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', border:'1px solid var(--border)', background:noneTicked?'var(--ink)':'var(--white)', color:noneTicked?'var(--white)':'var(--muted)', cursor:'pointer', letterSpacing:'0.06em' }}>None</button>
+            <button onClick={invertTick} style={{ padding:'4px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', border:'1px solid var(--border)', background:'var(--white)', color:'var(--muted)', cursor:'pointer', letterSpacing:'0.06em' }}>Invert</button>
+          </div>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'8px' }}>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap' }}>Pull List</span>
+            <input type="number" min="1" value={splitNum} onChange={e => setSplitNum(e.target.value)} placeholder="1" style={{ width:'40px', border:'1px solid var(--border)', background:'var(--white)', padding:'4px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center' }} />
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)' }}>of</span>
+            <input type="number" min="1" value={splitOf} onChange={e => setSplitOf(e.target.value)} placeholder="2" style={{ width:'40px', border:'1px solid var(--border)', background:'var(--white)', padding:'4px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center' }} />
+            {(splitNum || splitOf) && <button onClick={() => { setSplitNum(''); setSplitOf('') }} style={{ background:'none', border:'none', color:'var(--muted)', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', padding:'2px 4px' }}>✕</button>}
+          </div>
+        </div>
+
+        {/* Items preview */}
+        <div style={{ padding:'28px 32px' }}>
+          <div style={{ borderBottom:'1px solid #c8b89a', paddingBottom:'16px', marginBottom:'20px', display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:'8px' }}>
             <div>
-              <div className="hdr-title" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'26px', fontWeight:300, letterSpacing:'0.05em' }}>{box.name}</div>
-              <div className="hdr-sub" style={{ fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'4px' }}>For {box.buyer_name}{box.buyer_email && ` · ${box.buyer_email}`}</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300, letterSpacing:'0.05em' }}>{box.name}</div>
+              <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px' }}>For {box.buyer_name}{box.buyer_email && ` · ${box.buyer_email}`}</div>
             </div>
             <div style={{ textAlign:'right', fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>
-              <div>{totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
+              <div>{isPartial ? `${tickedBottles} of ${totalBottles}` : totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
               <div>{new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</div>
             </div>
           </div>
+
           {items.map((item, i) => {
+            const isTickedItem = ticked.has(item.id)
             const fd = item.wine_description || ''
             const ci = fd.indexOf(',')
             const wp = ci > -1 ? fd.slice(0, ci).trim() : fd
             const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
             const badge = sizeBadge(item.wine_bottle_size)
             return (
-              <div key={item.id} className="card" style={{ padding:'18px 0', borderBottom: i < items.length-1 ? '1px solid #ede6d6' : 'none', display:'grid', gridTemplateColumns:'1fr auto', gap:'16px', alignItems:'start' }}>
+              <div key={item.id} onClick={() => toggleItem(item.id)} style={{ padding:'14px 0', borderBottom: i < items.length-1 ? '1px solid #ede6d6' : 'none', display:'grid', gridTemplateColumns:'auto 1fr auto', gap:'12px', alignItems:'start', cursor:'pointer', opacity: isPartial && !isTickedItem ? 0.4 : 1, transition:'opacity 0.15s' }}>
+                {/* Checkbox */}
+                <div style={{ width:'18px', height:'18px', border:`2px solid ${isTickedItem ? 'var(--ink)' : 'var(--border)'}`, background:isTickedItem?'var(--ink)':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:'2px', borderRadius:'2px', transition:'all 0.1s' }}>
+                  {isTickedItem && <span style={{ color:'var(--white)', fontSize:'12px', lineHeight:1, fontWeight:700 }}>✓</span>}
+                </div>
+                {/* Wine info */}
                 <div>
                   <div style={{ display:'flex', alignItems:'baseline', gap:'8px', flexWrap:'wrap' }}>
                     <span style={{ display:'inline-block', width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), flexShrink:0 }}></span>
-                    <span className="wname" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', fontWeight:500 }}>{wp}</span>
-                    {item.wine_vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', color:'#7a6652' }}>{item.wine_vintage}</span>}
-                    {badge && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'#6b1e2e', fontWeight:600 }}>{badge}</span>}
+                    <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'17px', fontWeight:500 }}>{wp}</span>
+                    {item.wine_vintage && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)' }}>{item.wine_vintage}</span>}
+                    {badge && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--wine)', fontWeight:600 }}>{badge}</span>}
                   </div>
-                  {pp && <div className="wprod" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', color:'#3a2a1a', marginTop:'2px', marginLeft:'16px' }}>{pp}</div>}
-                  {item.wine_region && <div className="wmeta" style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'#7a6652', marginTop:'4px', marginLeft:'16px' }}>{item.wine_region}</div>}
-                  {item.tasting_note && <div className="tnote" style={{ fontSize:'13px', fontStyle:'italic', color:'#3a2a1a', marginTop:'10px', marginLeft:'16px', lineHeight:1.6 }}>"{item.tasting_note}"</div>}
-                  {item.buyer_note && <div className="bnote" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'#3a2a1a', marginTop:'8px', marginLeft:'16px', lineHeight:1.6, opacity:0.9 }}>{item.buyer_note}</div>}
-                  {item.women_note && (
-                    <div className="wnote" style={{ display:'flex', alignItems:'flex-start', gap:'5px', marginTop:'6px', marginLeft:'16px' }}>
-                      <span style={{ fontSize:'13px', color:'#9b3a4a', flexShrink:0, lineHeight:1.4 }}>♀</span>
-                      <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', color:'#9b3a4a', lineHeight:1.6 }}>{item.women_note}</span>
-                    </div>
-                  )}
+                  {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px', marginLeft:'16px' }}>{pp}</div>}
+                  {item.wine_region && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px', marginLeft:'16px' }}>{item.wine_region}</div>}
+                  {item.tasting_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'12px', fontStyle:'italic', color:'#3a2a1a', marginTop:'6px', marginLeft:'16px', lineHeight:1.5 }}>"{item.tasting_note}"</div>}
+                  {item.women_note && <div style={{ display:'flex', alignItems:'flex-start', gap:'4px', marginTop:'4px', marginLeft:'16px' }}><span style={{ fontSize:'12px', color:'#9b3a4a' }}>♀</span><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'12px', fontStyle:'italic', color:'#9b3a4a', lineHeight:1.5 }}>{item.women_note}</span></div>}
                 </div>
-                <div className="pblk" style={{ textAlign:'right', minWidth:'80px' }}>
-                  <div className="plbl" style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:'#7a6652', textTransform:'uppercase', letterSpacing:'0.1em' }}>per bottle</div>
-                  <div className="pval" style={{ fontFamily:'DM Mono,monospace', fontSize:'16px', fontWeight:500, color:'#6b1e2e', marginTop:'2px' }}>{item.sale_price ? `£${parseFloat(item.sale_price).toFixed(2)}` : '—'}</div>
-                  {item.quantity > 1 && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#7a6652', marginTop:'2px' }}>× {item.quantity}</div>}
+                {/* Price */}
+                <div style={{ textAlign:'right', minWidth:'72px' }}>
+                  <div style={{ fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:500, color:'var(--wine)' }}>{item.sale_price ? `£${parseFloat(item.sale_price).toFixed(2)}` : '—'}</div>
+                  {item.quantity > 1 && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>× {item.quantity}</div>}
                 </div>
               </div>
             )
           })}
-          <div className="tots" style={{ marginTop:'24px', paddingTop:'16px', borderTop:'2px solid #c8b89a', display:'flex', justifyContent:'flex-end', gap:'32px', flexWrap:'wrap' }}>
-            <div style={{ textAlign:'right' }}><div className="tlbl">Total</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'22px', fontWeight:500, color:'var(--wine)' }}>£{totalSale.toFixed(2)}</div></div>
+
+          {/* Totals footer */}
+          <div style={{ marginTop:'20px', paddingTop:'14px', borderTop:'2px solid #c8b89a', display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:'8px' }}>
+            <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase' }}>
+              {isSplit ? `Pull List ${splitNum} of ${splitOf}` : 'Pull List'}
+            </div>
+            <div style={{ textAlign:'right' }}>
+              {isPartial ? (
+                <div>
+                  <span style={{ fontFamily:'DM Mono,monospace', fontSize:'20px', fontWeight:500, color:'var(--wine)' }}>£{tickedSale.toFixed(2)}</span>
+                  <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', color:'var(--muted)', marginLeft:'8px' }}>of £{totalSale.toFixed(2)} total</span>
+                </div>
+              ) : (
+                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'20px', fontWeight:500, color:'var(--wine)' }}>£{totalSale.toFixed(2)}</span>
+              )}
+            </div>
           </div>
-          {box.notes && <div style={{ marginTop:'24px', padding:'12px 16px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.25)', fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>{box.notes}</div>}
-          <div className="foot" style={{ marginTop:'40px', paddingTop:'16px', borderTop:'1px solid #ede6d6', fontSize:'10px', fontFamily:'DM Mono,monospace', color:'#c8b89a', textAlign:'center', letterSpacing:'0.1em' }}>BELLE ANNÉE WINES · {new Date().getFullYear()}</div>
+
+          {/* Tick summary hint */}
+          {isPartial && (
+            <div style={{ marginTop:'10px', padding:'8px 12px', background:'rgba(107,30,46,0.05)', border:'1px solid rgba(107,30,46,0.15)', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.06em' }}>
+              {ticked.size} of {items.length} items selected · unticked items will print dimmed
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -585,11 +696,11 @@ function AddBottleModal({ onAdd, onClose }) {
     const w = entry.wines
     const built = {
       ...entry,
-      _desc: w?.description || entry.unlinked_description || '',
-      _vintage: w?.vintage || entry.unlinked_vintage || '',
-      _colour: w?.colour || entry.colour || '',
-      _region: w?.region || '',
-      _dp: entry.dp_price ? parseFloat(entry.dp_price) : null,
+      _desc:    w?.description || entry.unlinked_description || '',
+      _vintage: w?.vintage     || entry.unlinked_vintage     || '',
+      _colour:  w?.colour      || entry.colour               || '',
+      _region:  w?.region      || '',
+      _dp:      entry.dp_price ? parseFloat(entry.dp_price) : null,
     }
     setSelected(built)
     setSalePrice(entry.sale_price ? String(parseFloat(entry.sale_price)) : '')
@@ -643,7 +754,6 @@ function AddBottleModal({ onAdd, onClose }) {
   }
 
   const scanMatchDesc = scanMatch ? (scanMatch.wines?.description || scanMatch.unlinked_description || '') : ''
-  // FIX 3: Quick margins changed to 10% and 15%
   const MARGINS = [10, 15]
 
   return (
@@ -960,7 +1070,6 @@ export default function BoxPage() {
     if (role !== 'admin') router.push('/')
     else {
       fetchContacts()
-      // Initial load: fetch boxes then open the first one
       supabase.from('boxes').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false })
         .then(({ data, error }) => {
           if (error) return
@@ -1034,7 +1143,6 @@ export default function BoxPage() {
     await fetchBoxItemsById(activeBox.id); await updateBoxTotals(activeBox.id)
   }
 
-  // FIX 2: update quantity inline on existing items
   async function updateItemQty(itemId, newQty) {
     if (newQty < 1) return
     const { error } = await supabase.from('box_items').update({ quantity: newQty }).eq('id', itemId)
@@ -1092,7 +1200,6 @@ export default function BoxPage() {
     if (!invoiceId) { setActiveInvoice(null); return }
     const { data } = await supabase.from('invoices').select('*').eq('id', invoiceId).maybeSingle()
     setActiveInvoice(data || null)
-    // Load items from all boxes on this invoice
     const { data: junctions } = await supabase.from('invoice_boxes').select('box_id').eq('invoice_id', invoiceId)
     if (junctions?.length) {
       const allItems = []
@@ -1109,7 +1216,6 @@ export default function BoxPage() {
     const year = new Date().getFullYear()
     const { data: invNum, error: numErr } = await supabase.rpc('next_invoice_number', { p_initials: initials, p_year: year })
     if (numErr) { showStatus('error', 'Failed to generate invoice number: ' + numErr.message); return }
-    // Sum totals across all selected boxes
     const selectedBoxes = boxes.filter(b => boxIds.includes(b.id))
     const total = selectedBoxes.reduce((s, b) => s + (parseFloat(b.total_sale) || 0), 0)
     const { data: inv, error } = await supabase.from('invoices').insert({
@@ -1119,15 +1225,12 @@ export default function BoxPage() {
       total_amount: total, status: 'unpaid',
     }).select().single()
     if (error) { showStatus('error', 'Failed to create invoice: ' + error.message); return }
-    // Write junction rows for all selected boxes
     await supabase.from('invoice_boxes').insert(boxIds.map(bid => ({ invoice_id: inv.id, box_id: bid })))
-    // Mark all selected boxes as Invoiced
     await Promise.all(boxIds.map(bid =>
       supabase.from('boxes').update({ invoice_id: inv.id, status: 'Invoiced' }).eq('id', bid)
     ))
     setActiveBox(prev => ({ ...prev, status: 'Invoiced', invoice_id: inv.id }))
     await fetchBoxes()
-    // Fetch all items from all selected boxes for the invoice view
     const allItems = []
     for (const bid of boxIds) {
       const { data } = await supabase.rpc('get_box_items_with_notes', { p_box_id: bid })
@@ -1150,15 +1253,12 @@ export default function BoxPage() {
   async function saveBoxEdit() {
     if (!boxDraft.name.trim() || !boxDraft.buyer_name.trim()) return
     const { error } = await supabase.from('boxes').update({
-      name: boxDraft.name,
-      buyer_name: boxDraft.buyer_name,
-      buyer_email: boxDraft.buyer_email || null,
+      name: boxDraft.name, buyer_name: boxDraft.buyer_name, buyer_email: boxDraft.buyer_email || null,
     }).eq('id', activeBox.id)
     if (error) { showStatus('error', 'Failed to save: ' + error.message); return }
     setActiveBox(prev => ({ ...prev, name: boxDraft.name, buyer_name: boxDraft.buyer_name, buyer_email: boxDraft.buyer_email || null }))
     setBoxes(prev => prev.map(b => b.id === activeBox.id ? { ...b, name: boxDraft.name, buyer_name: boxDraft.buyer_name } : b))
-    setEditingBox(false)
-    showStatus('success', 'Box updated.')
+    setEditingBox(false); showStatus('success', 'Box updated.')
   }
 
   async function handleDrop(draggedId, targetId) {
@@ -1169,20 +1269,14 @@ export default function BoxPage() {
     if (fromIdx === -1 || toIdx === -1) return
     const [moved] = reordered.splice(fromIdx, 1)
     reordered.splice(toIdx, 0, moved)
-    // Optimistic update
-    setBoxes(reordered)
-    setDragOverId(null)
-    // Persist new sort_order for all boxes
-    await Promise.all(reordered.map((b, i) =>
-      supabase.from('boxes').update({ sort_order: i }).eq('id', b.id)
-    ))
+    setBoxes(reordered); setDragOverId(null)
+    await Promise.all(reordered.map((b, i) => supabase.from('boxes').update({ sort_order: i }).eq('id', b.id)))
   }
 
   const statusColour = s => s==='Confirmed'?'#2d6a4f':s==='Sent'?'#1a5a8a':'#8a6f1e'
   const totalBottles = activeItems.reduce((s, i) => s+(i.quantity||1), 0)
   const totalSale = activeItems.reduce((s, i) => s+(parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
   const totalDP = activeItems.reduce((s, i) => s+(parseFloat(i.dp_price)||0)*(i.quantity||1), 0)
-  // FIX 4: margin as percentage
   const marginPct = totalDP > 0 ? `+${((totalSale-totalDP)/totalDP*100).toFixed(1)}%` : '—'
   const NAV = [['Inventory','/admin'],['Studio','/studio'],['Box Builder','/boxes'],['Labels','/labels'],['Buyer View','/buyer'],['Local Sales','/local'],['Consignment','/consignment']]
 
@@ -1190,6 +1284,7 @@ export default function BoxPage() {
 
   return (
     <div style={{ minHeight:'100vh', background:'var(--cream)', overflowX:'hidden' }}>
+      {/* Nav */}
       <div style={{ background:'var(--ink)', color:'var(--white)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 14px', height:'52px', position:'fixed', top:0, left:0, width:'100%', zIndex:100, boxSizing:'border-box' }}>
         <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300, letterSpacing:'0.1em', color:'#d4ad45', flexShrink:0, marginRight:'8px' }}>Cellar</div>
         <div style={{ display:'flex', gap:'1px', overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
@@ -1212,7 +1307,6 @@ export default function BoxPage() {
             <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:'14px' }}>
               <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:300 }}>Boxes</div>
               <div style={{ display:'flex', gap:'6px' }}>
-                {/* FIX 1: Clients button */}
                 <button onClick={() => setShowClients(true)} style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'5px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>
                   Clients{contacts.length > 0 ? ` · ${contacts.length}` : ''}
                 </button>
@@ -1261,6 +1355,7 @@ export default function BoxPage() {
             </div>
           ) : (
             <div>
+              {/* Box header */}
               <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'14px', flexWrap:'wrap', gap:'10px' }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   {editingBox ? (
@@ -1268,16 +1363,12 @@ export default function BoxPage() {
                       {[['Box name',boxDraft.name,'name','Cormorant Garamond,serif','18px'],['Buyer name',boxDraft.buyer_name,'buyer_name','DM Mono,monospace','12px'],['Email',boxDraft.buyer_email,'buyer_email','DM Mono,monospace','12px']].map(([label,val,field,ff,fs]) => (
                         <div key={field} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                           <label style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', width:'72px', flexShrink:0 }}>{label}</label>
-                          <input value={val} onChange={e => setBoxDraft(d => ({...d, [field]: e.target.value}))}
-                            onKeyDown={e => e.key === 'Enter' && saveBoxEdit()}
-                            style={{ flex:1, border:'1px solid var(--border)', background:'var(--white)', padding:'5px 8px', fontFamily:ff, fontSize:fs, outline:'none' }} />
+                          <input value={val} onChange={e => setBoxDraft(d => ({...d, [field]: e.target.value}))} onKeyDown={e => e.key === 'Enter' && saveBoxEdit()} style={{ flex:1, border:'1px solid var(--border)', background:'var(--white)', padding:'5px 8px', fontFamily:ff, fontSize:fs, outline:'none' }} />
                         </div>
                       ))}
                       <div style={{ display:'flex', gap:'6px', marginTop:'2px' }}>
-                        <button onClick={saveBoxEdit} disabled={!boxDraft.name.trim() || !boxDraft.buyer_name.trim()}
-                          style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'6px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>✓ Save</button>
-                        <button onClick={() => setEditingBox(false)}
-                          style={{ background:'none', border:'1px solid var(--border)', padding:'6px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
+                        <button onClick={saveBoxEdit} disabled={!boxDraft.name.trim() || !boxDraft.buyer_name.trim()} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'6px 14px', fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>✓ Save</button>
+                        <button onClick={() => setEditingBox(false)} style={{ background:'none', border:'1px solid var(--border)', padding:'6px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
@@ -1285,8 +1376,7 @@ export default function BoxPage() {
                       <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                         <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300 }}>{activeBox.name}</div>
                         {activeBox.status === 'Draft' && (
-                          <button onClick={() => { setEditingBox(true); setBoxDraft({ name: activeBox.name, buyer_name: activeBox.buyer_name, buyer_email: activeBox.buyer_email || '' }) }}
-                            style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'2px 7px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', flexShrink:0 }}>✏</button>
+                          <button onClick={() => { setEditingBox(true); setBoxDraft({ name: activeBox.name, buyer_name: activeBox.buyer_name, buyer_email: activeBox.buyer_email || '' }) }} style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'2px 7px', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', flexShrink:0 }}>✏</button>
                         )}
                       </div>
                       <div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>
@@ -1295,8 +1385,7 @@ export default function BoxPage() {
                       </div>
                       {contacts.length > 0 && (
                         <div style={{ marginTop:'6px' }}>
-                          <select value={activeBox.contact_id || ''} onChange={e => linkClientToBox(e.target.value || null)}
-                            style={{ border:'1px solid var(--border)', background:'var(--cream)', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', outline:'none', color:'var(--muted)', cursor:'pointer' }}>
+                          <select value={activeBox.contact_id || ''} onChange={e => linkClientToBox(e.target.value || null)} style={{ border:'1px solid var(--border)', background:'var(--cream)', padding:'4px 8px', fontFamily:'DM Mono,monospace', fontSize:'10px', outline:'none', color:'var(--muted)', cursor:'pointer' }}>
                             <option value=''>— link to client —</option>
                             {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
@@ -1320,7 +1409,7 @@ export default function BoxPage() {
                 </div>
               </div>
 
-              {/* FIX 4: Stats bar — margin as % only */}
+              {/* Stats bar */}
               {activeItems.length > 0 && (
                 <div style={{ display:'flex', gap:'16px', padding:'10px 14px', background:'var(--white)', border:'1px solid var(--border)', marginBottom:'12px', fontSize:'11px', flexWrap:'wrap' }}>
                   {[['bottles', totalBottles], ['cost', `£${totalDP.toFixed(2)}`], ['sale', `£${totalSale.toFixed(2)}`], ['margin', marginPct]].map(([label, val]) => (
@@ -1332,6 +1421,7 @@ export default function BoxPage() {
                 </div>
               )}
 
+              {/* Items list */}
               {activeItems.length === 0 ? (
                 <div style={{ padding:'36px', textAlign:'center', border:'1px dashed var(--border)', background:'var(--white)' }}>
                   <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', color:'var(--muted)' }}>No bottles yet — tap + One Bottle to start</div>
@@ -1371,7 +1461,6 @@ export default function BoxPage() {
                           <div style={{ fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:500, color:'var(--wine)' }}>{item.sale_price ? `£${parseFloat(item.sale_price).toFixed(2)}` : '—'}</div>
                           {item.dp_price && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>DP £{parseFloat(item.dp_price).toFixed(2)}</div>}
                           {margin && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:parseFloat(margin)>=0?'#2d6a4f':'#c0392b' }}>{parseFloat(margin)>=0?'+':''}{margin}%</div>}
-                          {/* FIX 2: Quantity stepper on existing items */}
                           {activeBox.status === 'Draft' && (
                             <div style={{ display:'flex', alignItems:'center', gap:'3px', marginTop:'4px' }}>
                               <button onClick={() => updateItemQty(item.id, (item.quantity||1) - 1)} disabled={(item.quantity||1) <= 1} style={{ width:'22px', height:'22px', border:'1px solid var(--border)', background:'var(--cream)', cursor:(item.quantity||1)>1?'pointer':'not-allowed', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', opacity:(item.quantity||1)<=1?0.4:1 }}>−</button>
@@ -1412,12 +1501,12 @@ export default function BoxPage() {
         </div>
       )}
 
-      {showAddBottle   && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
-      {showMultiBottle && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
-      {showPullList    && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
-      {showClients        && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} />}
-      {showCreateInvoice  && activeBox && <CreateInvoiceModal box={activeBox} allBoxes={boxes} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
-      {showInvoice        && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} />}
+      {showAddBottle    && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
+      {showMultiBottle  && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
+      {showPullList     && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
+      {showClients      && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} />}
+      {showCreateInvoice && activeBox && <CreateInvoiceModal box={activeBox} allBoxes={boxes} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
+      {showInvoice      && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} />}
     </div>
   )
 }
