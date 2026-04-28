@@ -58,22 +58,24 @@ function normaliseRow(row) {
 }
 
 function sizeBadge(size) {
-  if (!size) return null
+  if (!size) return '75cl'
   const s = String(size)
-  if (s === '150' || s.toLowerCase().includes('magnum')) return 'MAG'
+  if (s === '150' || s.toLowerCase().includes('magnum')) return '150cl'
   if (s === '37.5') return '37.5cl'
   if (s === '300') return '300cl'
-  return null
+  if (s === '75') return '75cl'
+  return s + 'cl'
 }
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
 function sizeBadgeLabel(size) {
-  if (!size) return null
+  if (!size) return '75cl'
   const s = String(size)
   if (s === '150' || s.toLowerCase().includes('magnum')) return 'Magnum'
   if (s === '37.5') return '37.5cl'
   if (s === '300') return '300cl'
-  return null
+  if (s === '75') return '75cl'
+  return s + 'cl'
 }
 
 function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
