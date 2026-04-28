@@ -66,6 +66,240 @@ function sizeBadge(size) {
   return null
 }
 
+// ─── Invoice Modal ────────────────────────────────────────────────────────────
+function sizeBadgeLabel(size) {
+  if (!size) return null
+  const s = String(size)
+  if (s === '150' || s.toLowerCase().includes('magnum')) return 'Magnum'
+  if (s === '37.5') return '37.5cl'
+  if (s === '300') return '300cl'
+  return null
+}
+
+function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
+  const [saving, setSaving] = React.useState(false)
+
+  const lineItems = items.map(item => {
+    const fd = item.wine_description || ''
+    const ci = fd.indexOf(',')
+    const wp = ci > -1 ? fd.slice(0, ci).trim() : fd
+    const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
+    const badge = sizeBadgeLabel(item.wine_bottle_size)
+    const unitPrice = parseFloat(item.sale_price) || 0
+    const qty = item.quantity || 1
+    return { wp, pp, vintage: item.wine_vintage || '', badge, unitPrice, qty, lineTotal: unitPrice * qty }
+  })
+  const grandTotal = lineItems.reduce((s, i) => s + i.lineTotal, 0)
+
+  function buildHtml() {
+    const rows = lineItems.map(i => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #ede6d6;font-family:'Cormorant Garamond',serif;font-size:15px;">
+          ${i.wp}${i.pp ? `<span style="color:#7a6652;font-size:13px;"> · ${i.pp}</span>` : ''}
+          <div style="font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:2px;">${[i.vintage, i.badge].filter(Boolean).join(' · ')}</div>
+        </td>
+        <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:13px;">${i.qty}</td>
+        <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;">£${i.unitPrice.toFixed(2)}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">£${i.lineTotal.toFixed(2)}</td>
+      </tr>`).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice ${invoice.invoice_number}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Mono',monospace;color:#1a1008;background:#fff;padding:48px;font-size:12px}
+        @media print{body{padding:24px}}
+      </style></head><body>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:24px;border-bottom:2px solid #1a1008;">
+        <div><div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:300;letter-spacing:0.08em;">Belle Année</div>
+        <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:2px;">Wines &amp; Studio</div></div>
+        <div style="text-align:right;">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:500;color:#6b1e2e;">${invoice.invoice_number}</div>
+          <div style="font-size:11px;color:#7a6652;margin-top:4px;">${new Date(invoice.invoice_date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:36px;">
+        <div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Bill To</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;">${invoice.buyer_name}</div>
+          ${invoice.buyer_email ? `<div style="font-size:11px;color:#7a6652;margin-top:3px;">${invoice.buyer_email}</div>` : ''}
+        </div>
+        <div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Reference</div>
+          <div style="font-size:12px;">${box.name}</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:32px;">
+        <thead><tr style="border-bottom:2px solid #1a1008;">
+          <th style="padding:8px 0;text-align:left;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Wine</th>
+          <th style="padding:8px;text-align:center;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Qty</th>
+          <th style="padding:8px;text-align:right;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Unit</th>
+          <th style="padding:8px 0;text-align:right;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:36px;">
+        <div style="min-width:200px;border-top:2px solid #1a1008;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;">Total Due</span>
+          <span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">£${grandTotal.toFixed(2)}</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid #ede6d6;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+        <div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Payment</div>
+          <div style="font-size:11px;line-height:1.7;color:#3a2a1a;">Pay by bank transfer to<br><strong>MS J BRIDE</strong><br>Sort code: 20-31-52<br>Account: 63453472</div>
+        </div>
+        <div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">VAT Status</div>
+          <div style="font-size:11px;line-height:1.7;color:#7a6652;font-style:italic;">Belle Année Wines is not VAT registered. Prices include duty and VAT already paid at source.</div>
+        </div>
+      </div></body></html>`
+  }
+
+  function handlePrint() {
+    const win = document.createElement('iframe')
+    win.style.display = 'none'
+    document.body.appendChild(win)
+    win.contentDocument.write(buildHtml())
+    win.contentDocument.close()
+    setTimeout(() => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }, 600)
+  }
+
+  function handlePdf() {
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { alert('Please allow popups to save PDF'); return }
+    win.document.write(buildHtml())
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 600)
+  }
+
+  async function handleMarkPaid() {
+    setSaving(true)
+    await onMarkPaid(invoice.id)
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.85)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'720px', border:'1px solid var(--border)' }}>
+        <div style={{ background:'var(--ink)', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 20px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.15em', color:'rgba(253,250,245,0.5)', textTransform:'uppercase' }}>Invoice</span>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'13px', color:'#d4ad45', fontWeight:600 }}>{invoice.invoice_number}</span>
+            <span style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color: invoice.status==='paid'?'#2d6a4f':'rgba(212,173,69,0.7)', letterSpacing:'0.1em', textTransform:'uppercase', border:`1px solid ${invoice.status==='paid'?'#2d6a4f':'rgba(212,173,69,0.4)'}`, padding:'2px 7px' }}>{invoice.status}</span>
+          </div>
+          <div style={{ display:'flex', gap:'8px' }}>
+            {invoice.status === 'unpaid' && <button onClick={handleMarkPaid} disabled={saving} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>{saving?'…':'✓ Mark Paid'}</button>}
+            <button onClick={handlePdf} style={{ background:'rgba(107,30,46,0.7)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>⬇ PDF</button>
+            <button onClick={handlePrint} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>🖨 Print</button>
+            <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕</button>
+          </div>
+        </div>
+        <div style={{ padding:'40px 48px', background:'var(--white)' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'36px', paddingBottom:'20px', borderBottom:'2px solid var(--ink)' }}>
+            <div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'30px', fontWeight:300, letterSpacing:'0.08em' }}>Belle Année</div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.2em', textTransform:'uppercase', color:'var(--muted)', marginTop:'2px' }}>Wines &amp; Studio</div>
+            </div>
+            <div style={{ textAlign:'right' }}>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'20px', fontWeight:500, color:'var(--wine)' }}>{invoice.invoice_number}</div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', marginTop:'4px' }}>{new Date(invoice.invoice_date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div>
+            </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'32px', marginBottom:'32px' }}>
+            <div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'8px' }}>Bill To</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', fontWeight:500 }}>{invoice.buyer_name}</div>
+              {invoice.buyer_email && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', marginTop:'3px' }}>{invoice.buyer_email}</div>}
+            </div>
+            <div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'8px' }}>Reference</div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'12px' }}>{box.name}</div>
+            </div>
+          </div>
+          <table style={{ width:'100%', borderCollapse:'collapse', marginBottom:'28px' }}>
+            <thead>
+              <tr style={{ borderBottom:'2px solid var(--ink)' }}>
+                {[['Wine','left'],['Qty','center'],['Unit','right'],['Total','right']].map(([label,align]) => (
+                  <th key={label} style={{ padding:'8px 0', textAlign:align, fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', fontWeight:500, paddingLeft:label==='Qty'?'8px':undefined, paddingRight:label==='Unit'?'8px':undefined }}>{label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lineItems.map((item, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6' }}>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px' }}>{item.wp}{item.pp && <span style={{ color:'var(--muted)', fontSize:'13px' }}> · {item.pp}</span>}</div>
+                    {(item.vintage || item.badge) && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'2px' }}>{[item.vintage, item.badge].filter(Boolean).join(' · ')}</div>}
+                  </td>
+                  <td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'center', fontFamily:'DM Mono,monospace', fontSize:'13px' }}>{item.qty}</td>
+                  <td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px' }}>£{item.unitPrice.toFixed(2)}</td>
+                  <td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600 }}>£{item.lineTotal.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'32px' }}>
+            <div style={{ minWidth:'200px', borderTop:'2px solid var(--ink)', paddingTop:'12px', display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)' }}>Total Due</span>
+              <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'28px', fontWeight:500, color:'var(--wine)' }}>£{grandTotal.toFixed(2)}</span>
+            </div>
+          </div>
+          <div style={{ borderTop:'1px solid var(--border)', paddingTop:'20px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'32px' }}>
+            <div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'10px' }}>Payment</div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', lineHeight:1.8, color:'var(--ink)' }}>Pay by bank transfer to<br/><strong>MS J BRIDE</strong><br/>Sort code: 20-31-52<br/>Account: 63453472</div>
+            </div>
+            <div>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'10px' }}>VAT Status</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', lineHeight:1.7, color:'var(--muted)' }}>Belle Année Wines is not VAT registered. Prices include duty and VAT already paid at source.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Create Invoice Modal ─────────────────────────────────────────────────────
+function CreateInvoiceModal({ box, onConfirm, onClose }) {
+  const [initials, setInitials] = React.useState(() => {
+    const parts = (box.buyer_name || '').trim().split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length-1][0]).toUpperCase()
+    return parts[0]?.slice(0,2).toUpperCase() || ''
+  })
+  const [saving, setSaving] = React.useState(false)
+  const year = new Date().getFullYear()
+  const preview = initials.length >= 1 ? `${initials.toUpperCase()}-${year}-001` : '—'
+
+  async function handleCreate() {
+    if (!initials.trim()) return
+    setSaving(true)
+    await onConfirm(initials.trim().toUpperCase())
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.75)', zIndex:350, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'360px', border:'1px solid var(--border)', padding:'24px' }}>
+        <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300, marginBottom:'6px' }}>Create Invoice</div>
+        <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', marginBottom:'20px' }}>for {box.buyer_name}</div>
+        <div style={{ marginBottom:'16px' }}>
+          <label style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'6px', fontFamily:'DM Mono,monospace' }}>Buyer initials</label>
+          <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase().slice(0,4))} onKeyDown={e => e.key==='Enter' && handleCreate()} placeholder="e.g. NP" maxLength={4}
+            style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'10px 12px', fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:600, outline:'none', letterSpacing:'0.2em', boxSizing:'border-box', textTransform:'uppercase' }} />
+        </div>
+        <div style={{ background:'rgba(107,30,46,0.06)', border:'1px solid rgba(107,30,46,0.15)', padding:'10px 14px', marginBottom:'20px' }}>
+          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'4px' }}>Invoice number preview</div>
+          <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:500, color:'var(--wine)' }}>{preview}</div>
+          <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'2px' }}>auto-increments per buyer</div>
+        </div>
+        <div style={{ display:'flex', gap:'10px' }}>
+          <button onClick={onClose} style={{ flex:1, background:'none', border:'1px solid var(--border)', padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', cursor:'pointer' }}>Cancel</button>
+          <button onClick={handleCreate} disabled={!initials.trim()||saving} style={{ flex:2, background:initials.trim()?'var(--wine)':'#ccc', color:'var(--white)', border:'none', padding:'10px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:initials.trim()?'pointer':'not-allowed' }}>
+            {saving?'Creating…':'Create Invoice →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+
 // ─── Clients Modal ────────────────────────────────────────────────────────────
 // FIX: EditForm moved out of nested function to prevent React remount on every keystroke
 function ClientEditFields({ draft, setDraft, onSave, onCancel, isNew, saving, editingName }) {
@@ -279,8 +513,6 @@ function PullListView({ box, items, onClose }) {
             )
           })}
           <div className="tots" style={{ marginTop:'24px', paddingTop:'16px', borderTop:'2px solid #c8b89a', display:'flex', justifyContent:'flex-end', gap:'32px', flexWrap:'wrap' }}>
-            {totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl">Cost (DP)</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500 }}>£{totalDP.toFixed(2)}</div></div>}
-            {totalSale - totalDP > 0 && <div style={{ textAlign:'right' }}><div className="tlbl">Margin</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'18px', fontWeight:500, color:'#2d6a4f' }}>£{(totalSale-totalDP).toFixed(2)}</div></div>}
             <div style={{ textAlign:'right' }}><div className="tlbl">Total</div><div className="tval" style={{ fontFamily:'DM Mono,monospace', fontSize:'22px', fontWeight:500, color:'var(--wine)' }}>£{totalSale.toFixed(2)}</div></div>
           </div>
           {box.notes && <div style={{ marginTop:'24px', padding:'12px 16px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.25)', fontSize:'12px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>{box.notes}</div>}
@@ -677,6 +909,9 @@ export default function BoxPage() {
   const [showPullList, setShowPullList] = useState(false)
   const [showClients, setShowClients] = useState(false)
   const [editingBox, setEditingBox] = useState(false)
+  const [showCreateInvoice, setShowCreateInvoice] = useState(false)
+  const [showInvoice, setShowInvoice] = useState(false)
+  const [activeInvoice, setActiveInvoice] = useState(null)
   const [boxDraft, setBoxDraft] = useState({ name:'', buyer_name:'', buyer_email:'' })
   const [dragOverId, setDragOverId] = useState(null)
   const [showSidebar, setShowSidebar] = useState(true)
@@ -810,6 +1045,41 @@ export default function BoxPage() {
     setActiveBox(prev => ({ ...prev, ...updates }))
     await fetchBoxes()
     showStatus('success', contact ? `Linked to ${contact.name}` : 'Client unlinked')
+  }
+
+  async function fetchInvoice(invoiceId) {
+    if (!invoiceId) { setActiveInvoice(null); return }
+    const { data } = await supabase.from('invoices').select('*').eq('id', invoiceId).maybeSingle()
+    setActiveInvoice(data || null)
+  }
+
+  async function createInvoice(initials) {
+    if (!activeBox) return
+    const year = new Date().getFullYear()
+    const { data: invNum, error: numErr } = await supabase.rpc('next_invoice_number', { p_initials: initials, p_year: year })
+    if (numErr) { showStatus('error', 'Failed to generate invoice number: ' + numErr.message); return }
+    const total = activeItems.reduce((s, i) => s + (parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
+    const { data: inv, error } = await supabase.from('invoices').insert({
+      invoice_number: invNum, box_id: activeBox.id,
+      buyer_name: activeBox.buyer_name, buyer_email: activeBox.buyer_email || null,
+      invoice_date: new Date().toISOString().slice(0,10),
+      total_amount: total, status: 'unpaid',
+    }).select().single()
+    if (error) { showStatus('error', 'Failed to create invoice: ' + error.message); return }
+    await supabase.from('boxes').update({ invoice_id: inv.id, status: 'Invoiced' }).eq('id', activeBox.id)
+    setActiveBox(prev => ({ ...prev, status: 'Invoiced', invoice_id: inv.id }))
+    await fetchBoxes()
+    setActiveInvoice(inv)
+    setShowCreateInvoice(false)
+    setShowInvoice(true)
+    showStatus('success', `Invoice ${inv.invoice_number} created.`)
+  }
+
+  async function markInvoicePaid(invoiceId) {
+    const { error } = await supabase.from('invoices').update({ status:'paid', paid_date: new Date().toISOString().slice(0,10) }).eq('id', invoiceId)
+    if (error) { showStatus('error', 'Failed to mark paid: ' + error.message); return }
+    setActiveInvoice(prev => prev ? { ...prev, status:'paid' } : prev)
+    showStatus('success', 'Invoice marked as paid.')
   }
 
   async function saveBoxEdit() {
@@ -978,6 +1248,8 @@ export default function BoxPage() {
                     </>
                   )}
                   {activeItems.length > 0 && <button onClick={() => setShowPullList(true)} style={{ background:'none', border:'1px solid var(--ink)', color:'var(--ink)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>🖨 Pull List</button>}
+                  {activeBox.status==='Confirmed' && !activeBox.invoice_id && <button onClick={() => setShowCreateInvoice(true)} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>£ Invoice</button>}
+                  {activeBox.invoice_id && <button onClick={async () => { await fetchInvoice(activeBox.invoice_id); setShowInvoice(true) }} style={{ background:'none', border:'1px solid var(--wine)', color:'var(--wine)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>£ View Invoice</button>}
                   {activeBox.status==='Draft' && activeItems.length > 0 && <button onClick={confirmBox} disabled={saving} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>{saving?'Saving…':'✓ Confirm'}</button>}
                   <button onClick={() => deleteBox(activeBox.id)} style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕</button>
                 </div>
@@ -1078,7 +1350,9 @@ export default function BoxPage() {
       {showAddBottle   && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
       {showMultiBottle && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
       {showPullList    && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
-      {showClients     && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} />}
+      {showClients        && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} />}
+      {showCreateInvoice  && activeBox && <CreateInvoiceModal box={activeBox} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
+      {showInvoice        && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} />}
     </div>
   )
 }
