@@ -480,7 +480,7 @@ function PullListView({ box, items, onClose }) {
   const isPartial = ticked.size < items.length
 
   function buildPrintHtml() {
-    const rows = items.map(item => {
+   const rows = items.filter(item => ticked.has(item.id)).map(item => {
       const isTickedItem = ticked.has(item.id)
       const fd = item.wine_description || ''
       const ci = fd.indexOf(',')
@@ -537,9 +537,8 @@ function PullListView({ box, items, onClose }) {
         </div>
       </div>
       ${rows}
-      <div style="margin-top:24px;padding-top:16px;border-top:2px solid #c8b89a;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
+      <div style="margin-top:24px;padding-top:16px;border-top:2px solid #c8b89a;">
         <div style="font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;letter-spacing:0.08em;text-transform:uppercase;">${splitLabel}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:#6b1e2e;">${totalLine}</div>
       </div>
       ${box.notes ? `<div style="margin-top:16px;padding:12px 16px;background:rgba(212,173,69,0.08);border:1px solid rgba(212,173,69,0.25);font-size:12px;font-family:'DM Mono',monospace;color:#7a6652;">${box.notes}</div>` : ''}
       <div style="margin-top:40px;padding-top:16px;border-top:1px solid #ede6d6;font-size:10px;font-family:'DM Mono',monospace;color:#c8b89a;text-align:center;letter-spacing:0.1em;">BELLE ANNÉE WINES · ${new Date().getFullYear()}</div>
