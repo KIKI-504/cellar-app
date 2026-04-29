@@ -163,7 +163,7 @@ function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
     document.body.appendChild(win)
     win.contentDocument.write(buildHtml())
     win.contentDocument.close()
-    win.onload = () => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 1000) }
+    win.onload = () => { setTimeout(() => { win.contentWindow.focus(); win.contentWindow.print(); setTimeout(() => document.body.removeChild(win), 2000) }, 300) }
   }
 
   function handlePdf() {
