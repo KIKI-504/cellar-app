@@ -544,8 +544,14 @@ export default function ConsignmentPage() {
                               <td style={{ padding: '9px 12px' }}>
                                 {s.invoiced
                                   ? <span style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', padding: '2px 7px', borderRadius: '10px', fontWeight: 500 }}>{s.invoice_ref}</span>
-                                  : <span style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(192,57,43,0.1)', color: '#c0392b', padding: '2px 7px', borderRadius: '10px', fontWeight: 500 }}>Pending</span>}
-                              </td>
+: <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+    <span style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', padding: '2px 7px', borderRadius: '10px', fontWeight: 500 }}>{s.invoice_ref}</span>
+    <button onClick={() => {
+      const lines = activeSales.filter(x => x.invoice_ref === s.invoice_ref)
+      setInvoiceLines(lines); setInvoiceRef(s.invoice_ref); setShowInvoice(true)
+    }} style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 8px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>View</button>
+  </div>}
+                                  </td>
                               <td style={{ padding: '9px 12px' }}>
                                 {s.invoiced && !s.invoice_paid && (
                                   <button onClick={() => markPaid(s.id)} style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 8px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>Mark paid</button>
