@@ -1167,7 +1167,7 @@ export default function BoxPage() {
     for (const item of activeItems) {
       if (item.studio_id) {
         const { data: se } = await supabase.from('studio').select('id, quantity, status').eq('id', item.studio_id).maybeSingle()
-        if (se) { const newQty=Math.max(0,(se.quantity||0)-(item.quantity||1)); await supabase.from('studio').update({ quantity:newQty, status:newQty<=0?'Sold':se.status }).eq('id', se.id) }
+        if (se) { const newQty=Math.max(0,(se.quantity||0)-(item.quantity||1)); await supabase.from('studio').update({ quantity:newQty, status:se.status }).eq('id', se.id) }
       }
     }
     const { error } = await supabase.from('boxes').update({ status:'Confirmed' }).eq('id', activeBox.id)
