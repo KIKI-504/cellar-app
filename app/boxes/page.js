@@ -626,6 +626,7 @@ function PullListView({ box, items, onClose }) {
                   {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px', marginLeft:'16px' }}>{pp}</div>}
                   {item.wine_region && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px', marginLeft:'16px' }}>{item.wine_region}</div>}
                   {item.tasting_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'12px', fontStyle:'italic', color:'#3a2a1a', marginTop:'6px', marginLeft:'16px', lineHeight:1.5 }}>"{item.tasting_note}"</div>}
+            {item.buyer_note && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'12px', color:'#3a2a1a', marginTop:'6px', marginLeft:'16px', lineHeight:1.6, opacity:0.85 }}>{item.buyer_note}</div>}
                   {item.women_note && <div style={{ display:'flex', alignItems:'flex-start', gap:'4px', marginTop:'4px', marginLeft:'16px' }}><span style={{ fontSize:'12px', color:'#9b3a4a' }}>♀</span><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'12px', fontStyle:'italic', color:'#9b3a4a', lineHeight:1.5 }}>{item.women_note}</span></div>}
                 </div>
                 {/* Price */}
