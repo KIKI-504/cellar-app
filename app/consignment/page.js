@@ -111,7 +111,6 @@ export default function ConsignmentPage() {
   }, 0)
   const staleItems = activeItems.filter(i => i.status === 'Active' && i.qty_remaining === 0)
 
-  // ─── Inventory search ───────────────────────────────────────────────────────
   async function searchInventory(q) {
     setItemSearch(q)
     if (q.length < 2) { setItemSearchResults([]); return }
@@ -170,7 +169,6 @@ export default function ConsignmentPage() {
     setItemQty(1); setItemDate(new Date().toISOString().split('T')[0]); setItemNotes('')
   }
 
-  // ─── Stocktake ──────────────────────────────────────────────────────────────
   function openStocktake() {
     const counts = {}
     activeItems.filter(i => i.status === 'Active').forEach(i => { counts[i.id] = i.qty_remaining })
@@ -199,7 +197,6 @@ export default function ConsignmentPage() {
         consignee_id: activeConsignee, stocktake_date: stocktakeDate, period_label: stocktakePeriod,
       }).select().single()
       if (stErr) throw stErr
-
       const saleRows = diffs.map(d => ({
         consignee_id: activeConsignee, consignment_item_id: d.item.id,
         description: d.item.description, vintage: d.item.vintage || null,
@@ -209,20 +206,17 @@ export default function ConsignmentPage() {
       }))
       const { error: sErr } = await supabase.from('consignment_sales').insert(saleRows)
       if (sErr) throw sErr
-
       for (const d of diffs) {
         await supabase.from('consignment_items').update({
           qty_remaining: d.reported, status: d.reported === 0 ? 'Sold Out' : 'Active',
         }).eq('id', d.item.id)
       }
-
       await fetchAll(); setShowStocktake(false)
       showStatus('success', `Stocktake recorded — ${diffs.length} wine${diffs.length !== 1 ? 's' : ''} sold this period.`)
     } catch (err) { showStatus('error', 'Stocktake failed: ' + err.message) }
     setStocktakeSaving(false)
   }
 
-  // ─── Invoice ────────────────────────────────────────────────────────────────
   async function generateInvoice() {
     if (!activeC || uninvoicedSales.length === 0) return
     const year = new Date().getFullYear()
@@ -239,6 +233,13 @@ export default function ConsignmentPage() {
     setShowInvoice(true)
   }
 
+  function openInvoice(ref) {
+    const lines = activeSales.filter(x => x.invoice_ref === ref)
+    setInvoiceLines(lines)
+    setInvoiceRef(ref)
+    setShowInvoice(true)
+  }
+
   async function markPaid(saleId) {
     await supabase.from('consignment_sales').update({
       invoice_paid: true, invoice_paid_date: new Date().toISOString().split('T')[0],
@@ -247,7 +248,6 @@ export default function ConsignmentPage() {
     showStatus('success', 'Marked as paid.')
   }
 
-  // ─── Invoice HTML (for iframe print) ───────────────────────────────────────
   function buildInvoiceHtml(lines, ref, consignee) {
     const grandTotal = lines.reduce((sum, l) => sum + parseFloat(l.total_value || 0), 0)
     const rows = lines.map(l => `
@@ -331,7 +331,6 @@ export default function ConsignmentPage() {
     setTimeout(() => { win.focus(); win.print() }, 600)
   }
 
-  // ─── Add consignee ──────────────────────────────────────────────────────────
   async function saveConsignee() {
     if (!newName || !newPrefix) return
     setNewSaving(true)
@@ -371,7 +370,6 @@ export default function ConsignmentPage() {
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '9px', cursor: 'pointer', padding: '4px 8px', flexShrink: 0, marginLeft: '6px' }}>Out</button>
       </div>
 
-      {/* Status toast */}
       {statusMsg && (
         <div style={{ position: 'fixed', top: '60px', left: '50%', transform: 'translateX(-50%)', zIndex: 400, background: statusMsg.type === 'success' ? 'rgba(45,106,79,0.95)' : 'rgba(192,57,43,0.95)', color: 'var(--white)', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.05em', border: '1px solid rgba(255,255,255,0.15)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
           {statusMsg.type === 'success' ? '✓ ' : '✕ '}{statusMsg.text}
@@ -389,7 +387,6 @@ export default function ConsignmentPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '20px', alignItems: 'start' }}>
 
-            {/* Sidebar */}
             <div>
               {consignees.map(c => {
                 const owed = sales.filter(s => s.consignee_id === c.id && !s.invoiced).reduce((sum, s) => sum + parseFloat(s.total_value || 0), 0)
@@ -405,11 +402,9 @@ export default function ConsignmentPage() {
               })}
             </div>
 
-            {/* Main panel */}
             {activeC && (
               <div style={{ minWidth: 0 }}>
 
-                {/* Summary card */}
                 <div style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '16px 20px', marginBottom: '14px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                     <div>
@@ -443,7 +438,6 @@ export default function ConsignmentPage() {
                   )}
                 </div>
 
-                {/* Action buttons */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
                   <button onClick={() => setShowAddItem(true)} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Consign Wine</button>
                   <button onClick={openStocktake} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📋 Enter Stocktake</button>
@@ -542,16 +536,15 @@ export default function ConsignmentPage() {
                               <td style={{ padding: '9px 12px', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(s.price_per_bottle)}</td>
                               <td style={{ padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(s.total_value)}</td>
                               <td style={{ padding: '9px 12px' }}>
-                                {s.invoiced
-                                  ? <span style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', padding: '2px 7px', borderRadius: '10px', fontWeight: 500 }}>{s.invoice_ref}</span>
-: <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-    <span style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', padding: '2px 7px', borderRadius: '10px', fontWeight: 500 }}>{s.invoice_ref}</span>
-    <button onClick={() => {
-      const lines = activeSales.filter(x => x.invoice_ref === s.invoice_ref)
-      setInvoiceLines(lines); setInvoiceRef(s.invoice_ref); setShowInvoice(true)
-    }} style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 8px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>View</button>
-  </div>}
-                                  </td>
+                                {s.invoiced ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', padding: '2px 7px', borderRadius: '10px', fontWeight: 500 }}>{s.invoice_ref}</span>
+                                    <button onClick={() => openInvoice(s.invoice_ref)} style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 8px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>View</button>
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(192,57,43,0.1)', color: '#c0392b', padding: '2px 7px', borderRadius: '10px', fontWeight: 500 }}>Pending</span>
+                                )}
+                              </td>
                               <td style={{ padding: '9px 12px' }}>
                                 {s.invoiced && !s.invoice_paid && (
                                   <button onClick={() => markPaid(s.id)} style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 8px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>Mark paid</button>
@@ -706,8 +699,6 @@ export default function ConsignmentPage() {
                     style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
-
-              {/* Per-wine count inputs */}
               <div style={{ border: '1px solid var(--border)', background: 'var(--white)', marginBottom: '20px' }}>
                 {activeItems.filter(i => i.status === 'Active').length === 0 ? (
                   <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>No active wines to stocktake.</div>
@@ -757,8 +748,6 @@ export default function ConsignmentPage() {
                   </table>
                 )}
               </div>
-
-              {/* Reconciliation summary */}
               {(() => {
                 const diffs = getStocktakeDiffs()
                 const total = diffs.reduce((s, d) => s + d.lineTotal, 0)
@@ -786,7 +775,6 @@ export default function ConsignmentPage() {
                   </div>
                 )
               })()}
-
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button onClick={() => setShowStocktake(false)} style={{ background: 'none', border: '1px solid var(--border)', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={confirmStocktake} disabled={stocktakeSaving || getStocktakeDiffs().length === 0}
