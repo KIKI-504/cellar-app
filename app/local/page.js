@@ -64,7 +64,7 @@ export default function LocalPage() {
   async function handleName() {
     if (!buyerName.trim()) return
     setLoading(true)
-    const { data } = await supabase.from('studio').select('*, wines(*)').eq('include_in_local', true).eq('status', 'Available').order('created_at', { ascending: false })
+    const { data } = await supabase.from('studio').select('*, wines(id, description, vintage, colour, region, country, buyer_note, women_note, ws_lowest_per_bottle, ws_price_date, restaurant_spot, bottle_volume)').eq('include_in_local', true).eq('status', 'Available').order('created_at', { ascending: false })
     setWines(data || []); setLoading(false); setStage('browse')
   }
 
