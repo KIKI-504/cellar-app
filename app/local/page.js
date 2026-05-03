@@ -286,9 +286,8 @@ export default function LocalPage() {
             </div>
           </div>
         )}
-
-        <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '14px', fontFamily: 'DM Mono, monospace' }}>
-          {filtered.length} wine{filtered.length !== 1 ? 's' : ''} available{!isMobile && ' — click any column heading to sort'}
+<div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '14px', fontFamily: 'DM Mono, monospace' }}>
+          {filtered.length} wine{filtered.length !== 1 ? 's' : ''} available{!isMobile && ' — click any column heading to sort · click '}{!isMobile && <span style={{ color: '#9b3a4a', fontSize: '13px' }}>♀</span>}{!isMobile && ' for stories of women in wine'}
         </div>
 
         {loading ? (
