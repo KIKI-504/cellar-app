@@ -681,7 +681,8 @@ function AddBottleModal({ onAdd, onClose }) {
   const [scanning, setScanning] = useState(false)
   const [scanLabel, setScanLabel] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [justAdded, setJustAdded] = useState(null)
+  const [priceCheckDiffs, setPriceCheckDiffs] = useState(null)
+  const [statusMsg, setStatusMsg] = useState(null)
   const fileRef = useRef(null)
 
   async function searchStudio(q) {
@@ -1162,17 +1163,41 @@ export default function BoxPage() {
 
   async function confirmBox() {
     if (!activeBox) return
-    if (!confirm(`Mark "${activeBox.name}" as Confirmed and deduct quantities from studio?`)) return
     setSaving(true)
+    const diffs = []
+    for (const item of activeItems) {
+      if (item.studio_id) {
+        const { data: se } = await supabase.from('studio').select('id, quantity, status, sale_price').eq('id', item.studio_id).maybeSingle()
+        if (se && se.sale_price !== null) {
+          const studioPrice = parseFloat(se.sale_price)
+          const boxPrice = parseFloat(item.sale_price)
+          if (!isNaN(studioPrice) && !isNaN(boxPrice) && Math.abs(studioPrice - boxPrice) > 0.001) {
+            diffs.push({ item, studioPrice, boxPrice })
+          }
+        }
+      }
+    }
+    setSaving(false)
+    if (diffs.length > 0) { setPriceCheckDiffs(diffs); return }
+    if (!confirm(`Mark "${activeBox.name}" as Confirmed and deduct quantities from studio?`)) return
+    await doConfirmBox([])
+  }
+
+  async function doConfirmBox(pricesToUpdate) {
+    setSaving(true)
+    for (const { item, studioPrice } of pricesToUpdate) {
+      await supabase.from('box_items').update({ sale_price: studioPrice }).eq('id', item.id)
+    }
     for (const item of activeItems) {
       if (item.studio_id) {
         const { data: se } = await supabase.from('studio').select('id, quantity, status').eq('id', item.studio_id).maybeSingle()
-        if (se) { const newQty=Math.max(0,(se.quantity||0)-(item.quantity||1)); await supabase.from('studio').update({ quantity:newQty, status:se.status }).eq('id', se.id) }
+        if (se) { const newQty = Math.max(0, (se.quantity || 0) - (item.quantity || 1)); await supabase.from('studio').update({ quantity: newQty, status: se.status }).eq('id', se.id) }
       }
     }
-    const { error } = await supabase.from('boxes').update({ status:'Confirmed' }).eq('id', activeBox.id)
+    const { error } = await supabase.from('boxes').update({ status: 'Confirmed' }).eq('id', activeBox.id)
     if (error) { showStatus('error', 'Failed to confirm box: ' + error.message); setSaving(false); return }
-    setActiveBox(prev => ({ ...prev, status:'Confirmed' })); await fetchBoxes(); setSaving(false)
+    setActiveBox(prev => ({ ...prev, status: 'Confirmed' }))
+    await fetchBoxes(); setSaving(false); setPriceCheckDiffs(null)
     showStatus('success', `"${activeBox.name}" confirmed — studio quantities updated.`)
   }
 
@@ -1404,7 +1429,7 @@ export default function BoxPage() {
                   {activeItems.length > 0 && <button onClick={() => setShowPullList(true)} style={{ background:'none', border:'1px solid var(--ink)', color:'var(--ink)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>🖨 Pull List</button>}
                   {activeBox.status==='Confirmed' && !activeBox.invoice_id && <button onClick={() => setShowCreateInvoice(true)} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>£ Invoice</button>}
                   {activeBox.invoice_id && <button onClick={async () => { await fetchInvoice(activeBox.invoice_id); setShowInvoice(true) }} style={{ background:'none', border:'1px solid var(--wine)', color:'var(--wine)', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>£ View Invoice</button>}
-                  {activeBox.status==='Draft' && activeItems.length > 0 && <button onClick={confirmBox} disabled={saving} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>{saving?'Saving…':'✓ Confirm'}</button>}
+                  {activeBox.status==='Draft' && activeItems.length > 0 && <button onClick={confirmBox} disabled={saving} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'8px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>{saving?'Checking…':'✓ Confirm'}</button>}
                   <button onClick={() => deleteBox(activeBox.id)} style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'8px 10px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕</button>
                 </div>
               </div>
@@ -1507,6 +1532,72 @@ export default function BoxPage() {
       {showClients      && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} />}
       {showCreateInvoice && activeBox && <CreateInvoiceModal box={activeBox} allBoxes={boxes} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
       {showInvoice      && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} />}
+{priceCheckDiffs && activeBox && (
+        <PriceCheckModal
+          diffs={priceCheckDiffs}
+          boxName={activeBox.name}
+          onConfirm={pricesToUpdate => doConfirmBox(pricesToUpdate)}
+          onCancel={() => setPriceCheckDiffs(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Price Check Modal ────────────────────────────────────────────────────────
+function PriceCheckModal({ diffs, boxName, onConfirm, onCancel }) {
+  const [updates, setUpdates] = React.useState(() => {
+    const init = {}
+    diffs.forEach(d => { init[d.item.id] = true })
+    return init
+  })
+  function toggleUpdate(id) { setUpdates(prev => ({ ...prev, [id]: !prev[id] })) }
+  function handleConfirm() { onConfirm(diffs.filter(d => updates[d.item.id])) }
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.85)', zIndex:350, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'520px', border:'1px solid var(--border)' }}>
+        <div style={{ background:'var(--ink)', padding:'12px 20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.15em', color:'rgba(253,250,245,0.5)', textTransform:'uppercase' }}>Price check — </span>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'#d4ad45' }}>{boxName}</span>
+          </div>
+          <button onClick={onCancel} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'5px 10px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕ Cancel</button>
+        </div>
+        <div style={{ padding:'20px 24px' }}>
+          <div style={{ marginBottom:'16px', padding:'12px 16px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.3)', fontSize:'11px', fontFamily:'DM Mono,monospace', color:'#7a5e10', lineHeight:1.6 }}>
+            {diffs.length} wine{diffs.length !== 1 ? 's have' : ' has'} a price difference between this box and the current studio price. Choose which to update before confirming.
+          </div>
+          <div style={{ border:'1px solid var(--border)', background:'var(--white)', marginBottom:'20px' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px 36px', padding:'8px 12px', background:'rgba(26,16,8,0.06)', borderBottom:'1px solid var(--border)' }}>
+              {['Wine','Box £','Studio £',''].map(h => <div key={h} style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', fontWeight:500 }}>{h}</div>)}
+            </div>
+            {diffs.map(d => {
+              const fd = d.item.wine_description || ''; const ci = fd.indexOf(','); const wp = ci > -1 ? fd.slice(0, ci).trim() : fd
+              const useStudio = updates[d.item.id]; const higher = d.studioPrice > d.boxPrice
+              return (
+                <div key={d.item.id} style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px 36px', padding:'12px', borderBottom:'1px solid #ede6d6', alignItems:'center', background: useStudio ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
+                  <div>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', fontWeight:500 }}>{wp}</div>
+                    <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{d.item.wine_vintage || ''}</div>
+                  </div>
+                  <div style={{ fontFamily:'DM Mono,monospace', fontSize:'13px', color: useStudio ? 'var(--muted)' : 'var(--ink)', fontWeight: useStudio ? 400 : 600, textDecoration: useStudio ? 'line-through' : 'none' }}>£{d.boxPrice.toFixed(2)}</div>
+                  <div style={{ fontFamily:'DM Mono,monospace', fontSize:'13px', color: useStudio ? '#2d6a4f' : 'var(--muted)', fontWeight: useStudio ? 600 : 400 }}>
+                    £{d.studioPrice.toFixed(2)}<span style={{ fontSize:'9px', marginLeft:'3px', color: higher ? '#c0392b' : '#2d6a4f' }}>{higher ? '▲' : '▼'}</span>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'center' }}>
+                    <input type="checkbox" checked={!!useStudio} onChange={() => toggleUpdate(d.item.id)} style={{ width:'16px', height:'16px', cursor:'pointer', accentColor:'var(--wine)' }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ marginBottom:'16px', fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}>☑ checked = update box price to studio price before confirming</div>
+          <div style={{ display:'flex', gap:'10px', justifyContent:'flex-end' }}>
+            <button onClick={onCancel} style={{ background:'none', border:'1px solid var(--border)', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer', color:'var(--muted)' }}>Cancel</button>
+            <button onClick={handleConfirm} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'10px 20px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>✓ Confirm Box →</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
