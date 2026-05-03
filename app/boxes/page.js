@@ -681,8 +681,7 @@ function AddBottleModal({ onAdd, onClose }) {
   const [scanning, setScanning] = useState(false)
   const [scanLabel, setScanLabel] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [priceCheckDiffs, setPriceCheckDiffs] = useState(null)
-  const [statusMsg, setStatusMsg] = useState(null)
+  const [justAdded, setJustAdded] = useState(null)
   const fileRef = useRef(null)
 
   async function searchStudio(q) {
@@ -1059,6 +1058,7 @@ export default function BoxPage() {
   const [dragOverId, setDragOverId] = useState(null)
   const [showSidebar, setShowSidebar] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [priceCheckDiffs, setPriceCheckDiffs] = useState(null)
   const [statusMsg, setStatusMsg] = useState(null)
   const [contacts, setContacts] = useState([])
   const [newName, setNewName] = useState('')
