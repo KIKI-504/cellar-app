@@ -645,7 +645,6 @@ function PullListView({ box, items, onClose }) {
     </div>
   )
 }
-}
 
 // ─── Add Bottle Modal ─────────────────────────────────────────────────────────
 function AddBottleModal({ onAdd, onClose }) {
