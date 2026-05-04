@@ -636,34 +636,15 @@ function PullListView({ box, items, onClose }) {
               </div>
             )
           })}
-
-          {/* Totals footer */}
-          <div style={{ marginTop:'20px', paddingTop:'14px', borderTop:'2px solid #c8b89a', display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:'8px' }}>
+<div style={{ marginTop:'20px', paddingTop:'14px', borderTop:'2px solid #c8b89a' }}>
             <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase' }}>
               {isSplit ? `Pull List ${splitNum} of ${splitOf}` : 'Pull List'}
-            </div>
-            <div style={{ textAlign:'right' }}>
-              {isPartial ? (
-                <div>
-                  <span style={{ fontFamily:'DM Mono,monospace', fontSize:'20px', fontWeight:500, color:'var(--wine)' }}>£{tickedSale.toFixed(2)}</span>
-                  <span style={{ fontFamily:'DM Mono,monospace', fontSize:'12px', color:'var(--muted)', marginLeft:'8px' }}>of £{totalSale.toFixed(2)} total</span>
-                </div>
-              ) : (
-                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'20px', fontWeight:500, color:'var(--wine)' }}>£{totalSale.toFixed(2)}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Tick summary hint */}
-          {isPartial && (
-            <div style={{ marginTop:'10px', padding:'8px 12px', background:'rgba(107,30,46,0.05)', border:'1px solid rgba(107,30,46,0.15)', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.06em' }}>
-              {ticked.size} of {items.length} items selected · unticked items will print dimmed
-            </div>
-          )}
+</div>
         </div>
       </div>
     </div>
   )
+}
 }
 
 // ─── Add Bottle Modal ─────────────────────────────────────────────────────────
