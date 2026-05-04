@@ -639,7 +639,8 @@ function PullListView({ box, items, onClose }) {
 <div style={{ marginTop:'20px', paddingTop:'14px', borderTop:'2px solid #c8b89a' }}>
             <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase' }}>
               {isSplit ? `Pull List ${splitNum} of ${splitOf}` : 'Pull List'}
-</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
