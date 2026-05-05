@@ -1,5 +1,5 @@
 'use client'
-// ✅ CORRECT VERSION — v6 — autocorrect off, DP margin hints, WS date sort
+// ✅ CORRECT VERSION — v7 — sommelier_note added to expanded notes panel
 export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -81,7 +81,6 @@ function EditableCell({ value, onSave, type = 'text', step, min, placeholder, st
   )
 }
 
-// ─── Label print function ────────────────────────────────────────────────────
 function printLabel(s) {
   const name = s.wines?.description || s.unlinked_description || ''
   const vintage = s.wines?.vintage || s.unlinked_vintage || ''
@@ -381,7 +380,6 @@ export default function StudioPage() {
     setScanSaving(false)
   }
 
-  // ─── Filter + Sort ───────────────────────────────────────────────────────────
   const filtered = studioWines
     .filter(s => {
       if (filterStatus && s.status !== filterStatus) return false
@@ -403,7 +401,6 @@ export default function StudioPage() {
       else if (sortField === 'ws_price') { const aWs = a.wines?.ws_lowest_per_bottle ? parseFloat(a.wines.ws_lowest_per_bottle) : 0; const bWs = b.wines?.ws_lowest_per_bottle ? parseFloat(b.wines.ws_lowest_per_bottle) : 0; av = aWs ? (aWs + dutyForSize(a.bottle_size)) * 1.2 : 0; bv = bWs ? (bWs + dutyForSize(b.bottle_size)) * 1.2 : 0 }
       else if (sortField === 'colour') { av = (a.wines?.colour || a.colour || '').toLowerCase(); bv = (b.wines?.colour || b.colour || '').toLowerCase() }
       else if (sortField === 'local') { av = a.include_in_local ? 1 : 0; bv = b.include_in_local ? 1 : 0 }
-      // ✅ CHANGE 3a: ws_date sort
       else if (sortField === 'ws_date') { av = a.wines?.ws_price_date || ''; bv = b.wines?.ws_price_date || '' }
       else { av = a.date_moved || ''; bv = b.date_moved || '' }
       if (typeof av === 'number') { if (av < bv) return sortDir === 'asc' ? -1 : 1; if (av > bv) return sortDir === 'asc' ? 1 : -1; return 0 }
@@ -428,7 +425,6 @@ export default function StudioPage() {
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
       {saveFlash && (<div style={{ position: 'fixed', top: '60px', right: '20px', background: '#2d6a4f', color: '#fff', padding: '8px 16px', fontSize: '11px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.1em', zIndex: 999, borderRadius: '2px' }}>Saved ✓</div>)}
 
-      {/* Nav */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
         <button onClick={() => router.push('/studio')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}>Cellar</button>
         <div style={{ overflowX: 'auto', display: 'flex', gap: '2px', msOverflowStyle: 'none', scrollbarWidth: 'none', padding: '0 8px' }}>
@@ -440,7 +436,6 @@ export default function StudioPage() {
       </div>
 
       <div style={{ padding: '76px 28px 24px' }}>
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Studio Inventory</div>
@@ -453,7 +448,6 @@ export default function StudioPage() {
           </div>
         </div>
 
-        {/* Stats */}
         <div style={{ display:'flex', gap:'20px', padding:'12px 16px', background:'var(--white)', border:'1px solid var(--border)', marginBottom:'16px', fontSize:'11px', flexWrap:'wrap', alignItems:'baseline' }}>
           {[['available', availableCount], ['on bottles on hand', localCount], ['total bottles', totalBottles]].map(([label, n]) => (
             <div key={label} style={{ display:'flex', gap:'6px', alignItems:'baseline' }}>
@@ -466,18 +460,8 @@ export default function StudioPage() {
           </button>
         </div>
 
-        {/* Toolbar */}
         <div style={{ display:'flex', gap:'10px', marginBottom:'8px', flexWrap:'wrap', alignItems:'center' }}>
-          {/* ✅ CHANGE 1: autocorrect/spellcheck off on search input */}
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search studio…"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            style={{ flex:1, minWidth:'160px', border:'1px solid var(--border)', background:'var(--white)', padding:'8px 12px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }}
-          />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search studio…" autoCorrect="off" autoCapitalize="off" spellCheck={false} style={{ flex:1, minWidth:'160px', border:'1px solid var(--border)', background:'var(--white)', padding:'8px 12px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }} />
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'8px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }}>
             <option value="">All Status</option><option value="Available">Available</option><option value="Sold">Sold</option><option value="Consumed">Consumed</option>
           </select>
@@ -487,7 +471,6 @@ export default function StudioPage() {
           </select>
         </div>
 
-        {/* Date filter row */}
         <div style={{ display:'flex', gap:'10px', marginBottom:'16px', flexWrap:'wrap', alignItems:'center' }}>
           <span style={{ fontFamily:'DM Mono, monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase' }}>Date Added:</span>
           <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'6px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }} />
@@ -497,13 +480,11 @@ export default function StudioPage() {
           <button onClick={() => cycleSort('date_moved')} style={{ background:sortField==='date_moved'?'var(--wine)':'none', color:sortField==='date_moved'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
             Sort by Date {sortField === 'date_moved' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </button>
-          {/* ✅ CHANGE 3b: WS date sort button */}
           <button onClick={() => cycleSort('ws_date')} style={{ background:sortField==='ws_date'?'var(--wine)':'none', color:sortField==='ws_date'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
             Sort by WS Date {sortField === 'ws_date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </button>
         </div>
 
-        {/* Table */}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
@@ -539,6 +520,7 @@ export default function StudioPage() {
                 const wsDP = ws ? ((ws + dutyForSize(s.bottle_size)) * 1.2).toFixed(2) : null
                 const buyerNote = s.wines?.buyer_note || ''
                 const womenNote = s.wines?.women_note || ''
+                const sommelierNote = s.wines?.sommelier_note || ''
                 const studioNote = s.notes || ''
                 const hasWineId = !!s.wine_id
 
@@ -555,6 +537,7 @@ export default function StudioPage() {
                                 {name}
                                 {alert && <span title={alert.tooltip} style={{ marginLeft:'4px', fontSize:'11px' }}>{alert.icon}</span>}
                                 {buyerNote && <span style={{ marginLeft:'4px', fontSize:'10px', color:'var(--muted)' }}>✎</span>}
+                                {sommelierNote && <span title={sommelierNote} style={{ marginLeft:'6px', fontSize:'10px', color:'#8b6914', cursor:'help' }}>★</span>}
                                 {(s.status === 'Sold' || s.status === 'Consumed') && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase', color: s.status === 'Sold' ? '#c0392b' : '#7a5e10', border: `1px solid ${s.status === 'Sold' ? 'rgba(192,57,43,0.35)' : 'rgba(122,94,16,0.35)'}`, padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>{s.status}</span>}
                               </div>
                             )}
@@ -581,7 +564,6 @@ export default function StudioPage() {
                       </td>
                     </tr>
 
-                    {/* Expanded notes + WS price row */}
                     {isExpanded && (
                       <tr style={{ background: 'var(--cream)' }}>
                         <td colSpan={13} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
@@ -594,6 +576,19 @@ export default function StudioPage() {
                               <label style={{ ...labelStyle, color: '#9b3a4a' }}>♀ Women in Wine <span style={{ color: 'var(--muted)', fontWeight: 400 }}>shown on Buyer View</span></label>
                               {hasWineId ? (<textarea defaultValue={womenNote} placeholder="Women winemaker or producer story…" onBlur={e => { if (e.target.value !== womenNote) updateWine(s.id, s.wine_id, 'women_note', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
                             </div>
+                            {/* ✅ NEW: Sommelier hook field */}
+                            <div>
+                              <label style={{ ...labelStyle, color: '#8b6914' }}>★ Sommelier Hook <span style={{ color: 'var(--muted)', fontWeight: 400 }}>gold badge on Bottles on Hand · max 10 words</span></label>
+                              {hasWineId ? (
+                                <input
+                                  defaultValue={sommelierNote}
+                                  placeholder="e.g. Summer drinking! · Below WS avg"
+                                  maxLength={60}
+                                  onBlur={e => { if (e.target.value !== sommelierNote) updateWine(s.id, s.wine_id, 'sommelier_note', e.target.value) }}
+                                  style={{ ...inputStyle, border: '2px solid rgba(212,173,69,0.4)', background: 'rgba(212,173,69,0.05)', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, color: '#8b6914' }}
+                                />
+                              ) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
+                            </div>
                             <div>
                               <label style={labelStyle}>Delivery Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>studio only</span></label>
                               <textarea defaultValue={studioNote} placeholder="Condition, delivery ref…" onBlur={e => { if (e.target.value !== studioNote) updateStudio(s.id, 'notes', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
@@ -604,7 +599,6 @@ export default function StudioPage() {
                                 <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>£</span>
                                 <EditableCell value={s.wines?.purchase_price_per_bottle || ''} type="number" step="0.01" min="0" placeholder="0.00" width="90px" style={{ border: '1px solid var(--border)', padding: '6px 8px', fontFamily: 'DM Mono, monospace', fontSize: '12px', background: 'var(--white)' }}
                                   onSave={async v => { if (!s.wine_id) return; const duty = dutyForSize(s.bottle_size); const dp = v ? ((parseFloat(v) + duty) * 1.2).toFixed(2) : null; await supabase.from('wines').update({ purchase_price_per_bottle: v }).eq('id', s.wine_id); await supabase.from('studio').update({ dp_price: dp }).eq('id', s.id); setStudioWines(prev => prev.map(r => r.id === s.id ? { ...r, dp_price: dp, wines: { ...r.wines, purchase_price_per_bottle: v } } : r)) }} />
-                                {/* ✅ CHANGE 2: DP + margin hints */}
                                 {s.wines?.purchase_price_per_bottle && (() => {
                                   const dp = (parseFloat(s.wines.purchase_price_per_bottle) + dutyForSize(s.bottle_size)) * 1.2
                                   return (
@@ -639,7 +633,6 @@ export default function StudioPage() {
         </div>
       </div>
 
-      {/* ─── Scan Modal ──────────────────────────────────────────────────────── */}
       {showScanModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.7)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}>
           <div style={{ background:'var(--white)', width:'100%', maxWidth:'560px', maxHeight:'90vh', overflowY:'auto', padding:'28px' }}>
@@ -704,7 +697,6 @@ export default function StudioPage() {
         </div>
       )}
 
-      {/* ─── Add Wine Modal ───────────────────────────────────────────────────── */}
       {showAddModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.7)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}>
           <div style={{ background:'var(--white)', width:'100%', maxWidth:'600px', maxHeight:'90vh', overflowY:'auto', padding:'28px' }}>
