@@ -643,8 +643,6 @@ function PullListView({ box, items, onClose }) {
           </div>
         </div>
       </div>
-      </div>
-      </div>
     </div>
   )
 }
