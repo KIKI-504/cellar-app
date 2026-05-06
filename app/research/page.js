@@ -1,18 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase';
 
-let _supabase = null;
-function getSupabase() {
-  if (!_supabase) {
-    _supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
-  }
-  return _supabase;
-}
+
 
 const REGIONS = ['All', 'Burgundy', 'Bordeaux', 'Piedmont', 'Tuscany', 'California', 'Rhône', 'Loire', 'Champagne', 'Rioja', 'Other'];
 
@@ -32,7 +23,7 @@ export default function ResearchArchive() {
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
-    let query = getSupabase()
+    let query = supabase
       .from('research_archive')
       .select('*')
       .order('date_researched', { ascending: false });
@@ -84,7 +75,7 @@ export default function ResearchArchive() {
   const saveBuyerVersion = async () => {
     if (!selected) return;
     setSaving(true);
-    const { error } = await getSupabase()
+    const { error } = await supabase
       .from('research_archive')
       .update({ buyer_version: buyerDraft, updated_at: new Date().toISOString() })
       .eq('id', selected.id);
@@ -98,7 +89,7 @@ export default function ResearchArchive() {
 
   const toggleVerified = async (entry) => {
     const newVal = !entry.verified;
-    const { error } = await getSupabase()
+    const { error } = await supabase
       .from('research_archive')
       .update({ verified: newVal, updated_at: new Date().toISOString() })
       .eq('id', entry.id);
