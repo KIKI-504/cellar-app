@@ -26,6 +26,22 @@ const colourDot = (colour) => {
 
 const fmt = (n) => n != null ? `£${parseFloat(n).toFixed(2)}` : '—'
 
+function sizeLabel(s) {
+  if (!s) return '75cl'
+  if (s === '150') return 'Magnum (150cl)'
+  if (s === '37.5') return 'Half Bottle (37.5cl)'
+  if (s === '300') return 'Double Magnum (300cl)'
+  return '75cl'
+}
+
+function sizeLabelShort(s) {
+  if (!s) return '75cl'
+  if (s === '150') return 'Magnum'
+  if (s === '37.5') return 'Half'
+  if (s === '300') return 'Dbl Mag'
+  return '75cl'
+}
+
 export default function ConsignmentPage() {
   const router = useRouter()
   const [consignees, setConsignees] = useState([])
@@ -39,6 +55,9 @@ export default function ConsignmentPage() {
   const [showStocktake, setShowStocktake] = useState(false)
   const [showInvoice, setShowInvoice] = useState(false)
   const [showAddConsignee, setShowAddConsignee] = useState(false)
+
+  // Checkbox selection for pull list / delivery note
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   // Add item
   const [itemSearch, setItemSearch] = useState('')
@@ -89,7 +108,9 @@ export default function ConsignmentPage() {
     setLoading(true)
     const [{ data: c }, { data: i }, { data: s }] = await Promise.all([
       supabase.from('consignees').select('*').order('name'),
-      supabase.from('consignment_items').select('*').order('date_delivered', { ascending: false }),
+      supabase.from('consignment_items')
+        .select('*, wines(buyer_note, women_note)')
+        .order('date_delivered', { ascending: false }),
       supabase.from('consignment_sales').select('*').order('date_reported', { ascending: false }),
     ])
     setConsignees(c || [])
@@ -110,6 +131,232 @@ export default function ConsignmentPage() {
     return sum + (i.qty_remaining || 0) * p
   }, 0)
   const staleItems = activeItems.filter(i => i.status === 'Active' && i.qty_remaining === 0)
+
+  // Selection helpers
+  const selectedActiveItems = activeItems.filter(i => selectedIds.has(i.id))
+  const allActiveIds = activeItems.filter(i => i.status === 'Active').map(i => i.id)
+  const allSelected = allActiveIds.length > 0 && allActiveIds.every(id => selectedIds.has(id))
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        allActiveIds.forEach(id => next.delete(id))
+        return next
+      })
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        allActiveIds.forEach(id => next.add(id))
+        return next
+      })
+    }
+  }
+
+  // ─── Pull List (no prices) ────────────────────────────────────────────────
+  function buildPullListHtml(selItems, consignee) {
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const rows = selItems.map(item => {
+      const buyerNote = item.wines?.buyer_note || ''
+      const womenNote = item.wines?.women_note || ''
+      const dot = colourDot(item.colour)
+      const fd = item.description || ''
+      const ci = fd.indexOf(',')
+      const winePart = ci > -1 ? fd.slice(0, ci).trim() : fd
+      const producerPart = ci > -1 ? fd.slice(ci + 1).trim() : ''
+      const badge = item.bottle_size !== '75' ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:#6b1e2e;font-weight:600;margin-left:6px;">${sizeLabelShort(item.bottle_size)}</span>` : ''
+      return `
+        <div style="padding:22px 0;border-bottom:1px solid #ede6d6;">
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:${buyerNote || womenNote ? '10px' : '0'};">
+            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${dot};flex-shrink:0;margin-top:6px;"></span>
+            <div>
+              <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+                <span style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:500;line-height:1.2;">${winePart}</span>
+                ${item.vintage ? `<span style="font-family:'DM Mono',monospace;font-size:13px;color:#7a6652;">${item.vintage}</span>` : ''}
+                ${badge}
+              </div>
+              ${producerPart ? `<div style="font-family:'Cormorant Garamond',serif;font-size:15px;color:#3a2a1a;margin-top:2px;">${producerPart}</div>` : ''}
+              ${item.colour ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-top:3px;">${item.colour}</div>` : ''}
+            </div>
+          </div>
+          ${buyerNote ? `<div style="font-family:'Cormorant Garamond',serif;font-size:14px;line-height:1.7;color:#3a2a1a;margin-left:19px;padding-left:0;">${buyerNote}</div>` : ''}
+          ${womenNote ? `<div style="display:flex;align-items:flex-start;gap:5px;margin-top:8px;margin-left:19px;"><span style="font-size:14px;color:#9b3a4a;flex-shrink:0;line-height:1.5;">♀</span><span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#9b3a4a;line-height:1.6;">${womenNote}</span></div>` : ''}
+        </div>`
+    }).join('')
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pull List — ${consignee.name}</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Cormorant Garamond',serif;color:#1a1008;background:#fff;padding:52px;font-size:14px}
+      @media print{body{padding:28px}}
+      div:last-child{border-bottom:none}
+    </style></head><body>
+    <div style="border-bottom:2px solid #1a1008;padding-bottom:20px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;letter-spacing:0.05em;">Belle Année Wines</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-top:3px;">Restaurant Wine List</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:500;">${consignee.name}</div>
+        ${consignee.contact_name ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-top:2px;">Attn: ${consignee.contact_name}</div>` : ''}
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-top:2px;">${today}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#c8b89a;">
+      ${selItems.length} wine${selItems.length !== 1 ? 's' : ''} · For staff reference — prices not shown
+    </div>
+    ${rows}
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;letter-spacing:0.08em;text-align:center;">
+      BELLE ANNÉE WINES · ${INVOICE_FROM.address} · ${INVOICE_FROM.phone}
+    </div>
+    </body></html>`
+  }
+
+  // ─── Delivery Note (prices, no tasting notes) ─────────────────────────────
+  function buildDeliveryNoteHtml(selItems, consignee) {
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const totalQty = selItems.reduce((sum, i) => sum + (i.qty_delivered || 1), 0)
+    const totalValue = selItems.reduce((sum, i) => sum + (parseFloat(i.sale_price || i.dp_price || 0) * (i.qty_delivered || 1)), 0)
+
+    const rows = selItems.map(item => {
+      const dot = colourDot(item.colour)
+      const fd = item.description || ''
+      const ci = fd.indexOf(',')
+      const winePart = ci > -1 ? fd.slice(0, ci).trim() : fd
+      const producerPart = ci > -1 ? fd.slice(ci + 1).trim() : ''
+      const price = parseFloat(item.sale_price || item.dp_price || 0)
+      const lineTotal = price * (item.qty_delivered || 1)
+      return `
+        <tr>
+          <td style="padding:12px 8px;border-bottom:1px solid #ede6d6;vertical-align:top;">
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;"></span>
+              <div>
+                <div style="font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:500;">${winePart}</div>
+                ${producerPart ? `<div style="font-family:'Cormorant Garamond',serif;font-size:13px;color:#7a6652;">${producerPart}</div>` : ''}
+              </div>
+            </div>
+          </td>
+          <td style="padding:12px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:12px;color:#7a6652;white-space:nowrap;">${item.vintage || '—'}</td>
+          <td style="padding:12px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;white-space:nowrap;">${sizeLabel(item.bottle_size)}</td>
+          <td style="padding:12px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:14px;font-weight:600;">${item.qty_delivered || 1}</td>
+          <td style="padding:12px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;">${fmt(price)}</td>
+          <td style="padding:12px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">${fmt(lineTotal)}</td>
+        </tr>`
+    }).join('')
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Delivery Note — ${consignee.name}</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'DM Mono',monospace;color:#1a1008;background:#fff;padding:52px;font-size:12px}
+      @media print{body{padding:28px}}
+    </style></head><body>
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #1a1008;">
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;letter-spacing:0.06em;">Belle Année Wines</div>
+        <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-top:3px;">Delivery Note</div>
+        <div style="font-size:11px;color:#7a6652;margin-top:10px;line-height:1.8;">
+          ${INVOICE_FROM.name}<br/>
+          ${INVOICE_FROM.address}<br/>
+          ${INVOICE_FROM.phone}<br/>
+          ${INVOICE_FROM.email}
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:13px;font-weight:300;letter-spacing:0.1em;text-transform:uppercase;color:#7a6652;margin-bottom:4px;">Delivered to</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:500;">${consignee.name}</div>
+        ${consignee.contact_name ? `<div style="font-size:12px;color:#7a6652;margin-top:3px;">Attn: ${consignee.contact_name}</div>` : ''}
+        ${consignee.address ? `<div style="font-size:11px;color:#7a6652;margin-top:4px;line-height:1.6;">${consignee.address}</div>` : ''}
+        ${consignee.email ? `<div style="font-size:11px;color:#7a6652;margin-top:3px;">${consignee.email}</div>` : ''}
+        <div style="font-size:13px;font-weight:600;color:#1a1008;margin-top:12px;">${today}</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px;padding:8px 12px;background:rgba(212,173,69,0.08);border:1px solid rgba(212,173,69,0.3);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#7a5e10;">
+      Sale or Return — wines remain property of Belle Année Wines until sold
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+      <thead>
+        <tr style="border-bottom:2px solid #1a1008;">
+          <th style="padding:8px;text-align:left;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Wine</th>
+          <th style="padding:8px;text-align:left;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Vintage</th>
+          <th style="padding:8px;text-align:left;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Format</th>
+          <th style="padding:8px;text-align:center;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Qty</th>
+          <th style="padding:8px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Price/btl</th>
+          <th style="padding:8px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Value</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:32px;">
+      <div style="min-width:240px;border-top:2px solid #1a1008;padding-top:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;">Total bottles</span>
+          <span style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;">${totalQty}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;">Total value</span>
+          <span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">${fmt(totalValue)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;padding-top:20px;border-top:1px solid #ede6d6;">
+      <div>
+        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Received by</div>
+        <div style="height:40px;border-bottom:1px solid #c8b89a;margin-bottom:6px;"></div>
+        <div style="font-size:11px;color:#7a6652;">Signature &amp; date</div>
+      </div>
+      <div>
+        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Delivered by</div>
+        <div style="height:40px;border-bottom:1px solid #c8b89a;margin-bottom:6px;"></div>
+        <div style="font-size:11px;color:#7a6652;">${INVOICE_FROM.name}</div>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;font-size:10px;color:#c8b89a;font-family:'DM Mono',monospace;letter-spacing:0.08em;text-align:center;">
+      All prices inclusive of duty and VAT · Belle Année Wines · ${new Date().getFullYear()}
+    </div>
+    </body></html>`
+  }
+
+  function printHtml(html) {
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    document.body.appendChild(iframe)
+    iframe.contentDocument.write(html)
+    iframe.contentDocument.close()
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => document.body.removeChild(iframe), 2000)
+      }, 300)
+    }
+  }
+
+  function handlePullList() {
+    if (!activeC || selectedActiveItems.length === 0) return
+    printHtml(buildPullListHtml(selectedActiveItems, activeC))
+  }
+
+  function handleDeliveryNote() {
+    if (!activeC || selectedActiveItems.length === 0) return
+    printHtml(buildDeliveryNoteHtml(selectedActiveItems, activeC))
+  }
 
   async function searchInventory(q) {
     setItemSearch(q)
@@ -161,7 +408,7 @@ export default function ConsignmentPage() {
   async function deleteItem(id) {
     if (!confirm('Remove this item from consignment? Sales history will remain.')) return
     const { error } = await supabase.from('consignment_items').delete().eq('id', id)
-    if (!error) setItems(prev => prev.filter(i => i.id !== id))
+    if (!error) { setItems(prev => prev.filter(i => i.id !== id)); setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n }) }
   }
 
   function closeAddItem() {
@@ -313,13 +560,7 @@ export default function ConsignmentPage() {
 
   function printInvoice() {
     if (!activeC) return
-    const html = buildInvoiceHtml(invoiceLines, invoiceRef, activeC)
-    const iframe = document.createElement('iframe')
-    iframe.style.display = 'none'
-    document.body.appendChild(iframe)
-    iframe.contentDocument.write(html)
-    iframe.contentDocument.close()
-    iframe.onload = () => { setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 2000) }, 300) }
+    printHtml(buildInvoiceHtml(invoiceLines, invoiceRef, activeC))
   }
 
   function pdfInvoice() {
@@ -392,7 +633,7 @@ export default function ConsignmentPage() {
                 const owed = sales.filter(s => s.consignee_id === c.id && !s.invoiced).reduce((sum, s) => sum + parseFloat(s.total_value || 0), 0)
                 const isActive = activeConsignee === c.id
                 return (
-                  <div key={c.id} onClick={() => setActiveConsignee(c.id)}
+                  <div key={c.id} onClick={() => { setActiveConsignee(c.id); setSelectedIds(new Set()) }}
                     style={{ padding: '12px 14px', marginBottom: '6px', background: isActive ? 'var(--white)' : 'transparent', border: isActive ? '1px solid var(--border)' : '1px solid transparent', cursor: 'pointer', borderLeft: isActive ? '3px solid var(--wine)' : '3px solid transparent', borderRadius: '2px' }}>
                     <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 500, whiteSpace: 'nowrap' }}>{c.name}</div>
                     <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>{c.invoice_prefix}</div>
@@ -438,26 +679,66 @@ export default function ConsignmentPage() {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                {/* Action buttons row */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button onClick={() => setShowAddItem(true)} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Consign Wine</button>
-                  <button onClick={openStocktake} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📋 Enter Stocktake</button>
+                  <button onClick={openStocktake} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📋 Stocktake</button>
                   {uninvoicedSales.length > 0 && (
                     <button onClick={generateInvoice} style={{ background: 'var(--ink)', color: '#d4ad45', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>
                       £ Invoice · £{uninvoicedTotal.toFixed(2)}
                     </button>
                   )}
+                  {/* Print buttons — only shown when items are selected */}
+                  {selectedActiveItems.length > 0 && (
+                    <>
+                      <div style={{ width: '1px', height: '32px', background: 'var(--border)', flexShrink: 0 }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', letterSpacing: '0.08em' }}>
+                          {selectedActiveItems.length} selected:
+                        </span>
+                        <button
+                          onClick={handlePullList}
+                          style={{ background: 'var(--ink)', color: 'var(--white)', border: 'none', padding: '9px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          🖨 Pull List
+                        </button>
+                        <button
+                          onClick={handleDeliveryNote}
+                          style={{ background: 'none', border: '1px solid var(--ink)', color: 'var(--ink)', padding: '9px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          📄 Delivery Note
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Wines held table */}
                 <div style={{ marginBottom: '24px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px', fontFamily: 'DM Mono, monospace' }}>Wines at {activeC.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>Wines at {activeC.name}</div>
+                    {activeItems.filter(i => i.status === 'Active').length > 0 && (
+                      <div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)' }}>
+                        ☑ check wines to print a Pull List or Delivery Note
+                      </div>
+                    )}
+                  </div>
                   <div style={{ background: 'var(--white)', border: '1px solid var(--border)', overflowX: 'auto' }}>
                     {activeItems.length === 0 ? (
                       <div style={{ padding: '28px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No wines consigned yet.</div>
                     ) : (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '600px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '620px' }}>
                         <thead>
                           <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
+                            <th style={{ padding: '8px 12px', width: '36px' }}>
+                              {/* Select-all checkbox */}
+                              <input
+                                type="checkbox"
+                                checked={allSelected}
+                                onChange={toggleSelectAll}
+                                style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#d4ad45' }}
+                              />
+                            </th>
                             {['Wine', 'Vintage', 'Size', 'Delivered', 'Remaining', 'Sale £/btl', 'Value out', 'Status', ''].map(h => (
                               <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
@@ -466,8 +747,20 @@ export default function ConsignmentPage() {
                         <tbody>
                           {activeItems.map(item => {
                             const isStale = item.status === 'Active' && item.qty_remaining === 0
+                            const isChecked = selectedIds.has(item.id)
+                            const isActive = item.status === 'Active'
                             return (
-                              <tr key={item.id} style={{ borderBottom: '1px solid #ede6d6', opacity: item.status !== 'Active' ? 0.5 : 1, background: isStale ? 'rgba(212,173,69,0.06)' : 'transparent' }}>
+                              <tr key={item.id} style={{ borderBottom: '1px solid #ede6d6', opacity: item.status !== 'Active' ? 0.5 : 1, background: isChecked ? 'rgba(107,30,46,0.04)' : isStale ? 'rgba(212,173,69,0.06)' : 'transparent' }}>
+                                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                  {isActive && (
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => toggleSelect(item.id)}
+                                      style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: 'var(--wine)' }}
+                                    />
+                                  )}
+                                </td>
                                 <td style={{ padding: '10px 12px', minWidth: '160px' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: colourDot(item.colour), flexShrink: 0 }}></span>
@@ -479,7 +772,7 @@ export default function ConsignmentPage() {
                                   </div>
                                 </td>
                                 <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px' }}>{item.vintage || '—'}</td>
-                                <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{item.bottle_size === '150' ? 'Mag' : item.bottle_size === '37.5' ? 'Half' : '75cl'}</td>
+                                <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{sizeLabelShort(item.bottle_size)}</td>
                                 <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{item.date_delivered}</td>
                                 <td style={{ padding: '10px 12px' }}>
                                   <input type="number" min="0" defaultValue={item.qty_remaining}
