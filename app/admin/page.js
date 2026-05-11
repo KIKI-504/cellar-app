@@ -180,7 +180,8 @@ export default function AdminPage() {
       const duty = dutyForWine(w)
       const dpPerBottle = (ib + duty) * 1.2
       const caseSize = parseInt(w.case_size) || 12
-      return { w, qty, ib, duty, dpPerBottle, dpTotal: dpPerBottle * qty, ibTotal: ib * qty, caseSize }
+      const dutyVatPerBottle = dpPerBottle - ib
+      return { w, qty, ib, duty, dpPerBottle, dpTotal: dpPerBottle * qty, ibTotal: ib * qty, dutyVatPerBottle, dutyVatTotal: dutyVatPerBottle * qty, caseSize }
     }).filter(Boolean)
   }
 
@@ -189,7 +190,7 @@ export default function AdminPage() {
       wine_id: w.id, source_id: w.source_id, description: w.description,
       vintage: w.vintage, source: w.source, colour: w.colour, region: w.region,
       bottle_format: w.bottle_format, ib_price: ib, duty_per_bottle: duty,
-      qty, case_size: caseSize, ib_total: ibTotal, dp_per_bottle: dpPerBottle, dp_total: dpTotal,
+      qty, case_size: caseSize, ib_total: ibTotal, dp_per_bottle: dpPerBottle, dp_total: dpTotal, duty_vat_per_bottle: dpPerBottle - ib, duty_vat_total: (dpPerBottle - ib) * qty,
     }))
     setReleaseSaving(true)
     const { error } = await supabase.from('release_orders').insert({
@@ -221,7 +222,7 @@ export default function AdminPage() {
     const today = new Date(order.order_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
     const sourceSections = Object.entries(bySource).map(([src, srcItems]) => {
-      const srcTotal = srcItems.reduce((s, i) => s + i.dp_total, 0)
+      const srcTotal = srcItems.reduce((s, i) => s + (i.duty_vat_total || (parseFloat(i.dp_per_bottle||0) - parseFloat(i.ib_price||0)) * parseInt(i.qty||1)), 0)
       const srcIBTotal = srcItems.reduce((s, i) => s + i.ib_total, 0)
       const rows = srcItems.map(i => `
         <tr>
@@ -230,8 +231,8 @@ export default function AdminPage() {
           <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;white-space:nowrap;">${i.source_id || '—'}</td>
           <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">${i.qty}</td>
           <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:12px;">£${parseFloat(i.ib_price).toFixed(2)}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:12px;">£${parseFloat(i.dp_per_bottle || ((parseFloat(i.ib_price)+parseFloat(i.duty_per_bottle))*1.2)).toFixed(2)}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">£${parseFloat(i.dp_total).toFixed(2)}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:12px;">£${(i.duty_vat_per_bottle || (parseFloat(i.dp_per_bottle||0) - parseFloat(i.ib_price||0))).toFixed(2)}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">£${(i.duty_vat_total || ((parseFloat(i.dp_per_bottle||0) - parseFloat(i.ib_price||0)) * parseInt(i.qty||1))).toFixed(2)}</td>
         </tr>`).join('')
       return `
         <div style="margin-bottom:36px;">
@@ -243,25 +244,25 @@ export default function AdminPage() {
               <th style="padding:7px 8px;text-align:left;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Ref / SID</th>
               <th style="padding:7px 8px;text-align:center;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Bottles</th>
               <th style="padding:7px 8px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">IB/btl</th>
-              <th style="padding:7px 8px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">DP/btl</th>
-              <th style="padding:7px 8px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">DP Total</th>
+              <th style="padding:7px 8px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Duty+VAT/btl</th>
+              <th style="padding:7px 8px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Duty+VAT Est.</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div style="display:flex;justify-content:flex-end;">
             <div style="min-width:220px;border-top:1px solid #1a1008;padding-top:8px;">
               <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-bottom:4px;">
-                <span>IB total (ex duty)</span><span>£${srcIBTotal.toFixed(2)}</span>
+                <span>IB total (already paid)</span><span>£${srcIBTotal.toFixed(2)}</span>
               </div>
               <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:#1a1008;">
-                <span>DP total (incl duty+VAT)</span><span>£${srcTotal.toFixed(2)}</span>
+                <span>Est. duty + VAT due</span><span style="font-weight:700;">£${srcTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>
         </div>`
     }).join('')
 
-    const grandTotal = items.reduce((s, i) => s + i.dp_total, 0)
+    const grandTotal = items.reduce((s, i) => s + (i.duty_vat_total || (parseFloat(i.dp_per_bottle||0) - parseFloat(i.ib_price||0)) * parseInt(i.qty||1)), 0)
     const notesHtml = order.notes ? `<div style="margin-top:20px;padding:12px 14px;background:#faf7f0;border:1px solid #c8b89a;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${order.notes}</div>` : ''
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Release Order — ${today}</title>
@@ -287,7 +288,7 @@ export default function AdminPage() {
     <div style="margin-top:24px;padding-top:16px;border-top:2px solid #1a1008;display:flex;justify-content:flex-end;">
       <div style="min-width:260px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <span style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#7a6652;">Grand Total (incl duty+VAT)</span>
+          <span style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#7a6652;">Estimated Duty + VAT Due</span>
           <span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">£${grandTotal.toFixed(2)}</span>
         </div>
         <div style="font-size:9px;color:#c8b89a;margin-top:4px;font-family:'DM Mono',monospace;">DP = (IB + duty) × 1.2 · 75cl duty £3/btl · Magnum duty £6/btl</div>
@@ -648,7 +649,7 @@ export default function AdminPage() {
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', fontSize: '11px' }}>No release orders yet.</div>
               ) : releaseOrders.map(order => {
                 const items = order.items || []
-                const total = items.reduce((s, i) => s + parseFloat(i.dp_total || 0), 0)
+                const total = items.reduce((s, i) => s + parseFloat(i.duty_vat_total || (parseFloat(i.dp_per_bottle||0) - parseFloat(i.ib_price||0)) * parseInt(i.qty||1) || 0), 0)
                 const sources = [...new Set(items.map(i => i.source))].join(', ')
                 const isExpanded = expandedReleaseOrder === order.id
                 return (
@@ -1026,7 +1027,7 @@ export default function AdminPage() {
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--white)' }}>
             {basketCount} wine{basketCount !== 1 ? 's' : ''} selected for release
             <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: '#d4ad45', marginLeft: '12px' }}>
-              DP total: £{releaseBasketItems().reduce((s, i) => s + i.dpTotal, 0).toFixed(2)}
+              Duty+VAT est: £{releaseBasketItems().reduce((s, i) => s + i.dutyVatTotal, 0).toFixed(2)}
             </span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -1066,10 +1067,10 @@ export default function AdminPage() {
                     <div key={src} style={{ marginBottom: '20px' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px' }}>
                         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500, color: 'var(--wine)' }}>{src}</div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>IB £{srcIB.toFixed(2)} · <strong style={{ color: 'var(--ink)' }}>DP £{srcDP.toFixed(2)}</strong></div>
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>IB £{srcIB.toFixed(2)} (paid) · <strong style={{ color: 'var(--wine)' }}>duty+VAT est. £{srcItems.reduce((s,i)=>s+i.dutyVatTotal,0).toFixed(2)}</strong></div>
                       </div>
                       <div style={{ border: '1px solid var(--border)', background: 'var(--white)' }}>
-                        {srcItems.map(({ w, qty, ib, duty, dpPerBottle, dpTotal, caseSize }, idx) => {
+                        {srcItems.map(({ w, qty, ib, duty, dpPerBottle, dpTotal, dutyVatPerBottle, dutyVatTotal, caseSize }, idx) => {
                           const cases = qty / caseSize
                           return (
                             <div key={w.id} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 100px', gap: '12px', padding: '12px 14px', borderBottom: idx < srcItems.length - 1 ? '1px solid #ede6d6' : 'none', alignItems: 'center' }}>
