@@ -677,6 +677,30 @@ export default function StudioPage() {
                   <div><label style={labelStyle}>Bottle Size</label><select value={scanBottleSize} onChange={e => setScanBottleSize(e.target.value)} style={inputStyle}><option value="37.5">37.5cl Half</option><option value="75">75cl Bottle</option><option value="150">150cl Magnum</option><option value="300">300cl Double Magnum</option></select></div>
                   <div><label style={labelStyle}>Sale Price £</label><input type="number" step="0.01" value={scanSalePrice} onChange={e => setScanSalePrice(e.target.value)} placeholder="0.00" style={inputStyle} /></div>
                 </div>
+                {/* IB / DP price entry */}
+                <div style={{ gridColumn:'1 / -1', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', background:'rgba(107,30,46,0.03)', border:'1px solid rgba(107,30,46,0.15)', padding:'12px', marginBottom:'12px' }}>
+                  <div>
+                    <label style={labelStyle}>IB Price / btl £ <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(ex-duty)</span></label>
+                    <input type="number" step="0.01" value={scanIBPrice} onChange={e => setScanIBPrice(e.target.value)} placeholder="0.00" style={{ ...inputStyle, fontFamily:'DM Mono, monospace', fontWeight:600 }} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>DP Price / btl £ <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(back-calculates IB)</span></label>
+                    <input type="number" step="0.01" placeholder="0.00"
+                      value={scanIBPrice ? ((parseFloat(scanIBPrice) + dutyForSize(scanBottleSize)) * 1.2).toFixed(2) : ''}
+                      onChange={e => {
+                        const dp = parseFloat(e.target.value)
+                        if (!isNaN(dp) && dp > 0) { setScanIBPrice(((dp / 1.2) - dutyForSize(scanBottleSize)).toFixed(2)) }
+                        else { setScanIBPrice('') }
+                      }}
+                      style={{ ...inputStyle, fontFamily:'DM Mono, monospace', fontWeight:600, color:'var(--wine)', border:'2px solid rgba(107,30,46,0.3)', background:'rgba(107,30,46,0.03)' }} />
+                  </div>
+                  {scanIBPrice && parseFloat(scanIBPrice) > 0 && (
+                    <div style={{ gridColumn:'1/-1', fontFamily:'DM Mono, monospace', fontSize:'10px', color:'var(--muted)' }}>
+                      IB £{parseFloat(scanIBPrice).toFixed(2)} → DP £{((parseFloat(scanIBPrice) + dutyForSize(scanBottleSize)) * 1.2).toFixed(2)}
+                      {isMagnum(scanBottleSize) ? ' (magnum · £6 duty)' : ' (75cl · £3 duty)'}
+                    </div>
+                  )}
+                </div>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={labelStyle}>Colour{scanWine && !scanWine.colour ? <span style={{ color: 'var(--wine)', fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}> — not set on record</span> : ''}</label>
                   <select value={scanColour} onChange={e => setScanColour(e.target.value)} style={{ ...inputStyle, border: scanColour ? '1px solid var(--border)' : '2px solid rgba(107,30,46,0.3)' }}>
