@@ -32,7 +32,7 @@ export default function BuyerPage() {
   const [filterWomen, setFilterWomen] = useState(false)
   const [sortCol, setSortCol] = useState('description')
   const [sortDir, setSortDir] = useState('asc')
-  const [hearts, setHearts] = useState({})
+  const [selected, setSelected] = useState({})
   const [userName, setUserName] = useState('')
   const [expanded, setExpanded] = useState({})
   const [tooltip, setTooltip] = useState(null)
@@ -94,8 +94,8 @@ export default function BuyerPage() {
     setFiltered(result)
   }, [wines, search, filterColour, filterRegion, filterWomen, sortCol, sortDir])
 
-  function toggleHeart(id) {
-    setHearts(prev => {
+  function toggleSelected(id) {
+    setSelected(prev => {
       const next = { ...prev }
       if (next[id]) delete next[id]
       else next[id] = 1
@@ -105,7 +105,7 @@ export default function BuyerPage() {
 
   function setQuantity(id, qty, max) {
     const capped = Math.min(Math.max(1, parseInt(qty) || 1), max)
-    setHearts(prev => ({ ...prev, [id]: capped }))
+    setSelected(prev => ({ ...prev, [id]: capped }))
   }
 
   function toggleExpanded(id) {
@@ -118,13 +118,13 @@ export default function BuyerPage() {
   }
 
   function sendWishlist() {
-    const list = wines.filter(w => hearts[w.id])
-    const totalBottles = list.reduce((sum, w) => sum + (hearts[w.id] || 0), 0)
-    const totalValue = list.reduce((sum, w) => sum + parseFloat(w.sale_price) * (hearts[w.id] || 1), 0)
+    const list = wines.filter(w => selected[w.id])
+    const totalBottles = list.reduce((sum, w) => sum + (selected[w.id] || 0), 0)
+    const totalValue = list.reduce((sum, w) => sum + parseFloat(w.sale_price) * (selected[w.id] || 1), 0)
     const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     const divider = '─'.repeat(50)
     const wineLines = list.map(w => {
-      const qty = hearts[w.id] || 1
+      const qty = selected[w.id] || 1
       const total = (parseFloat(w.sale_price) * qty).toFixed(2)
       const size = formatBottleSize(w.bottle_volume, w.bottle_format)
       return [
@@ -150,8 +150,8 @@ export default function BuyerPage() {
   }
 
   const regions = [...new Set(wines.map(w => w.region).filter(Boolean))].sort()
-  const heartCount = Object.keys(hearts).length
-  const totalBottles = Object.values(hearts).reduce((sum, q) => sum + q, 0)
+  const selectedCount = Object.keys(selected).length
+  const totalBottles = Object.values(selected).reduce((sum, q) => sum + q, 0)
   const womenCount = wines.filter(w => w.women_note).length
 
   const colHead = (label, field, align = 'left') => (
@@ -168,13 +168,13 @@ export default function BuyerPage() {
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--cream)', paddingBottom: heartCount > 0 ? '80px' : '40px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--cream)', paddingBottom: selectedCount > 0 ? '80px' : '40px' }}>
 
       {/* Tooltip */}
       {tooltip && (
         <div style={{ position: 'fixed', top: tooltip.y, left: tooltip.x, zIndex: 1000, background: 'var(--ink)', color: 'var(--white)', padding: '10px 14px', maxWidth: '280px', fontSize: '11px', lineHeight: 1.6, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', pointerEvents: 'none' }}>
           <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: tooltip.type === 'women' ? '#d4748a' : '#d4ad45', marginBottom: '5px' }}>
-            {tooltip.type === 'women' ? '♀ Women in wine' : '🍷 Producer'}
+            {tooltip.type === 'women' ? '♀ Women in wine' : 'Producer note'}
           </div>
           {tooltip.text}
         </div>
@@ -188,13 +188,28 @@ export default function BuyerPage() {
 
       {/* Header */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '28px 28px 0' }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '8px' }}>Cheers, {userName}!</div>
-        <div style={{ fontSize: '11px', color: 'rgba(253,250,245,0.45)', letterSpacing: '0.06em', marginBottom: '24px' }}>
-          🤍 Heart wines to build your wishlist
-          <span style={{ margin: '0 10px', opacity: 0.3 }}>·</span>
-          Hover <span style={{ color: '#d4748a' }}>♀</span> for women winemaker info
-          <span style={{ margin: '0 10px', opacity: 0.3 }}>·</span>
-          Hover <span style={{ color: '#d4ad45' }}>🍷</span> for producer info
+
+        {/* Title + instructions */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '32px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '16px' }}>
+            Current Selection
+          </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', padding: '8px 14px' }}>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '16px', fontWeight: 700, color: '#d4ad45', lineHeight: 1 }}>+</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Add wines to build your order</span>
+            </div>
+            {womenCount > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(155,58,74,0.12)', border: '1px solid rgba(155,58,74,0.25)', padding: '8px 14px' }}>
+                <span style={{ color: '#d4748a', fontSize: '13px' }}>♀</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Hover for women winemaker info</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.15)', padding: '8px 14px' }}>
+              <span style={{ color: '#d4ad45', fontSize: '12px', fontFamily: 'DM Mono, monospace' }}>i</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Hover wine icon for producer info</span>
+            </div>
+          </div>
         </div>
 
         {/* Filters */}
@@ -246,8 +261,8 @@ export default function BuyerPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
           {filtered.map(w => {
-            const hearted = !!hearts[w.id]
-            const qty = hearts[w.id] || 1
+            const isSelected = !!selected[w.id]
+            const qty = selected[w.id] || 1
             const maxQty = parseInt(w.quantity) || 1
             const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
             const size = formatBottleSize(w.bottle_volume, w.bottle_format)
@@ -263,10 +278,10 @@ export default function BuyerPage() {
 
             return (
               <div key={w.id} style={{ background: 'var(--white)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 110px 90px 40px', padding: '14px 0 14px 0', alignItems: 'center', borderLeft: hearted ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 110px 90px 40px', padding: '14px 0 14px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
 
                   {/* Wine name */}
-                  <div style={{ paddingLeft: hearted ? '13px' : '16px' }}>
+                  <div style={{ paddingLeft: isSelected ? '13px' : '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                       <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
                       <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 400, color: 'var(--ink)', lineHeight: 1.3 }}>{w.description}</span>
@@ -296,7 +311,7 @@ export default function BuyerPage() {
 
                   {/* Qty */}
                   <div style={{ textAlign: 'center' }}>
-                    {hearted ? (
+                    {isSelected ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
                         <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1}
                           style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '14px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
@@ -313,7 +328,7 @@ export default function BuyerPage() {
                   <div style={{ textAlign: 'right', paddingRight: '8px' }}>
                     <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
                     {isBelowWs && <div style={{ fontSize: '9px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>−£{saving} vs WS</div>}
-                    {hearted && <div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
+                    {isSelected && <div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
                   </div>
 
                   {/* WS avg */}
@@ -330,17 +345,18 @@ export default function BuyerPage() {
                     )}
                   </div>
 
-                  {/* Heart */}
+                  {/* Add/remove button */}
                   <div style={{ textAlign: 'center' }}>
-                    <button onClick={() => toggleHeart(w.id)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>
-                      {hearted ? '❤️' : '🤍'}
+                    <button onClick={() => toggleSelected(w.id)}
+                      style={{ width: '28px', height: '28px', border: isSelected ? '2px solid var(--wine)' : '1px solid var(--border)', background: isSelected ? 'var(--wine)' : 'transparent', color: isSelected ? 'var(--white)' : 'var(--muted)', borderRadius: '2px', cursor: 'pointer', fontSize: '18px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>
+                      {isSelected ? '✓' : '+'}
                     </button>
                   </div>
                 </div>
 
                 {/* Expanded notes */}
                 {isExpanded && hasNotes && (
-                  <div style={{ padding: '0 16px 16px 29px', borderLeft: hearted ? '3px solid var(--wine)' : '3px solid transparent', background: 'var(--cream)' }}>
+                  <div style={{ padding: '0 16px 16px 29px', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent', background: 'var(--cream)' }}>
                     {w.buyer_note && (
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.6 }}>
                         {w.buyer_note}
@@ -354,11 +370,11 @@ export default function BuyerPage() {
         </div>
       )}
 
-      {/* Wishlist bar */}
-      {heartCount > 0 && (
+      {/* Order bar */}
+      {selectedCount > 0 && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 28px', zIndex: 200 }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>{heartCount} wine{heartCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
-          <button onClick={sendWishlist} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Wishlist</button>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
+          <button onClick={sendWishlist} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Order</button>
         </div>
       )}
     </div>
