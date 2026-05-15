@@ -49,7 +49,7 @@ export default function BuyerPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('wines')
-      .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle, restaurant_spot')
+      .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle')
       .order('description')
     if (error) { console.error(error) }
     else {
@@ -154,7 +154,6 @@ export default function BuyerPage() {
   const totalBottles = Object.values(hearts).reduce((sum, q) => sum + q, 0)
   const womenCount = wines.filter(w => w.women_note).length
 
-  // Sortable column header helper
   const colHead = (label, field, align = 'left') => (
     <div onClick={() => cycleSort(field)}
       style={{ textAlign: align, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start', color: sortCol === field ? '#d4ad45' : 'rgba(253,250,245,0.5)', transition: 'color 0.15s' }}>
@@ -187,7 +186,7 @@ export default function BuyerPage() {
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
       </div>
 
-      {/* Header — dark, flows into filter bar */}
+      {/* Header */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '28px 28px 0' }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '8px' }}>Cheers, {userName}!</div>
         <div style={{ fontSize: '11px', color: 'rgba(253,250,245,0.45)', letterSpacing: '0.06em', marginBottom: '24px' }}>
@@ -198,7 +197,7 @@ export default function BuyerPage() {
           Hover <span style={{ color: '#d4ad45' }}>🍷</span> for producer info
         </div>
 
-        {/* Filters — sit inside the dark header, on a slightly lighter band */}
+        {/* Filters */}
         <div style={{ background: 'rgba(255,255,255,0.06)', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '14px 0', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines…"
             style={{ flex: 1, minWidth: '200px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}
@@ -227,7 +226,7 @@ export default function BuyerPage() {
           </div>
         </div>
 
-        {/* Column headers — sortable, part of the dark section */}
+        {/* Column headers */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 110px 90px 40px', padding: '10px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           {colHead('Wine', 'description')}
           {colHead('Size', 'format')}
@@ -260,7 +259,7 @@ export default function BuyerPage() {
             const isBelowWs = wsDp && salePrice < wsDp
             const saving = isBelowWs ? (wsDp - salePrice).toFixed(2) : null
             const isExpanded = expanded[w.id]
-            const hasNotes = !!(w.buyer_note || w.restaurant_spot)
+            const hasNotes = !!w.buyer_note
 
             return (
               <div key={w.id} style={{ background: 'var(--white)' }}>
@@ -343,13 +342,8 @@ export default function BuyerPage() {
                 {isExpanded && hasNotes && (
                   <div style={{ padding: '0 16px 16px 29px', borderLeft: hearted ? '3px solid var(--wine)' : '3px solid transparent', background: 'var(--cream)' }}>
                     {w.buyer_note && (
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.6, marginBottom: w.restaurant_spot ? '10px' : '0' }}>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.6 }}>
                         {w.buyer_note}
-                      </div>
-                    )}
-                    {w.restaurant_spot && (
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#8b2535', letterSpacing: '0.05em' }}>
-                        {w.restaurant_spot}
                       </div>
                     )}
                   </div>
