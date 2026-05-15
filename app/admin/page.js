@@ -796,8 +796,8 @@ export default function AdminPage() {
                   Sell {sortCol === 'sale_price' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Notes</th>
-                <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Buyer</th>
-                <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
+<th onClick={() => handleSort('include_in_buyer_view')} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'include_in_buyer_view' ? '#d4ad45' : 'var(--white)' }}>Buyer {sortCol === 'include_in_buyer_view' ? (sortDir === 1 ? '↑' : '↓') : '↕'}</th>
+                  <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
                 <th onClick={() => handleSort('source')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'source' ? '#d4ad45' : 'var(--white)' }}>
                   Src {sortCol === 'source' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
