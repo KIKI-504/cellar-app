@@ -250,14 +250,19 @@ export default function ConsignmentPage() {
     </body></html>`
   }
 
-  function printHtml(html) {
-    const iframe = document.createElement('iframe')
-    iframe.style.display = 'none'
-    document.body.appendChild(iframe)
-    iframe.contentDocument.write(html)
-    iframe.contentDocument.close()
-    iframe.onload = () => { setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 2000) }, 300) }
+function printHtml(html) {
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none;'
+  document.body.appendChild(iframe)
+  iframe.onload = () => {
+    iframe.contentWindow.focus()
+    iframe.contentWindow.print()
+    setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe) }, 3000)
   }
+  iframe.contentDocument.open()
+  iframe.contentDocument.write(html)
+  iframe.contentDocument.close()
+}
 
   function handlePullList() { if (!activeC || selectedActiveItems.length === 0) return; printHtml(buildPullListHtml(selectedActiveItems, activeC)) }
   function handleDeliveryNote() { if (!activeC || selectedActiveItems.length === 0) return; printHtml(buildDeliveryNoteHtml(selectedActiveItems, activeC)) }
