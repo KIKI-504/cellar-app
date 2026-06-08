@@ -73,8 +73,9 @@ export default function AdminPage() {
       let av = a[sortCol] ?? '', bv = b[sortCol] ?? ''
       const aEmpty = av === '' || av === null || av === undefined
       const bEmpty = bv === '' || bv === null || bv === undefined
-      if (aEmpty && !bEmpty) return 1
-      if (!aEmpty && bEmpty) return -1
+      // Empties to TOP when ascending, BOTTOM when descending
+      if (aEmpty && !bEmpty) return sortDir === 1 ? -1 : 1
+      if (!aEmpty && bEmpty) return sortDir === 1 ? 1 : -1
       if (aEmpty && bEmpty) return 0
       const aN = typeof av === 'number' ? av : parseFloat(av)
       const bN = typeof bv === 'number' ? bv : parseFloat(bv)
