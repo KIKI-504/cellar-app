@@ -14,6 +14,7 @@ export default function AdminPage() {
   const [filterBuyer, setFilterBuyer] = useState('')
   const [sortCol, setSortCol] = useState('description')
   const [sortDir, setSortDir] = useState(1)
+  const [displayOrder, setDisplayOrder] = useState([])
   const [page, setPage] = useState(0)
   const [showValues, setShowValues] = useState(false)
   const [expandedNote, setExpandedNote] = useState(null)
@@ -70,12 +71,43 @@ export default function AdminPage() {
     }
     result.sort((a, b) => {
       let av = a[sortCol] ?? '', bv = b[sortCol] ?? ''
-      if (typeof av === 'number') return (av - bv) * sortDir
+      const aEmpty = av === '' || av === null || av === undefined
+      const bEmpty = bv === '' || bv === null || bv === undefined
+      if (aEmpty && !bEmpty) return 1
+      if (!aEmpty && bEmpty) return -1
+      if (aEmpty && bEmpty) return 0
+      const aN = typeof av === 'number' ? av : parseFloat(av)
+      const bN = typeof bv === 'number' ? bv : parseFloat(bv)
+      if (!isNaN(aN) && !isNaN(bN) && typeof av !== 'string' && typeof bv !== 'string') return (aN - bN) * sortDir
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir
       return String(av).localeCompare(String(bv)) * sortDir
     })
     setFiltered(result)
+    setDisplayOrder(result.map(w => w.id))
     setPage(0)
-  }, [wines, search, filterSource, filterColour, filterBuyer, sortCol, sortDir])
+  }, [wines.length, search, filterSource, filterColour, filterBuyer, sortCol, sortDir])
+
+  // Keep `filtered` in sync with wine edits, but PRESERVE the displayOrder
+  // so editing a price doesn't reshuffle rows mid-task.
+  useEffect(() => {
+    if (displayOrder.length === 0) return
+    const byId = new Map(wines.map(w => [w.id, w]))
+    const reordered = displayOrder.map(id => byId.get(id)).filter(Boolean)
+    // Apply current filters (so checking 'In Buyer View' etc still works,
+    // but order is preserved within the filtered set)
+    let result = reordered
+    if (filterSource) result = result.filter(w => w.source === filterSource)
+    if (filterColour) result = result.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
+    if (filterBuyer === 'included') result = result.filter(w => w.include_in_buyer_view)
+    if (filterBuyer === 'missing-retail') result = result.filter(w => !w.retail_price)
+    if (filterBuyer === 'competitive') result = result.filter(w => isCompetitive(w))
+    if (filterBuyer === 'women') result = result.filter(w => w.women_note)
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(w => [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase().includes(q))
+    }
+    setFiltered(result)
+  }, [wines])
 
   function isMagnum(w) {
     const vol = String(w.bottle_volume || '').replace(/[^0-9]/g, '')
@@ -733,27 +765,27 @@ export default function AdminPage() {
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
                 <th style={{ padding: '10px 8px', width: '36px', textAlign: 'center' }}>
-                  <span style={{ fontSize: '9px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace', letterSpacing: '0.08em' }}>REL</span>
+                  <span style={{ fontSize: '10px', color: '#fdfaf5', fontFamily: 'DM Mono, monospace', letterSpacing: '0.08em', opacity: 0.9 }}>REL</span>
                 </th>
-                <th onClick={() => handleSort('description')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'description' ? '#d4ad45' : 'var(--white)', position: 'sticky', left: 0, background: 'var(--ink)', zIndex: 10, minWidth: '200px' }}>
+                <th onClick={() => handleSort('description')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'description' ? '#d4ad45' : 'var(--white)', position: 'sticky', left: 0, background: 'var(--ink)', zIndex: 10, minWidth: '200px' }}>
                   Wine {sortCol === 'description' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
                 {[['vintage','Vin.'],['colour','Colour'],['region','Region'],['bottle_format','Format'],['quantity','Qty']].map(([col, label]) => (
-                  <th key={col} onClick={() => handleSort(col)} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === col ? '#d4ad45' : 'var(--white)' }}>
+                  <th key={col} onClick={() => handleSort(col)} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === col ? '#d4ad45' : 'var(--white)' }}>
                     {label} {sortCol === col ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                   </th>
                 ))}
-                <th onClick={() => handleSort('ws_lowest_per_bottle')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', color: sortCol === 'ws_lowest_per_bottle' ? '#d4ad45' : 'var(--white)', minWidth: '240px' }}>
+                <th onClick={() => handleSort('ws_lowest_per_bottle')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', color: sortCol === 'ws_lowest_per_bottle' ? '#d4ad45' : 'var(--white)', minWidth: '240px' }}>
                   Pricing {sortCol === 'ws_lowest_per_bottle' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
-                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>sorts by WS IB · Your IB·DP | WS IB·DP · ▼ ladder</span>
+                  <span style={{ display: 'block', fontSize: '9px', color: '#fdfaf5', fontWeight: 400, letterSpacing: '0.04em', textTransform: 'none', marginTop: '2px', opacity: 0.85 }}>sorts by WS IB · click again to re-sort</span>
                 </th>
-                <th onClick={() => handleSort('sale_price')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'sale_price' ? '#d4ad45' : 'var(--white)' }}>
+                <th onClick={() => handleSort('sale_price')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'sale_price' ? '#d4ad45' : 'var(--white)' }}>
                   Sell {sortCol === 'sale_price' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
-                <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Notes</th>
-                <th onClick={() => handleSort('include_in_buyer_view')} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'include_in_buyer_view' ? '#d4ad45' : 'var(--white)' }}>Buyer {sortCol === 'include_in_buyer_view' ? (sortDir === 1 ? '↑' : '↓') : '↕'}</th>
-                <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
-                <th onClick={() => handleSort('source')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'source' ? '#d4ad45' : 'var(--white)' }}>
+                <th style={{ padding: '10px 12px', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: '#fdfaf5' }}>Notes</th>
+                <th onClick={() => handleSort('include_in_buyer_view')} style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'include_in_buyer_view' ? '#d4ad45' : 'var(--white)' }}>Buyer {sortCol === 'include_in_buyer_view' ? (sortDir === 1 ? '↑' : '↓') : '↕'}</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: '#fdfaf5' }}>Studio</th>
+                <th onClick={() => handleSort('source')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'source' ? '#d4ad45' : 'var(--white)' }}>
                   Src {sortCol === 'source' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
               </tr>
