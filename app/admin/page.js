@@ -743,9 +743,9 @@ export default function AdminPage() {
                     {label} {sortCol === col ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                   </th>
                 ))}
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--white)', minWidth: '240px' }}>
-                  Pricing
-                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>Your IB · DP &nbsp;|&nbsp; WS IB · DP &nbsp;·&nbsp; ▼ ladder</span>
+                <th onClick={() => handleSort('ws_lowest_per_bottle')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', color: sortCol === 'ws_lowest_per_bottle' ? '#d4ad45' : 'var(--white)', minWidth: '240px' }}>
+                  Pricing {sortCol === 'ws_lowest_per_bottle' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
+                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>sorts by WS IB · Your IB·DP | WS IB·DP · ▼ ladder</span>
                 </th>
                 <th onClick={() => handleSort('sale_price')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'sale_price' ? '#d4ad45' : 'var(--white)' }}>
                   Sell {sortCol === 'sale_price' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
@@ -810,9 +810,21 @@ export default function AdminPage() {
                               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em' }}>IB</div>
                               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>{ib ? `£${ib.toFixed(2)}` : '—'}</div>
                             </div>
-                            <div style={{ paddingTop: '5px', paddingBottom: '4px', borderBottom: '1px solid #f0ebe0', paddingLeft: '10px', borderLeft: '1px solid var(--border)' }}>
+                            <div style={{ paddingTop: '5px', paddingBottom: '4px', borderBottom: '1px solid #f0ebe0', paddingLeft: '10px', borderLeft: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
                               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em' }}>IB</div>
-                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, color: ws ? 'var(--ink)' : 'var(--muted)' }}>{ws ? `£${ws.toFixed(2)}` : '—'}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
+                                <input type="number" step="0.01" key={`${w.id}-ws`}
+                                  defaultValue={w.ws_lowest_per_bottle || ''}
+                                  placeholder="enter"
+                                  onBlur={e => {
+                                    const val = e.target.value ? parseFloat(e.target.value) : null
+                                    updateWine(w.id, 'ws_lowest_per_bottle', val)
+                                    if (val) updateWine(w.id, 'retail_price', Math.round((val + duty) * 1.2 * 100) / 100)
+                                    updateWine(w.id, 'retail_price_source', 'WS avg (ex duty)')
+                                  }}
+                                  style={{ width: '64px', border: '1px solid var(--border)', background: ws ? 'var(--cream)' : 'rgba(212,173,69,0.08)', padding: '2px 5px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, outline: 'none', color: 'var(--ink)' }} />
+                                <button onClick={e => { e.stopPropagation(); openWineSearcher(w.description, w.vintage) }} style={{ background: 'none', border: '1px solid var(--border)', padding: '1px 4px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>🔍</button>
+                              </div>
                             </div>
                             <div style={{ paddingTop: '4px' }}>
                               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em' }}>DP</div>
@@ -826,21 +838,7 @@ export default function AdminPage() {
                               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 700, color: wsDP ? (isComp ? '#2d6a4f' : '#c0392b') : 'var(--muted)' }}>{wsDP ? `£${wsDP.toFixed(2)}` : '—'}</div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
-                            <input type="number" step="0.01" key={`${w.id}-ws`}
-                              defaultValue={w.ws_lowest_per_bottle || ''}
-                              placeholder="WS IB price"
-                              onBlur={e => {
-                                const val = e.target.value ? parseFloat(e.target.value) : null
-                                updateWine(w.id, 'ws_lowest_per_bottle', val)
-                                if (val) updateWine(w.id, 'retail_price', Math.round((val + duty) * 1.2 * 100) / 100)
-                                updateWine(w.id, 'retail_price_source', 'WS avg (ex duty)')
-                              }}
-                              style={{ width: '76px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
-                            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)' }}>IB</span>
-                            <button onClick={e => { e.stopPropagation(); openWineSearcher(w.description, w.vintage) }} style={{ background: 'none', border: '1px solid var(--border)', padding: '1px 4px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>🔍</button>
-                          </div>
-                          {w.retail_price_date && <div style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>{w.retail_price_date}</div>}
+                          {w.retail_price_date && <div style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), fontFamily: 'DM Mono, monospace', marginTop: '4px' }}>{w.retail_price_date}</div>}
                           <div style={{ marginTop: '4px', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
                             <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: isPriceOpen ? 'var(--wine)' : 'var(--muted)', letterSpacing: '0.06em' }}>{isPriceOpen ? '▲ hide ladder' : '▼ IB ladder'}</span>
                           </div>
