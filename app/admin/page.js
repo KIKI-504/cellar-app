@@ -27,9 +27,7 @@ export default function AdminPage() {
   const [showOtherSourceInput, setShowOtherSourceInput] = useState(false)
   const otherFileRef = useRef(null)
   const [showMergeModal, setShowMergeModal] = useState(false)
-
-  // ─── Release Order state ─────────────────────────────────────────────────
-  const [releaseBasket, setReleaseBasket] = useState({})      // { wineId: qty }
+  const [releaseBasket, setReleaseBasket] = useState({})
   const [showReleaseModal, setShowReleaseModal] = useState(false)
   const [releaseNotes, setReleaseNotes] = useState('')
   const [releaseSaving, setReleaseSaving] = useState(false)
@@ -85,8 +83,6 @@ export default function AdminPage() {
     return vol === '150' || vol === '1500' || fmt.includes('magnum')
   }
 
-  // ─── DP formula: (IB + duty) × 1.2  ──────────────────────────────────────
-  // duty = £3 for 75cl, £6 for 150cl/magnum
   function dutyForWine(w) { return isMagnum(w) ? 6 : 3 }
   function dpForWine(w) {
     if (!w.purchase_price_per_bottle) return null
@@ -149,16 +145,18 @@ export default function AdminPage() {
     const qty = parseInt(prompt(`Move to studio — how many bottles?\n\n${wine.description} ${wine.vintage}\n(${wine.quantity} in bond)`))
     if (!qty || isNaN(qty) || qty < 1) return
     const dp = dpForWine(wine)?.toFixed(2)
+    const vol = String(wine.bottle_volume || '').replace(/[^0-9.]/g, '')
+    const fmt = (wine.bottle_format || '').toLowerCase()
+    const bottle_size = (vol === '150' || fmt.includes('magnum')) ? '150' : (vol === '37.5' || fmt.includes('half')) ? '37.5' : '75'
     const { error } = await supabase.from('studio').insert({
       wine_id: wine.id, quantity: qty,
       date_moved: new Date().toISOString().split('T')[0],
-      dp_price: dp, status: 'Available', include_in_local: false,
+      dp_price: dp, status: 'Available', include_in_local: false, bottle_size,
     })
     if (error) alert('Error moving to studio: ' + error.message)
     else alert(`✓ ${qty} bottle${qty > 1 ? 's' : ''} moved to studio at DP £${dp}`)
   }
 
-  // ─── Release Order helpers ────────────────────────────────────────────────
   function toggleReleaseBasket(wine) {
     setReleaseBasket(prev => {
       if (prev[wine.id]) { const next = { ...prev }; delete next[wine.id]; return next }
@@ -190,7 +188,8 @@ export default function AdminPage() {
       wine_id: w.id, source_id: w.source_id, description: w.description,
       vintage: w.vintage, source: w.source, colour: w.colour, region: w.region,
       bottle_format: w.bottle_format, ib_price: ib, duty_per_bottle: duty,
-      qty, case_size: caseSize, ib_total: ibTotal, dp_per_bottle: dpPerBottle, dp_total: dpTotal, duty_vat_per_bottle: dpPerBottle - ib, duty_vat_total: (dpPerBottle - ib) * qty,
+      qty, case_size: caseSize, ib_total: ibTotal, dp_per_bottle: dpPerBottle, dp_total: dpTotal,
+      duty_vat_per_bottle: dpPerBottle - ib, duty_vat_total: (dpPerBottle - ib) * qty,
     }))
     setReleaseSaving(true)
     const { error } = await supabase.from('release_orders').insert({
@@ -220,7 +219,6 @@ export default function AdminPage() {
       return acc
     }, {})
     const today = new Date(order.order_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-
     const sourceSections = Object.entries(bySource).map(([src, srcItems]) => {
       const srcTotal = srcItems.reduce((s, i) => s + (i.duty_vat_total || (parseFloat(i.dp_per_bottle||0) - parseFloat(i.ib_price||0)) * parseInt(i.qty||1)), 0)
       const srcIBTotal = srcItems.reduce((s, i) => s + i.ib_total, 0)
@@ -261,40 +259,20 @@ export default function AdminPage() {
           </div>
         </div>`
     }).join('')
-
     const grandTotal = items.reduce((s, i) => s + (i.duty_vat_total || (parseFloat(i.dp_per_bottle||0) - parseFloat(i.ib_price||0)) * parseInt(i.qty||1)), 0)
     const notesHtml = order.notes ? `<div style="margin-top:20px;padding:12px 14px;background:#faf7f0;border:1px solid #c8b89a;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${order.notes}</div>` : ''
-
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Release Order — ${today}</title>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
-      *{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Mono',monospace;color:#1a1008;background:#fff;padding:48px;font-size:12px}@media print{body{padding:24px}}
-    </style></head><body>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Mono',monospace;color:#1a1008;background:#fff;padding:48px;font-size:12px}@media print{body{padding:24px}}</style></head><body>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #1a1008;">
-      <div>
-        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;letter-spacing:0.06em;">Belle Année Wines</div>
-        <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-top:3px;">Release Order</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:500;color:#6b1e2e;">Release Request</div>
-        <div style="font-size:12px;color:#7a6652;margin-top:4px;">${today}</div>
-        <div style="font-size:11px;color:#7a6652;margin-top:3px;">Jessica Bride · 25 Hillgate Street, London W8 7SP</div>
-      </div>
+      <div><div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;letter-spacing:0.06em;">Belle Année Wines</div><div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-top:3px;">Release Order</div></div>
+      <div style="text-align:right;"><div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:500;color:#6b1e2e;">Release Request</div><div style="font-size:12px;color:#7a6652;margin-top:4px;">${today}</div><div style="font-size:11px;color:#7a6652;margin-top:3px;">Jessica Bride · 25 Hillgate Street, London W8 7SP</div></div>
     </div>
-    <div style="margin-bottom:10px;padding:8px 12px;background:rgba(212,173,69,0.08);border:1px solid rgba(212,173,69,0.3);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#7a5e10;">
-      Please release the following wines for delivery. Prices shown are for reference only.
-    </div>
+    <div style="margin-bottom:10px;padding:8px 12px;background:rgba(212,173,69,0.08);border:1px solid rgba(212,173,69,0.3);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#7a5e10;">Please release the following wines for delivery. Prices shown are for reference only.</div>
     <div style="margin-top:24px;">${sourceSections}</div>
     <div style="margin-top:24px;padding-top:16px;border-top:2px solid #1a1008;display:flex;justify-content:flex-end;">
-      <div style="min-width:260px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <span style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#7a6652;">Estimated Duty + VAT Due</span>
-          <span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">£${grandTotal.toFixed(2)}</span>
-        </div>
-        <div style="font-size:9px;color:#c8b89a;margin-top:4px;font-family:'DM Mono',monospace;">DP = (IB + duty) × 1.2 · 75cl duty £3/btl · Magnum duty £6/btl</div>
-      </div>
-    </div>
-    ${notesHtml}
+      <div style="min-width:260px;"><div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#7a6652;">Estimated Duty + VAT Due</span><span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">£${grandTotal.toFixed(2)}</span></div>
+      <div style="font-size:9px;color:#c8b89a;margin-top:4px;font-family:'DM Mono',monospace;">DP = (IB + duty) × 1.2 · 75cl duty £3/btl · Magnum duty £6/btl</div></div>
+    </div>${notesHtml}
     <div style="margin-top:40px;padding-top:16px;border-top:1px solid #ede6d6;font-size:10px;color:#c8b89a;text-align:center;letter-spacing:0.08em;">BELLE ANNÉE WINES · ${new Date().getFullYear()}</div>
     </body></html>`
   }
@@ -304,9 +282,10 @@ export default function AdminPage() {
     const iframe = document.createElement('iframe')
     iframe.style.display = 'none'
     document.body.appendChild(iframe)
+    iframe.onload = () => { setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 2000) }, 300) }
+    iframe.contentDocument.open()
     iframe.contentDocument.write(html)
     iframe.contentDocument.close()
-    iframe.onload = () => { setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 2000) }, 300) }
   }
 
   function emailReleaseOrder(order, source) {
@@ -317,7 +296,6 @@ export default function AdminPage() {
     window.location.href = `mailto:?subject=${encodeURIComponent(`Release Order — Belle Année — ${today}`)}&body=${encodeURIComponent(body)}`
   }
 
-  // ─── CSV / import / export (unchanged from original) ─────────────────────
   function parseCsv(text) {
     const lines = text.split('\n').filter(l => l.trim())
     if (lines.length < 2) return []
@@ -503,7 +481,6 @@ export default function AdminPage() {
     a.click(); URL.revokeObjectURL(url)
   }
 
-  // ─── Price breakdown panel ─────────────────────────────────────────────────
   function PriceBreakdown({ w }) {
     const ib = w.purchase_price_per_bottle ? parseFloat(w.purchase_price_per_bottle) : null
     const duty = dutyForWine(w)
@@ -515,7 +492,6 @@ export default function AdminPage() {
     const sale = w.sale_price ? parseFloat(w.sale_price) : null
     const wsDP75 = ws ? (ws + 3) * 1.2 : null
     const wsDP150 = ws ? (ws + 6) * 1.2 : null
-
     const row = (label, val, color, dim) => val != null ? (
       <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <span style={{ fontSize: '10px', color: dim ? 'rgba(253,250,245,0.3)' : 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{label}</span>
@@ -529,9 +505,7 @@ export default function AdminPage() {
     )
     return (
       <div style={{ position: 'absolute', left: 0, top: '100%', zIndex: 300, background: '#1a1208', border: '1px solid rgba(212,173,69,0.4)', padding: '14px 16px', minWidth: '260px', boxShadow: '0 6px 24px rgba(0,0,0,0.5)', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d4ad45', marginBottom: '10px', fontFamily: 'DM Mono, monospace' }}>
-          IB Price Ladder — {mag ? 'Magnum · £6 duty' : '75cl · £3 duty'}
-        </div>
+        <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d4ad45', marginBottom: '10px', fontFamily: 'DM Mono, monospace' }}>IB Price Ladder — {mag ? 'Magnum · £6 duty' : '75cl · £3 duty'}</div>
         {row('Cost IB /btl', ib)}
         {row('+10% on IB', ib ? ib * 1.10 : null)}
         {row('+15% on IB', ib ? ib * 1.15 : null)}
@@ -540,22 +514,16 @@ export default function AdminPage() {
         {row('+10% on DP', dp ? dp * 1.10 : null)}
         {row('+15% on DP', dp ? dp * 1.15 : null)}
         {ws && divider('Wine Searcher')}
-        {ws && row('WS lowest (ex duty/VAT)', ws)}
-        {ws && row('WS + duty + VAT  75cl', wsDP75, wsDP75 && dp && dp < wsDP75 ? '#86efac' : null)}
-        {ws && row('WS + duty + VAT  150cl', wsDP150, null, !mag)}
+        {ws && row('WS lowest IB (ex duty/VAT)', ws)}
+        {ws && row('WS DP  75cl', wsDP75, wsDP75 && dp && dp < wsDP75 ? '#86efac' : null)}
+        {ws && row('WS DP  150cl', wsDP150, null, !mag)}
         {(livex || retail || sale) && divider()}
         {livex && row('Livex (ex duty)', livex)}
-        {retail && row(
-          w.retail_price_source === 'WS avg (ex duty)' || w.retail_price_source === 'Wine Searcher avg' || w.retail_price_source === 'Wine Searcher lowest +duty+VAT' ? 'WS avg (duty paid)' : w.retail_price_source === 'Duty paid retail' ? 'Retail (duty paid, manual)' : 'Retail est. (duty paid)',
-          retail
-        )}
         {sale && row('Your sale price', sale, '#d4ad45')}
         {!ib && <div style={{ fontSize: '10px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace' }}>No cost data available</div>}
         {ws && dp && (
           <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'DM Mono, monospace' }}>
-            {dp < (ws + duty) * 1.2
-              ? <span style={{ color: '#86efac' }}>✓ Competitive — your DP is below WS market rate</span>
-              : <span style={{ color: '#f87171' }}>✗ Not competitive vs WS at this duty-paid price</span>}
+            {dp < (ws + duty) * 1.2 ? <span style={{ color: '#86efac' }}>✓ Competitive — your DP is below WS market rate</span> : <span style={{ color: '#f87171' }}>✗ Not competitive vs WS at this duty-paid price</span>}
           </div>
         )}
       </div>
@@ -585,7 +553,6 @@ export default function AdminPage() {
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden', paddingBottom: basketCount > 0 ? '80px' : '0' }}
       onClick={() => { setExpandedPrice(null) }}>
 
-      {/* Nav */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
         <button onClick={() => router.push('/studio')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}>Cellar</button>
         <div style={{ overflowX: 'auto', display: 'flex', gap: '2px', msOverflowStyle: 'none', scrollbarWidth: 'none', padding: '0 8px' }}>
@@ -602,7 +569,6 @@ export default function AdminPage() {
           <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{filtered.length} wines</div>
         </div>
 
-        {/* Stats bar */}
         <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '12px', fontSize: '11px', flexWrap: 'wrap' }}>
           {[['wines total', wines.length], ['Berry Brothers', bbCount], ['Flint', flintCount], ['in buyer view', inBuyerCount], ['competitive', competitiveCount], ['need retail price', missingRetailCount], ['women-led', womenCount]].map(([label, n]) => (
             <div key={label} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
@@ -612,7 +578,6 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* Collection value */}
         <div style={{ marginBottom: '16px' }}>
           <button onClick={() => setShowValues(v => !v)} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', color: 'var(--muted)' }}>
             {showValues ? '▲ Hide collection value' : '▼ Show collection value'}
@@ -638,7 +603,6 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* ─── Release Order History ─────────────────────────────────────────── */}
         <div style={{ marginBottom: '16px' }}>
           <button onClick={() => setShowReleaseHistory(v => !v)} style={{ background: releaseOrders.length > 0 ? 'rgba(107,30,46,0.06)' : 'none', border: '1px solid rgba(107,30,46,0.2)', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', color: 'var(--wine)' }}>
             {showReleaseHistory ? '▲' : '▼'} Release Orders {releaseOrders.length > 0 ? `· ${releaseOrders.length}` : ''}
@@ -701,7 +665,6 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Toolbar */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by description, region, vintage…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
@@ -726,7 +689,6 @@ export default function AdminPage() {
           <button onClick={() => setShowMergeModal(true)} style={{ background: 'none', border: '1px solid #2d6a4f', color: '#2d6a4f', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>🔀 Merge</button>
         </div>
 
-        {/* Import buttons row */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <label style={{ position: 'relative', cursor: 'pointer' }}>
             <input type="file" accept=".csv" onChange={handleBBRImport} disabled={importing} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
@@ -752,7 +714,6 @@ export default function AdminPage() {
           {importStatus && !importing && <span style={{ fontSize: '11px', color: importStatus.startsWith('✓') ? '#2d6a4f' : 'var(--muted)', fontFamily: 'DM Mono, monospace', padding: '9px 0' }}>{importStatus}</span>}
         </div>
 
-        {/* Import conflicts */}
         {importConflicts.length > 0 && (
           <div style={{ background: 'rgba(184,148,42,0.08)', border: '1px solid rgba(184,148,42,0.4)', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>⚠️ Price conflicts — your manual overrides were preserved</div>
@@ -767,12 +728,10 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Table */}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                {/* Release order checkbox column */}
                 <th style={{ padding: '10px 8px', width: '36px', textAlign: 'center' }}>
                   <span style={{ fontSize: '9px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace', letterSpacing: '0.08em' }}>REL</span>
                 </th>
@@ -784,20 +743,16 @@ export default function AdminPage() {
                     {label} {sortCol === col ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                   </th>
                 ))}
-                <th onClick={() => handleSort('purchase_price_per_bottle')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'purchase_price_per_bottle' ? '#d4ad45' : 'var(--white)' }}>
-                  DP {sortCol === 'purchase_price_per_bottle' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
-                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>▼ click for IB ladder</span>
-                </th>
-                <th onClick={() => handleSort('ws_lowest_per_bottle')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'ws_lowest_per_bottle' ? '#d4ad45' : 'var(--white)', minWidth: '160px' }}>
-                  DP Retail {sortCol === 'ws_lowest_per_bottle' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
-                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>WS ex-tax below</span>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--white)', minWidth: '240px' }}>
+                  Pricing
+                  <span style={{ display: 'block', fontSize: '8px', color: 'rgba(253,250,245,0.35)', fontWeight: 300, letterSpacing: '0.03em', textTransform: 'none', marginTop: '1px' }}>Your IB · DP &nbsp;|&nbsp; WS IB · DP &nbsp;·&nbsp; ▼ ladder</span>
                 </th>
                 <th onClick={() => handleSort('sale_price')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'sale_price' ? '#d4ad45' : 'var(--white)' }}>
                   Sell {sortCol === 'sale_price' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
                 <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Notes</th>
-<th onClick={() => handleSort('include_in_buyer_view')} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'include_in_buyer_view' ? '#d4ad45' : 'var(--white)' }}>Buyer {sortCol === 'include_in_buyer_view' ? (sortDir === 1 ? '↑' : '↓') : '↕'}</th>
-                  <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
+                <th onClick={() => handleSort('include_in_buyer_view')} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'include_in_buyer_view' ? '#d4ad45' : 'var(--white)' }}>Buyer {sortCol === 'include_in_buyer_view' ? (sortDir === 1 ? '↑' : '↓') : '↕'}</th>
+                <th style={{ padding: '10px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Studio</th>
                 <th onClick={() => handleSort('source')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'source' ? '#d4ad45' : 'var(--white)' }}>
                   Src {sortCol === 'source' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
@@ -806,8 +761,6 @@ export default function AdminPage() {
             <tbody>
               {slice.map(w => {
                 const pp = w.purchase_price_per_bottle
-                const retail = w.retail_price ? parseFloat(w.retail_price) : null
-                const comp = w.ws_lowest_per_bottle && pp ? isCompetitive(w) : null
                 const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
                 const isExpanded = expandedNote === w.id
                 const isPriceOpen = expandedPrice === w.id
@@ -816,14 +769,9 @@ export default function AdminPage() {
 
                 return (
                   <tr key={w.id} style={{ borderBottom: '1px solid #ede6d6', background: inBasket ? 'rgba(107,30,46,0.05)' : w.include_in_buyer_view ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
-
-                    {/* Release order tick */}
                     <td style={{ padding: '9px 8px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={inBasket} onChange={() => toggleReleaseBasket(w)}
-                        style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--wine)' }} />
+                      <input type="checkbox" checked={inBasket} onChange={() => toggleReleaseBasket(w)} style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--wine)' }} />
                     </td>
-
-                    {/* Sticky wine name */}
                     <td style={{ padding: '9px 12px', maxWidth: '260px', position: 'sticky', left: 0, background: inBasket ? 'rgba(107,30,46,0.07)' : w.include_in_buyer_view ? '#f0f7f4' : 'var(--white)', zIndex: 5, borderRight: '1px solid #ede6d6' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                         {w.women_note && <span title={w.women_note} style={{ fontSize: '12px', flexShrink: 0, cursor: 'help' }}>♀</span>}
@@ -833,7 +781,6 @@ export default function AdminPage() {
                         </div>
                       </div>
                     </td>
-
                     <td style={{ padding: '9px 12px', fontWeight: 500 }}>{w.vintage}</td>
                     <td style={{ padding: '9px 12px' }}>
                       <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, marginRight: '5px', verticalAlign: 'middle' }}></span>
@@ -843,91 +790,95 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{w.bottle_volume || (w.bottle_format === 'Magnum' ? '150cl' : w.bottle_format ? '75cl' : '—')}</td>
                     <td style={{ padding: '9px 12px' }}>{w.quantity || '—'}</td>
 
-                    {/* DP — click for ladder */}
-                    <td style={{ padding: '9px 12px', position: 'relative' }} onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
-                      <div style={{ cursor: 'pointer', userSelect: 'none' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontWeight: 700, color: isPriceOpen ? 'var(--wine)' : 'var(--ink)', fontFamily: 'DM Mono, monospace', fontSize: '13px' }}>
-                            {pp ? `£${dpForWine(w).toFixed(2)}` : '—'}
-                          </span>
-                          <span style={{ fontSize: '9px', color: isPriceOpen ? 'var(--wine)' : '#bbb' }}>{isPriceOpen ? '▲' : '▼'}</span>
-                          {w.manual_override_note && <span title={`Override: ${w.manual_override_note}`} style={{ fontSize: '9px', color: '#b8942a', cursor: 'help' }}>✎</span>}
-                        </div>
-                        {pp && <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>IB £{parseFloat(pp).toFixed(2)}</div>}
-                      </div>
-                      {isPriceOpen && (
-                        <>
-                          <PriceBreakdown w={w} />
-                          <div style={{ marginTop: '8px' }}>
-                            <button onClick={e => { e.stopPropagation(); setExpandedPrice(null); openOverride(w, 'purchase_price_per_bottle', pp) }}
-                              style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(184,148,42,0.12)', border: '1px solid rgba(184,148,42,0.3)', color: '#7a5e10', padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              ✎ Override IB price
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </td>
-
-                    {/* DP Retail */}
+                    {/* ── Pricing 2×2 grid ── */}
                     {(() => {
+                      const ib = pp ? parseFloat(pp) : null
                       const duty = dutyForWine(w)
+                      const myDP = ib ? (ib + duty) * 1.2 : null
                       const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
                       const wsDP = ws ? (ws + duty) * 1.2 : null
-                      const isExDuty = w.retail_price_source === 'WS avg (ex duty)' || w.retail_price_source === 'Wine Searcher avg' || w.retail_price_source === 'Wine Searcher lowest +duty+VAT' || (!w.retail_price && w.ws_lowest_per_bottle)
-                      const displayVal = isExDuty ? (w.ws_lowest_per_bottle || '') : (w.retail_price || '')
-                      const myDP = pp ? dpForWine(w) : null
-                      const isComp = wsDP && myDP ? myDP < wsDP : null
-
-                      function handlePriceBlur(e) {
-                        const raw = e.target.value
-                        const val = raw ? parseFloat(raw) : null
-                        const type = e.target.closest('td').querySelector('select')?.value || 'ex-duty'
-                        if (type === 'ex-duty') {
-                          updateWine(w.id, 'ws_lowest_per_bottle', val)
-                          if (val) updateWine(w.id, 'retail_price', Math.round((val + duty) * 1.2 * 100) / 100)
-                          updateWine(w.id, 'retail_price_source', 'WS avg (ex duty)')
-                        } else {
-                          updateWine(w.id, 'retail_price', val)
-                          updateWine(w.id, 'retail_price_source', 'Duty paid retail')
-                        }
-                      }
-
-                      function handleTypeChange(e) {
-                        updateWine(w.id, 'retail_price_source', e.target.value === 'ex-duty' ? 'WS avg (ex duty)' : 'Duty paid retail')
-                      }
-
+                      const isComp = myDP && wsDP ? myDP < wsDP : null
                       return (
-                        <td style={{ padding: '9px 12px', minWidth: '160px' }}>
-                          {wsDP ? (
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: isComp ? '#2d6a4f' : 'var(--ink)' }}>£{wsDP.toFixed(2)}</span>
-                                {isComp !== null && <span style={{ fontSize: '10px', fontWeight: 600, color: isComp ? '#2d6a4f' : '#c0392b' }}>{isComp ? '✓' : '✗'}</span>}
-                              </div>
-                              <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>WS £{ws.toFixed(2)} ex-tax</div>
+                        <td style={{ padding: '9px 12px', position: 'relative', minWidth: '240px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' }}>
+                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', paddingBottom: '3px', borderBottom: '1px solid var(--border)' }}>Your cost</div>
+                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', paddingBottom: '3px', borderBottom: '1px solid var(--border)', paddingLeft: '10px', borderLeft: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              Market (WS)
+                              {isComp !== null && <span style={{ color: isComp ? '#2d6a4f' : '#c0392b', fontWeight: 700, fontSize: '9px' }}>{isComp ? '✓' : '✗'}</span>}
                             </div>
-                          ) : <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>—</div>}
-                          <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginTop: '5px' }}>
-                            <input type="number" step="0.01" key={`${w.id}-price`} defaultValue={displayVal} placeholder="WS price" onBlur={handlePriceBlur} onClick={e => e.stopPropagation()} style={{ width: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
-                            <select key={`${w.id}-type`} defaultValue={isExDuty ? 'ex-duty' : 'duty-paid'} onChange={handleTypeChange} onClick={e => e.stopPropagation()} style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '1px 2px', fontFamily: 'DM Mono, monospace', fontSize: '9px', outline: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
-                              <option value="ex-duty">ex</option>
-                              <option value="duty-paid">dp</option>
-                            </select>
+                            <div style={{ paddingTop: '5px', paddingBottom: '4px', borderBottom: '1px solid #f0ebe0' }}>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em' }}>IB</div>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>{ib ? `£${ib.toFixed(2)}` : '—'}</div>
+                            </div>
+                            <div style={{ paddingTop: '5px', paddingBottom: '4px', borderBottom: '1px solid #f0ebe0', paddingLeft: '10px', borderLeft: '1px solid var(--border)' }}>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em' }}>IB</div>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, color: ws ? 'var(--ink)' : 'var(--muted)' }}>{ws ? `£${ws.toFixed(2)}` : '—'}</div>
+                            </div>
+                            <div style={{ paddingTop: '4px' }}>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em' }}>DP</div>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 700, color: 'var(--wine)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                {myDP ? `£${myDP.toFixed(2)}` : '—'}
+                                {w.manual_override_note && <span title={`Override: ${w.manual_override_note}`} style={{ fontSize: '9px', color: '#b8942a', cursor: 'help' }}>✎</span>}
+                              </div>
+                            </div>
+                            <div style={{ paddingTop: '4px', paddingLeft: '10px', borderLeft: '1px solid var(--border)' }}>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em' }}>DP</div>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 700, color: wsDP ? (isComp ? '#2d6a4f' : '#c0392b') : 'var(--muted)' }}>{wsDP ? `£${wsDP.toFixed(2)}` : '—'}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
+                            <input type="number" step="0.01" key={`${w.id}-ws`}
+                              defaultValue={w.ws_lowest_per_bottle || ''}
+                              placeholder="WS IB price"
+                              onBlur={e => {
+                                const val = e.target.value ? parseFloat(e.target.value) : null
+                                updateWine(w.id, 'ws_lowest_per_bottle', val)
+                                if (val) updateWine(w.id, 'retail_price', Math.round((val + duty) * 1.2 * 100) / 100)
+                                updateWine(w.id, 'retail_price_source', 'WS avg (ex duty)')
+                              }}
+                              style={{ width: '76px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '2px 4px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
+                            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)' }}>IB</span>
                             <button onClick={e => { e.stopPropagation(); openWineSearcher(w.description, w.vintage) }} style={{ background: 'none', border: '1px solid var(--border)', padding: '1px 4px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>🔍</button>
                           </div>
                           {w.retail_price_date && <div style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>{w.retail_price_date}</div>}
+                          <div style={{ marginTop: '4px', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
+                            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: isPriceOpen ? 'var(--wine)' : 'var(--muted)', letterSpacing: '0.06em' }}>{isPriceOpen ? '▲ hide ladder' : '▼ IB ladder'}</span>
+                          </div>
+                          {isPriceOpen && (
+                            <>
+                              <PriceBreakdown w={w} />
+                              <div style={{ marginTop: '8px' }}>
+                                <button onClick={e => { e.stopPropagation(); setExpandedPrice(null); openOverride(w, 'purchase_price_per_bottle', pp) }}
+                                  style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', background: 'rgba(184,148,42,0.12)', border: '1px solid rgba(184,148,42,0.3)', color: '#7a5e10', padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                  ✎ Override IB price
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </td>
                       )
                     })()}
 
-                    {/* Sell Price */}
-                    <td style={{ padding: '9px 12px' }}>
-                      {w.sale_price && <div style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: 'var(--wine)', marginBottom: '3px' }}>£{parseFloat(w.sale_price).toFixed(2)}</div>}
-                      <input type="number" step="0.01" defaultValue={w.sale_price || ''} placeholder="0.00"
-                        onBlur={e => { if (e.target.value !== String(w.sale_price || '')) updateWine(w.id, 'sale_price', e.target.value ? parseFloat(e.target.value) : null) }}
-                        onClick={e => e.stopPropagation()}
-                        style={{ width: '68px', border: '1px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: 'var(--wine)' }} />
-                    </td>
+                    {/* Sell Price + margin % */}
+                    {(() => {
+                      const myDP = pp ? dpForWine(w) : null
+                      const sale = w.sale_price ? parseFloat(w.sale_price) : null
+                      const marginPct = myDP && sale ? ((sale - myDP) / myDP * 100) : null
+                      return (
+                        <td style={{ padding: '9px 12px' }}>
+                          {sale && <div style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', fontSize: '13px', color: 'var(--wine)', marginBottom: '2px' }}>£{sale.toFixed(2)}</div>}
+                          <input type="number" step="0.01" defaultValue={w.sale_price || ''} placeholder="0.00"
+                            onBlur={e => { if (e.target.value !== String(w.sale_price || '')) updateWine(w.id, 'sale_price', e.target.value ? parseFloat(e.target.value) : null) }}
+                            onClick={e => e.stopPropagation()}
+                            style={{ width: '68px', border: '1px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: 'var(--wine)' }} />
+                          {marginPct !== null && (
+                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', marginTop: '3px', color: marginPct >= 0 ? '#2d6a4f' : '#c0392b', fontWeight: 500 }}>
+                              {marginPct >= 0 ? '+' : ''}{marginPct.toFixed(1)}% on DP
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })()}
 
                     {/* Notes */}
                     <td style={{ padding: '9px 12px', maxWidth: '200px' }}>
@@ -973,9 +924,7 @@ export default function AdminPage() {
                       )}
                       {!w.women_note && !w.producer_note && (
                         <button onClick={e => { e.stopPropagation(); setExpandedNote(isExpanded ? null : w.id) }}
-                          style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 8px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
-                          + note
-                        </button>
+                          style={{ background: 'none', border: '1px solid var(--border)', padding: '2px 8px', cursor: 'pointer', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>+ note</button>
                       )}
                       {isExpanded && !w.women_note && !w.producer_note && (
                         <div style={{ marginTop: '6px' }}>
@@ -1021,7 +970,6 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* ─── Release Order sticky basket ──────────────────────────────────────── */}
       {basketCount > 0 && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', padding: '12px 24px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 200, borderTop: '2px solid rgba(212,173,69,0.4)', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--white)' }}>
@@ -1037,7 +985,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ─── Release Order Modal ───────────────────────────────────────────────── */}
       {showReleaseModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.8)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '700px', border: '1px solid var(--border)', marginTop: '8px' }}>
@@ -1049,8 +996,6 @@ export default function AdminPage() {
               <div style={{ marginBottom: '16px', padding: '10px 14px', background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.3)', fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10', lineHeight: 1.6 }}>
                 Adjust quantities (snapped to full cases). DP = (IB + duty) × 1.2. Saving creates a dated record — does NOT change stock quantities.
               </div>
-
-              {/* Lines grouped by source */}
               {(() => {
                 const items = releaseBasketItems()
                 const bySource = items.reduce((acc, item) => {
@@ -1059,9 +1004,7 @@ export default function AdminPage() {
                   acc[src].push(item)
                   return acc
                 }, {})
-
                 return Object.entries(bySource).map(([src, srcItems]) => {
-                  const srcDP = srcItems.reduce((s, i) => s + i.dpTotal, 0)
                   const srcIB = srcItems.reduce((s, i) => s + i.ibTotal, 0)
                   return (
                     <div key={src} style={{ marginBottom: '20px' }}>
@@ -1070,7 +1013,7 @@ export default function AdminPage() {
                         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>IB £{srcIB.toFixed(2)} (paid) · <strong style={{ color: 'var(--wine)' }}>duty+VAT est. £{srcItems.reduce((s,i)=>s+i.dutyVatTotal,0).toFixed(2)}</strong></div>
                       </div>
                       <div style={{ border: '1px solid var(--border)', background: 'var(--white)' }}>
-                        {srcItems.map(({ w, qty, ib, duty, dpPerBottle, dpTotal, dutyVatPerBottle, dutyVatTotal, caseSize }, idx) => {
+                        {srcItems.map(({ w, qty, ib, duty, dpPerBottle, dpTotal, caseSize }, idx) => {
                           const cases = qty / caseSize
                           return (
                             <div key={w.id} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 100px', gap: '12px', padding: '12px 14px', borderBottom: idx < srcItems.length - 1 ? '1px solid #ede6d6' : 'none', alignItems: 'center' }}>
@@ -1081,7 +1024,6 @@ export default function AdminPage() {
                                   <span style={{ marginLeft: '6px', color: 'rgba(0,0,0,0.3)' }}>case={caseSize}</span>
                                 </div>
                               </div>
-                              {/* Cases input — qty snaps to case multiples */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <div>
                                   <div style={{ fontSize: '9px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '2px' }}>Cases</div>
@@ -1104,28 +1046,23 @@ export default function AdminPage() {
                   )
                 })
               })()}
-
-              {/* Grand total */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px', paddingTop: '8px', borderTop: '2px solid var(--ink)' }}>
                 <div style={{ minWidth: '220px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: '4px' }}>
                     <span>IB total (ex duty)</span><span>£{releaseBasketItems().reduce((s, i) => s + i.ibTotal, 0).toFixed(2)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Grand total DP</span>
-                    <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 500, color: 'var(--wine)' }}>£{releaseBasketItems().reduce((s, i) => s + i.dpTotal, 0).toFixed(2)}</span>
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Est. duty + VAT due</span>
+                    <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 500, color: 'var(--wine)' }}>£{releaseBasketItems().reduce((s, i) => s + i.dutyVatTotal, 0).toFixed(2)}</span>
                   </div>
                   <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)', marginTop: '3px' }}>DP = (IB + £{isMagnum(wines.find(w => releaseBasket[w.id]) || {}) ? '6' : '3'} duty) × 1.2 per bottle</div>
                 </div>
               </div>
-
-              {/* Notes */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '5px', fontFamily: 'DM Mono, monospace' }}>Notes (optional)</label>
                 <input value={releaseNotes} onChange={e => setReleaseNotes(e.target.value)} placeholder="e.g. For Noam boxes · deliver to studio"
                   style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
-
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button onClick={() => setShowReleaseModal(false)} style={{ background: 'none', border: '1px solid var(--border)', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={saveReleaseOrder} disabled={releaseSaving}
@@ -1138,7 +1075,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ─── Price Override Modal ──────────────────────────────────────────────── */}
       {overrideModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '440px', padding: '28px', border: '1px solid var(--border)' }}>
@@ -1182,9 +1118,6 @@ export default function AdminPage() {
   )
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Merge Duplicates Modal (unchanged from original)
-// ═══════════════════════════════════════════════════════════════════════════════
 function MergeDuplicatesModal({ wines, onClose, onMerged }) {
   const [survivorSearch, setSurvivorSearch] = useState('')
   const [loserSearch, setLoserSearch] = useState('')
@@ -1210,7 +1143,6 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
   const survivorResults = survivorSearch.length >= 2
     ? wines.filter(w => w.id !== loser?.id && [w.description, w.vintage, w.region, w.source_id].join(' ').toLowerCase().includes(survivorSearch.toLowerCase())).slice(0, 8)
     : []
-
   const loserResults = loserSearch.length >= 2
     ? wines.filter(w => w.id !== survivor?.id && [w.description, w.vintage, w.region, w.source_id].join(' ').toLowerCase().includes(loserSearch.toLowerCase())).slice(0, 8)
     : []
@@ -1247,9 +1179,7 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
   function getMergedValues() {
     if (!survivor || !loser) return {}
     const merged = {}
-    for (const f of COMPARE_FIELDS) {
-      merged[f] = (fieldChoices[f] || 'survivor') === 'loser' ? loser[f] : survivor[f]
-    }
+    for (const f of COMPARE_FIELDS) { merged[f] = (fieldChoices[f] || 'survivor') === 'loser' ? loser[f] : survivor[f] }
     return merged
   }
 
