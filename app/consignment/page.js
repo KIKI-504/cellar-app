@@ -57,13 +57,9 @@ export default function ConsignmentPage() {
   const [showAddConsignee, setShowAddConsignee] = useState(false)
   const [showRecordSales, setShowRecordSales] = useState(false)
 
-  // Checkbox selection for pull list / delivery note
   const [selectedIds, setSelectedIds] = useState(new Set())
-
-  // Expanded invoice groups in sales history
   const [expandedInvoices, setExpandedInvoices] = useState(new Set())
 
-  // Add item
   const [itemSearch, setItemSearch] = useState('')
   const [itemSearchResults, setItemSearchResults] = useState([])
   const [itemWineId, setItemWineId] = useState(null)
@@ -78,22 +74,18 @@ export default function ConsignmentPage() {
   const [itemNotes, setItemNotes] = useState('')
   const [itemSaving, setItemSaving] = useState(false)
 
-  // Record sales (monthly entry)
   const [salesEntries, setSalesEntries] = useState([{ itemId: '', qty: 1 }])
   const [salesPeriod, setSalesPeriod] = useState('')
   const [salesSaving, setSalesSaving] = useState(false)
 
-  // Stocktake
   const [stocktakeCounts, setStocktakeCounts] = useState({})
   const [stocktakePeriod, setStocktakePeriod] = useState('')
   const [stocktakeDate, setStocktakeDate] = useState(new Date().toISOString().split('T')[0])
   const [stocktakeSaving, setStocktakeSaving] = useState(false)
 
-  // Invoice
   const [invoiceLines, setInvoiceLines] = useState([])
   const [invoiceRef, setInvoiceRef] = useState('')
 
-  // Add consignee
   const [newName, setNewName] = useState('')
   const [newContact, setNewContact] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -142,7 +134,6 @@ export default function ConsignmentPage() {
   }, 0)
   const staleItems = activeItems.filter(i => i.status === 'Active' && i.qty_remaining === 0)
 
-  // Group invoiced sales by invoice_ref
   const invoiceGroups = invoicedSales.reduce((acc, s) => {
     const ref = s.invoice_ref || 'Unknown'
     if (!acc[ref]) acc[ref] = []
@@ -150,7 +141,6 @@ export default function ConsignmentPage() {
     return acc
   }, {})
 
-  // Selection helpers
   const selectedActiveItems = activeItems.filter(i => selectedIds.has(i.id))
   const allActiveIds = activeItems.filter(i => i.status === 'Active').map(i => i.id)
   const allSelected = allActiveIds.length > 0 && allActiveIds.every(id => selectedIds.has(id))
@@ -179,7 +169,6 @@ export default function ConsignmentPage() {
     })
   }
 
-  // ─── Pull List ──────────────────────────────────────────────────────────────
   function buildPullListHtml(selItems, consignee) {
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     const rows = selItems.map(item => {
@@ -221,7 +210,6 @@ export default function ConsignmentPage() {
     </body></html>`
   }
 
-  // ─── Delivery Note ─────────────────────────────────────────────────────────
   function buildDeliveryNoteHtml(selItems, consignee) {
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     const totalQty = selItems.reduce((sum, i) => sum + (i.qty_delivered || 1), 0)
@@ -323,7 +311,6 @@ function printHtml(html) {
     setItemQty(1); setItemDate(new Date().toISOString().split('T')[0]); setItemNotes('')
   }
 
-  // ─── Record Sales ──────────────────────────────────────────────────────────
   function openRecordSales() {
     setSalesEntries([{ itemId: '', qty: 1 }])
     setSalesPeriod('')
@@ -365,7 +352,6 @@ function printHtml(html) {
     setSalesSaving(false)
   }
 
-  // ─── Stocktake ─────────────────────────────────────────────────────────────
   function openStocktake() {
     const counts = {}
     activeItems.filter(i => i.status === 'Active').forEach(i => { counts[i.id] = i.qty_remaining })
@@ -400,7 +386,6 @@ function printHtml(html) {
     setStocktakeSaving(false)
   }
 
-  // ─── Invoice ────────────────────────────────────────────────────────────────
   async function generateInvoice() {
     if (!activeC || uninvoicedSales.length === 0) return
     const year = new Date().getFullYear()
@@ -462,8 +447,6 @@ function printHtml(html) {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
-
-      {/* Nav */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
         <button onClick={() => router.push('/studio')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Cellar</button>
         <div style={{ display: 'flex', gap: '2px', overflowX: 'auto', flexShrink: 1 }}>
@@ -490,7 +473,6 @@ function printHtml(html) {
           <div style={{ textAlign: 'center', padding: '60px', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>No consignment clients yet — add a restaurant above.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '20px', alignItems: 'start' }}>
-
             <div>
               {consignees.map(c => {
                 const owed = sales.filter(s => s.consignee_id === c.id && !s.invoiced).reduce((sum, s) => sum + parseFloat(s.total_value || 0), 0)
@@ -507,8 +489,6 @@ function printHtml(html) {
 
             {activeC && (
               <div style={{ minWidth: 0 }}>
-
-                {/* Restaurant header */}
                 <div style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '16px 20px', marginBottom: '14px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                     <div>
@@ -536,7 +516,6 @@ function printHtml(html) {
                   {staleItems.length > 0 && (<div style={{ marginTop: '12px', padding: '8px 12px', background: 'rgba(212,173,69,0.1)', border: '1px solid rgba(212,173,69,0.4)', fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10' }}>⚠ {staleItems.length} wine{staleItems.length !== 1 ? 's' : ''} at qty 0 but still Active — update status below.</div>)}
                 </div>
 
-                {/* Action buttons */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button onClick={() => setShowAddItem(true)} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Consign Wine</button>
                   <button onClick={openRecordSales} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>✎ Record Sales</button>
@@ -558,24 +537,24 @@ function printHtml(html) {
                   )}
                 </div>
 
-                {/* Wines held table */}
+                {/* ── Wines held table ── */}
                 <div style={{ marginBottom: '28px' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>Wines at {activeC.name}</div>
-                    {activeItems.filter(i => i.status === 'Active').length > 0 && (<div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)' }}>☑ check to print Pull List or Delivery Note</div>)}
+                    {activeItems.filter(i => i.status === 'Active').length > 0 && (<div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)' }}>click fields to edit · ☑ check to print</div>)}
                   </div>
                   <div style={{ background: 'var(--white)', border: '1px solid var(--border)', overflowX: 'auto' }}>
                     {activeItems.length === 0 ? (
                       <div style={{ padding: '28px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No wines consigned yet.</div>
                     ) : (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '620px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '700px' }}>
                         <thead>
                           <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
                             <th style={{ padding: '8px 12px', width: '36px' }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#d4ad45' }} />
                             </th>
-                            {['Wine', 'Vintage', 'Size', 'Delivered', 'Remaining', 'Sale £/btl', 'Value out', 'Status', ''].map(h => (
-                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                            {['Wine', 'Vintage', 'Size', 'Date delivered', 'Remaining', 'Sale £/btl', 'Value out', 'Status', ''].map(h => (
+                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: 'var(--white)' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -592,20 +571,44 @@ function printHtml(html) {
                                 <td style={{ padding: '10px 12px', minWidth: '160px' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: colourDot(item.colour), flexShrink: 0 }}></span>
-                                    <div>
+                                    <div style={{ minWidth: 0 }}>
                                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500, lineHeight: 1.3 }}>{item.description}</div>
                                       {item.source_id && <div style={{ fontSize: '9px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>{item.source_id}</div>}
-                                      {item.notes && <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '1px', fontStyle: 'italic' }}>{item.notes}</div>}
+                                      <input
+                                        defaultValue={item.notes || ''}
+                                        placeholder="add note…"
+                                        onBlur={e => { if (e.target.value !== (item.notes || '')) updateItem(item.id, 'notes', e.target.value || null) }}
+                                        style={{ marginTop: '3px', width: '100%', maxWidth: '180px', border: 'none', borderBottom: '1px solid transparent', background: 'transparent', padding: '1px 0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', outline: 'none', cursor: 'text' }}
+                                        onFocus={e => { e.target.style.borderBottomColor = 'var(--border)' }}
+                                        onBlurCapture={e => { e.target.style.borderBottomColor = 'transparent' }}
+                                      />
                                     </div>
                                   </div>
                                 </td>
                                 <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px' }}>{item.vintage || '—'}</td>
                                 <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{sizeLabelShort(item.bottle_size)}</td>
-                                <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{item.date_delivered}</td>
+                                {/* ── EDITABLE: date_delivered ── */}
+                                <td style={{ padding: '10px 12px' }}>
+                                  <input
+                                    type="date"
+                                    defaultValue={item.date_delivered || ''}
+                                    onBlur={e => { if (e.target.value !== item.date_delivered) updateItem(item.id, 'date_delivered', e.target.value || null) }}
+                                    style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: 'var(--ink)', cursor: 'pointer' }}
+                                  />
+                                </td>
                                 <td style={{ padding: '10px 12px' }}>
                                   <input type="number" min="0" defaultValue={item.qty_remaining} onBlur={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v !== item.qty_remaining) updateItem(item.id, 'qty_remaining', v) }} style={{ width: '52px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, textAlign: 'center', outline: 'none' }} />
                                 </td>
-                                <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, color: 'var(--wine)' }}>{fmt(item.sale_price || item.dp_price)}</td>
+                                {/* ── EDITABLE: sale_price ── */}
+                                <td style={{ padding: '10px 12px' }}>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    defaultValue={parseFloat(item.sale_price || item.dp_price || 0).toFixed(2)}
+                                    onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) { updateItem(item.id, 'sale_price', v); updateItem(item.id, 'dp_price', v) } }}
+                                    style={{ width: '72px', border: '1px solid rgba(107,30,46,0.3)', background: 'rgba(107,30,46,0.03)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, outline: 'none', color: 'var(--wine)' }}
+                                  />
+                                </td>
                                 <td style={{ padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600 }}>
                                   {(item.sale_price || item.dp_price) ? fmt((item.qty_remaining || 0) * parseFloat(item.sale_price || item.dp_price)) : '—'}
                                 </td>
@@ -626,11 +629,10 @@ function printHtml(html) {
                   </div>
                 </div>
 
-                {/* ── Sales section ─────────────────────────────────────────── */}
+                {/* ── Sales section ── */}
                 <div>
                   <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px', fontFamily: 'DM Mono, monospace' }}>Sales</div>
 
-                  {/* Sold — not yet invoiced */}
                   {uninvoicedSales.length > 0 && (
                     <div style={{ marginBottom: '20px' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
@@ -671,7 +673,6 @@ function printHtml(html) {
                     </div>
                   )}
 
-                  {/* Invoice history — grouped */}
                   {Object.keys(invoiceGroups).length > 0 && (
                     <div>
                       <div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>Invoice history</div>
@@ -683,7 +684,6 @@ function printHtml(html) {
                           const invoiceDate = lines[0]?.invoice_date || lines[0]?.date_reported
                           return (
                             <div key={ref} style={{ borderBottom: gi < Object.keys(invoiceGroups).length - 1 ? '1px solid var(--border)' : 'none' }}>
-                              {/* Invoice row header */}
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', gap: '12px', flexWrap: 'wrap', background: isExpanded ? 'rgba(26,16,8,0.03)' : 'transparent' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
                                   <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, color: 'var(--wine)' }}>{ref}</span>
@@ -702,7 +702,6 @@ function printHtml(html) {
                                   </button>
                                 </div>
                               </div>
-                              {/* Expanded line items */}
                               {isExpanded && (
                                 <div style={{ borderTop: '1px solid #ede6d6', background: 'rgba(26,16,8,0.02)' }}>
                                   {lines.map((l, li) => (
@@ -736,7 +735,7 @@ function printHtml(html) {
         )}
       </div>
 
-      {/* ─── Record Sales Modal ─────────────────────────────────────────────────── */}
+      {/* ─── Record Sales Modal ── */}
       {showRecordSales && activeC && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.75)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '540px', border: '1px solid var(--border)', marginTop: '8px' }}>
@@ -763,22 +762,15 @@ function printHtml(html) {
                 </div>
                 {salesEntries.map((entry, idx) => (
                   <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 28px', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
-                    <select
-                      value={entry.itemId}
-                      onChange={e => updateSalesEntry(idx, 'itemId', e.target.value)}
-                      style={{ border: entry.itemId ? '1px solid var(--border)' : '2px solid rgba(107,30,46,0.25)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', outline: 'none', width: '100%' }}
-                    >
+                    <select value={entry.itemId} onChange={e => updateSalesEntry(idx, 'itemId', e.target.value)}
+                      style={{ border: entry.itemId ? '1px solid var(--border)' : '2px solid rgba(107,30,46,0.25)', background: 'var(--white)', padding: '8px 10px', fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', outline: 'none', width: '100%' }}>
                       <option value="">— select wine —</option>
                       {activeItems.filter(i => i.status === 'Active').map(i => (
                         <option key={i.id} value={i.id}>{i.description}{i.vintage ? ` ${i.vintage}` : ''}{i.bottle_size === '150' ? ' (Mag)' : ''}</option>
                       ))}
                     </select>
-                    <input
-                      type="number" min="1" value={entry.qty}
-                      onChange={e => updateSalesEntry(idx, 'qty', parseInt(e.target.value) || 1)}
-                      onFocus={e => e.target.select()}
-                      style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 6px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, textAlign: 'center', outline: 'none', width: '100%' }}
-                    />
+                    <input type="number" min="1" value={entry.qty} onChange={e => updateSalesEntry(idx, 'qty', parseInt(e.target.value) || 1)} onFocus={e => e.target.select()}
+                      style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '8px 6px', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, textAlign: 'center', outline: 'none', width: '100%' }} />
                     {salesEntries.length > 1
                       ? <button onClick={() => removeSalesEntry(idx)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '16px', cursor: 'pointer', padding: '0', lineHeight: 1 }}>✕</button>
                       : <div />
@@ -786,10 +778,7 @@ function printHtml(html) {
                   </div>
                 ))}
               </div>
-              <button onClick={addSalesEntry} style={{ background: 'none', border: '1px dashed var(--border)', width: '100%', padding: '8px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.08em', marginBottom: '16px' }}>
-                + Add another wine
-              </button>
-              {/* Preview total */}
+              <button onClick={addSalesEntry} style={{ background: 'none', border: '1px dashed var(--border)', width: '100%', padding: '8px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.08em', marginBottom: '16px' }}>+ Add another wine</button>
               {salesEntries.some(e => e.itemId && e.qty > 0) && (
                 <div style={{ padding: '10px 14px', background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.25)', marginBottom: '16px', fontFamily: 'DM Mono, monospace', fontSize: '12px' }}>
                   {salesEntries.filter(e => e.itemId && e.qty > 0).map((e, i) => {
@@ -820,7 +809,7 @@ function printHtml(html) {
         </div>
       )}
 
-      {/* ─── Consign Wine Modal ─────────────────────────────────────────────────── */}
+      {/* ─── Consign Wine Modal ── */}
       {showAddItem && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '520px', padding: '28px', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -908,7 +897,7 @@ function printHtml(html) {
         </div>
       )}
 
-      {/* ─── Stocktake Modal ────────────────────────────────────────────────────── */}
+      {/* ─── Stocktake Modal ── */}
       {showStocktake && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.75)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '620px', border: '1px solid var(--border)', marginTop: '8px' }}>
@@ -918,7 +907,7 @@ function printHtml(html) {
             </div>
             <div style={{ padding: '20px 24px' }}>
               <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.3)', fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10', lineHeight: 1.6 }}>
-                Enter how many bottles the restaurant currently has. Cellar calculates what was sold and creates sales records automatically. Use this for a full reconciliation — for regular monthly reporting use "Record Sales" instead.
+                Enter how many bottles the restaurant currently has. Cellar calculates what was sold and creates sales records automatically.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
                 <div>
@@ -994,7 +983,7 @@ function printHtml(html) {
         </div>
       )}
 
-      {/* ─── Invoice Preview Modal ──────────────────────────────────────────────── */}
+      {/* ─── Invoice Preview Modal ── */}
       {showInvoice && activeC && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.85)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '680px', border: '1px solid var(--border)', marginTop: '8px' }}>
@@ -1066,7 +1055,7 @@ function printHtml(html) {
         </div>
       )}
 
-      {/* ─── Add Restaurant Modal ───────────────────────────────────────────────── */}
+      {/* ─── Add Restaurant Modal ── */}
       {showAddConsignee && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '480px', padding: '28px', border: '1px solid var(--border)' }}>
