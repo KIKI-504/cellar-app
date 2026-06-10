@@ -547,13 +547,13 @@ function printHtml(html) {
                     {activeItems.length === 0 ? (
                       <div style={{ padding: '28px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No wines consigned yet.</div>
                     ) : (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '700px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '780px' }}>
                         <thead>
                           <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
                             <th style={{ padding: '8px 12px', width: '36px' }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#d4ad45' }} />
                             </th>
-                            {['Wine', 'Vintage', 'Size', 'Date delivered', 'Remaining', 'Sale £/btl', 'Value out', 'Status', ''].map(h => (
+                            {['Wine', 'Vintage', 'Size', 'Date delivered', 'Delivered', 'Remaining', 'Sale £/btl', 'Value out', 'Status', ''].map(h => (
                               <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: 'var(--white)' }}>{h}</th>
                             ))}
                           </tr>
@@ -595,6 +595,9 @@ function printHtml(html) {
                                     onBlur={e => { if (e.target.value !== item.date_delivered) updateItem(item.id, 'date_delivered', e.target.value || null) }}
                                     style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', color: 'var(--ink)', cursor: 'pointer' }}
                                   />
+                                </td>
+                                <td style={{ padding: '10px 12px' }}>
+                                  <input type="number" min="0" defaultValue={item.qty_delivered} onBlur={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v !== item.qty_delivered) updateItem(item.id, 'qty_delivered', v) }} style={{ width: '52px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, textAlign: 'center', outline: 'none' }} />
                                 </td>
                                 <td style={{ padding: '10px 12px' }}>
                                   <input type="number" min="0" defaultValue={item.qty_remaining} onBlur={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v !== item.qty_remaining) updateItem(item.id, 'qty_remaining', v) }} style={{ width: '52px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, textAlign: 'center', outline: 'none' }} />
