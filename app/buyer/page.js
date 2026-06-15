@@ -32,11 +32,11 @@ export default function BuyerPage() {
   const [filterWomen, setFilterWomen] = useState(false)
   const [sortCol, setSortCol] = useState('description')
   const [sortDir, setSortDir] = useState('asc')
+  const [prevSort, setPrevSort] = useState(null) // for region toggle
   const [selected, setSelected] = useState({})
   const [expanded, setExpanded] = useState({})
   const [tooltip, setTooltip] = useState(null)
 
-  // Buyer identity (resolved from PIN)
   const [buyerName, setBuyerName] = useState('')
   const [buyerDisplayName, setBuyerDisplayName] = useState('')
   const [buyerEditorial, setBuyerEditorial] = useState('')
@@ -53,7 +53,6 @@ export default function BuyerPage() {
 
   async function resolveBuyerAndFetch(role, pin) {
     setLoading(true)
-
     if (role === 'admin') {
       setBuyerDisplayName('Master Buyer View')
       setBuyerName('Admin')
@@ -63,10 +62,7 @@ export default function BuyerPage() {
         .eq('include_in_buyer_view', true)
         .not('sale_price', 'is', null)
         .order('description')
-      setWines(data || [])
-      setFiltered(data || [])
-      setLoading(false)
-      return
+      setWines(data || []); setFiltered(data || []); setLoading(false); return
     }
 
     const { data: buyer } = await supabase
@@ -76,18 +72,14 @@ export default function BuyerPage() {
       .maybeSingle()
 
     if (!buyer) {
-      setBuyerDisplayName('Current Selection')
-      setBuyerName('Guest')
+      setBuyerDisplayName('Current Selection'); setBuyerName('Guest')
       const { data } = await supabase
         .from('wines')
         .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle')
         .eq('include_in_buyer_view', true)
         .not('sale_price', 'is', null)
         .order('description')
-      setWines(data || [])
-      setFiltered(data || [])
-      setLoading(false)
-      return
+      setWines(data || []); setFiltered(data || []); setLoading(false); return
     }
 
     setBuyerAccessId(buyer.id)
@@ -101,10 +93,7 @@ export default function BuyerPage() {
       .eq('buyer_access_id', buyer.id)
 
     if (!assignments || assignments.length === 0) {
-      setWines([])
-      setFiltered([])
-      setLoading(false)
-      return
+      setWines([]); setFiltered([]); setLoading(false); return
     }
 
     const wineIds = assignments.map(a => a.wine_id)
@@ -115,14 +104,23 @@ export default function BuyerPage() {
       .not('sale_price', 'is', null)
       .order('description')
 
-    setWines(wineData || [])
-    setFiltered(wineData || [])
-    setLoading(false)
+    setWines(wineData || []); setFiltered(wineData || []); setLoading(false)
   }
 
   function cycleSort(field) {
     if (sortCol === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(field); setSortDir('asc') }
+  }
+
+  // Toggle region sort — if already sorted by region, go back to previous sort
+  function toggleRegionSort() {
+    if (sortCol === 'region') {
+      const p = prevSort || { col: 'description', dir: 'asc' }
+      setSortCol(p.col); setSortDir(p.dir); setPrevSort(null)
+    } else {
+      setPrevSort({ col: sortCol, dir: sortDir })
+      setSortCol('region'); setSortDir('asc')
+    }
   }
 
   function sortArrow(field) {
@@ -143,6 +141,7 @@ export default function BuyerPage() {
       let av, bv
       if (sortCol === 'description') { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
       else if (sortCol === 'vintage') { av = a.vintage || ''; bv = b.vintage || '' }
+      else if (sortCol === 'region') { av = (a.region || '').toLowerCase(); bv = (b.region || '').toLowerCase() }
       else if (sortCol === 'format') { av = bottleSortKey(a.bottle_volume, a.bottle_format); bv = bottleSortKey(b.bottle_volume, b.bottle_format) }
       else if (sortCol === 'quantity') { av = parseInt(a.quantity) || 0; bv = parseInt(b.quantity) || 0 }
       else if (sortCol === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
@@ -157,8 +156,7 @@ export default function BuyerPage() {
   function toggleSelected(id) {
     setSelected(prev => {
       const next = { ...prev }
-      if (next[id]) delete next[id]
-      else next[id] = 1
+      if (next[id]) delete next[id]; else next[id] = 1
       return next
     })
   }
@@ -187,24 +185,9 @@ export default function BuyerPage() {
       const qty = selected[w.id] || 1
       const total = (parseFloat(w.sale_price) * qty).toFixed(2)
       const size = formatBottleSize(w.bottle_volume, w.bottle_format)
-      return [
-        `${w.vintage}  ${w.description}`,
-        `      ${w.region}${w.country ? ' · ' + w.country : ''} · ${w.colour} · ${size}`,
-        `      £${parseFloat(w.sale_price).toFixed(2)} per bottle · Qty: ${qty} · Subtotal: £${total}`,
-      ].join('\n')
+      return [`${w.vintage}  ${w.description}`, `      ${w.region}${w.country ? ' · ' + w.country : ''} · ${w.colour} · ${size}`, `      £${parseFloat(w.sale_price).toFixed(2)} per bottle · Qty: ${qty} · Subtotal: £${total}`].join('\n')
     })
-    const body = [
-      `WISHLIST — ${buyerDisplayName.toUpperCase()}`,
-      date, '',
-      'WINES SELECTED',
-      divider, '',
-      wineLines.join('\n\n'), '',
-      divider,
-      `TOTAL: ${list.length} wine${list.length !== 1 ? 's' : ''} · ${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} · £${totalValue.toFixed(2)}`,
-      '',
-      'All prices per bottle, in bond (ex-duty and VAT).',
-      'Please reply to confirm availability.',
-    ].join('\n')
+    const body = [`WISHLIST — ${buyerDisplayName.toUpperCase()}`, date, '', 'WINES SELECTED', divider, '', wineLines.join('\n\n'), '', divider, `TOTAL: ${list.length} wine${list.length !== 1 ? 's' : ''} · ${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} · £${totalValue.toFixed(2)}`, '', 'All prices per bottle, in bond (ex-duty and VAT).', 'Please reply to confirm availability.'].join('\n')
     const subject = encodeURIComponent(`Wishlist — ${buyerDisplayName} — ${new Date().toLocaleDateString('en-GB')}`)
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(body)}`
   }
@@ -213,7 +196,8 @@ export default function BuyerPage() {
   function printPriceList() {
     const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
-    const rows = wines.map(w => {
+    // Print in current sort order (so if sorted by region, prints by region)
+    const rows = filtered.map(w => {
       const size = formatBottleSize(w.bottle_volume, w.bottle_format)
       const isMag = size === '150cl' || size === '300cl'
       const duty = isMag ? 6 : 3
@@ -248,23 +232,23 @@ export default function BuyerPage() {
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: 'DM Mono', monospace; color: #1a1008; background: #fff; padding: 48px; font-size: 12px; }
-      @media print { body { padding: 24px; } }
+      body { font-family: 'DM Mono', monospace; color: #1a1008; background: #fff; padding: 40px 48px; font-size: 12px; }
+      @media print { body { padding: 20px 28px; } }
     </style>
     </head><body>
 
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #1a1008;">
-      <div>
-        <div style="font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:300;letter-spacing:0.08em;">Belle Année</div>
-        <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:2px;">Wines &amp; Studio</div>
+    <div style="margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #1a1008;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <div style="text-align:right;">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:300;letter-spacing:0.08em;color:#7a6652;">Belle Année</div>
+          <div style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#c8b89a;margin-top:1px;">Wines &amp; Studio</div>
+        </div>
       </div>
-      <div style="text-align:right;">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:400;color:#6b1e2e;">${buyerDisplayName}</div>
-        ${buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest'
-          ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-top:3px;">For ${buyerName}</div>`
-          : ''}
-        <div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-top:3px;">${date}</div>
-      </div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:300;letter-spacing:0.02em;color:#1a1008;margin-bottom:4px;">${buyerDisplayName}</div>
+      ${buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest'
+        ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-bottom:4px;">For ${buyerName}</div>`
+        : ''}
+      <div style="font-family:'DM Mono',monospace;font-size:11px;color:#c8b89a;">${date}</div>
     </div>
 
     <table style="width:100%;border-collapse:collapse;">
@@ -287,7 +271,7 @@ export default function BuyerPage() {
         ${wines.length} wine${wines.length !== 1 ? 's' : ''} · All prices per bottle · In bond (ex-duty and VAT)
       </div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;letter-spacing:0.06em;">
-        BELLE ANNÉE WINES · jessica.bride@gmail.com
+        jessica.bride@gmail.com
       </div>
     </div>
 
@@ -310,6 +294,7 @@ export default function BuyerPage() {
   const selectedCount = Object.keys(selected).length
   const totalBottles = Object.values(selected).reduce((sum, q) => sum + q, 0)
   const womenCount = wines.filter(w => w.women_note).length
+  const sortingByRegion = sortCol === 'region'
 
   const colHead = (label, field, align = 'left') => (
     <div onClick={() => cycleSort(field)}
@@ -357,7 +342,6 @@ export default function BuyerPage() {
       {/* Header */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '20px 20px 0' }}>
 
-        {/* Title */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '4px' }}>
             {buyerDisplayName}
@@ -386,11 +370,10 @@ export default function BuyerPage() {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters — with Sort by Region button */}
         <div style={{ background: 'rgba(255,255,255,0.05)', borderTop: '1px solid rgba(255,255,255,0.07)', padding: '10px 0', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines…"
-            style={{ flex: 1, minWidth: '160px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}
-          />
+            style={{ flex: 1, minWidth: '160px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
           <select value={filterColour} onChange={e => setFilterColour(e.target.value)}
             style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
             <option value="" style={{ background: '#1a1208' }}>All Colours</option>
@@ -403,6 +386,11 @@ export default function BuyerPage() {
             <option value="" style={{ background: '#1a1208' }}>All Regions</option>
             {regions.map(r => <option key={r} value={r} style={{ background: '#1a1208' }}>{r}</option>)}
           </select>
+          {/* Sort by Region toggle */}
+          <button onClick={toggleRegionSort}
+            style={{ background: sortingByRegion ? 'rgba(212,173,69,0.2)' : 'rgba(255,255,255,0.07)', color: sortingByRegion ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: `1px solid ${sortingByRegion ? 'rgba(212,173,69,0.5)' : 'rgba(255,255,255,0.12)'}`, padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            {sortingByRegion ? '✓ By Region' : 'Sort: Region'}
+          </button>
           {womenCount > 0 && (
             <button onClick={() => setFilterWomen(v => !v)}
               style={{ background: filterWomen ? '#9b3a4a' : 'rgba(155,58,74,0.15)', color: filterWomen ? 'var(--white)' : '#d4748a', border: '1px solid rgba(155,58,74,0.4)', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -455,9 +443,7 @@ export default function BuyerPage() {
 
             return (
               <div key={w.id} style={{ background: 'var(--white)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '10px 0 10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
-
-                  {/* Wine name */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
                   <div style={{ paddingLeft: isSelected ? '13px' : '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '1px' }}>
                       <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
@@ -482,33 +468,23 @@ export default function BuyerPage() {
                       </button>
                     )}
                   </div>
-
-                  {/* Size */}
                   <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: isMag ? 600 : 400 }}>{size}</div>
-
-                  {/* Qty */}
                   <div style={{ textAlign: 'center' }}>
                     {isSelected ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'center' }}>
-                        <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1}
-                          style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '13px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
+                        <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1} style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '13px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 500, minWidth: '14px', textAlign: 'center' }}>{qty}</span>
-                        <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty}
-                          style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '13px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
+                        <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty} style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '13px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
                       </div>
                     ) : (
                       <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>{maxQty}</span>
                     )}
                   </div>
-
-                  {/* Price */}
                   <div style={{ textAlign: 'right', paddingRight: '6px' }}>
                     <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
                     {isBelowWs && <div style={{ fontSize: '8px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>−£{saving} vs WS</div>}
                     {isSelected && <div style={{ fontSize: '8px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
                   </div>
-
-                  {/* WS */}
                   <div style={{ textAlign: 'right', paddingRight: '6px' }}>
                     {isBelowWs ? (
                       <div>
@@ -521,8 +497,6 @@ export default function BuyerPage() {
                       <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--border)' }}>—</div>
                     )}
                   </div>
-
-                  {/* Add/remove */}
                   <div style={{ textAlign: 'center' }}>
                     <button onClick={() => toggleSelected(w.id)}
                       style={{ width: '26px', height: '26px', border: isSelected ? '2px solid var(--wine)' : '1px solid var(--border)', background: isSelected ? 'var(--wine)' : 'transparent', color: isSelected ? 'var(--white)' : 'var(--muted)', borderRadius: '2px', cursor: 'pointer', fontSize: '16px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>
@@ -530,15 +504,9 @@ export default function BuyerPage() {
                     </button>
                   </div>
                 </div>
-
-                {/* Expanded notes */}
                 {isExpanded && hasNotes && (
                   <div style={{ padding: '0 14px 12px 25px', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent', background: 'var(--cream)' }}>
-                    {w.buyer_note && (
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.6 }}>
-                        {w.buyer_note}
-                      </div>
-                    )}
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.6 }}>{w.buyer_note}</div>
                   </div>
                 )}
               </div>
