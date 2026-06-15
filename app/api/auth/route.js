@@ -6,6 +6,11 @@ const STATIC_PINS = {
   local:  process.env.PIN_LOCAL,
 }
 
+// Supabase connection — hardcoded since NEXT_PUBLIC_ vars are
+// not reliably available in Next.js App Router API routes at runtime
+const SUPABASE_URL = 'https://unteoesmedxvwrmnhlkz.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudGVvZXNtZWR4dndybW5obGt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjAwNjksImV4cCI6MjA4OTE5NjA2OX0.RSV9s8-5IM0kUcdAESH15ABWu_h-_Up6Dg6j4qzcB-o'
+
 function makeCookieResponse(role) {
   const response = NextResponse.json({ role })
   response.cookies.set('cellar_role', role, {
@@ -33,30 +38,23 @@ export async function POST(request) {
   }
 
   // 3. Per-buyer PINs from buyer_access table
-  // Use direct REST fetch rather than Supabase JS client to avoid
-  // env var resolution issues in server-side routes
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (supabaseUrl && supabaseKey) {
-    try {
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/buyer_access?pin=eq.${encodeURIComponent(pin)}&select=id&limit=1`,
-        {
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Accept': 'application/json',
-          },
-        }
-      )
-      if (res.ok) {
-        const rows = await res.json()
-        if (rows.length > 0) return makeCookieResponse('buyer')
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/buyer_access?pin=eq.${encodeURIComponent(pin)}&select=id&limit=1`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Accept': 'application/json',
+        },
       }
-    } catch (err) {
-      console.error('buyer_access lookup failed:', err)
+    )
+    if (res.ok) {
+      const rows = await res.json()
+      if (rows.length > 0) return makeCookieResponse('buyer')
     }
+  } catch (err) {
+    console.error('buyer_access lookup failed:', err)
   }
 
   return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
