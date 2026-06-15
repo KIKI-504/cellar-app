@@ -33,30 +33,94 @@ export default function BuyerPage() {
   const [sortCol, setSortCol] = useState('description')
   const [sortDir, setSortDir] = useState('asc')
   const [selected, setSelected] = useState({})
-  const [userName, setUserName] = useState('')
   const [expanded, setExpanded] = useState({})
   const [tooltip, setTooltip] = useState(null)
 
+  // Buyer identity (resolved from PIN)
+  const [buyerName, setBuyerName] = useState('')
+  const [buyerDisplayName, setBuyerDisplayName] = useState('')
+  const [buyerEditorial, setBuyerEditorial] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [buyerAccessId, setBuyerAccessId] = useState(null)
+
   useEffect(() => {
     const role = sessionStorage.getItem('role')
-    const user = sessionStorage.getItem('user')
+    const pin = sessionStorage.getItem('pin')
     if (role !== 'buyer' && role !== 'admin') { router.push('/'); return }
-    setUserName(user || 'there')
-    fetchWines()
+    setIsAdmin(role === 'admin')
+    resolveBuyerAndFetch(role, pin)
   }, [])
 
-  async function fetchWines() {
+  async function resolveBuyerAndFetch(role, pin) {
     setLoading(true)
-    const { data, error } = await supabase
+
+    if (role === 'admin') {
+      // Admin sees the master buyer view (all include_in_buyer_view wines)
+      setBuyerDisplayName('Master Buyer View')
+      setBuyerName('Admin')
+      const { data } = await supabase
+        .from('wines')
+        .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle')
+        .eq('include_in_buyer_view', true)
+        .not('sale_price', 'is', null)
+        .order('description')
+      setWines(data || [])
+      setFiltered(data || [])
+      setLoading(false)
+      return
+    }
+
+    // Resolve buyer from PIN
+    const { data: buyer } = await supabase
+      .from('buyer_access')
+      .select('id, name, display_name, editorial')
+      .eq('pin', pin)
+      .maybeSingle()
+
+    if (!buyer) {
+      // Fallback: show all buyer view wines (legacy behaviour)
+      setBuyerDisplayName('Current Selection')
+      setBuyerName('Guest')
+      const { data } = await supabase
+        .from('wines')
+        .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle')
+        .eq('include_in_buyer_view', true)
+        .not('sale_price', 'is', null)
+        .order('description')
+      setWines(data || [])
+      setFiltered(data || [])
+      setLoading(false)
+      return
+    }
+
+    // Buyer found — load their assigned wines only
+    setBuyerAccessId(buyer.id)
+    setBuyerName(buyer.name)
+    setBuyerDisplayName(buyer.display_name || buyer.name)
+    setBuyerEditorial(buyer.editorial || '')
+
+    const { data: assignments } = await supabase
+      .from('buyer_wine_assignments')
+      .select('wine_id')
+      .eq('buyer_access_id', buyer.id)
+
+    if (!assignments || assignments.length === 0) {
+      setWines([])
+      setFiltered([])
+      setLoading(false)
+      return
+    }
+
+    const wineIds = assignments.map(a => a.wine_id)
+    const { data: wineData } = await supabase
       .from('wines')
       .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle')
+      .in('id', wineIds)
+      .not('sale_price', 'is', null)
       .order('description')
-    if (error) { console.error(error) }
-    else {
-      const buyerWines = (data || []).filter(w => w.include_in_buyer_view === true && w.sale_price !== null)
-      setWines(buyerWines)
-      setFiltered(buyerWines)
-    }
+
+    setWines(wineData || [])
+    setFiltered(wineData || [])
     setLoading(false)
   }
 
@@ -134,7 +198,7 @@ export default function BuyerPage() {
       ].join('\n')
     })
     const body = [
-      `WISHLIST — ${userName.toUpperCase()}`,
+      `WISHLIST — ${buyerDisplayName.toUpperCase()}`,
       date, '',
       'WINES SELECTED',
       divider, '',
@@ -145,7 +209,7 @@ export default function BuyerPage() {
       'All prices per bottle, in bond (ex-duty and VAT).',
       'Please reply to confirm availability.',
     ].join('\n')
-    const subject = encodeURIComponent(`Wishlist — ${userName} — ${new Date().toLocaleDateString('en-GB')}`)
+    const subject = encodeURIComponent(`Wishlist — ${buyerDisplayName} — ${new Date().toLocaleDateString('en-GB')}`)
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(body)}`
   }
 
@@ -181,68 +245,68 @@ export default function BuyerPage() {
       )}
 
       {/* Nav */}
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: '52px', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
+      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '48px', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
         <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
       </div>
 
       {/* Header */}
-      <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '28px 28px 0' }}>
+      <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '20px 20px 0' }}>
 
-        {/* Title + instructions */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '32px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '16px' }}>
-            Current Selection
+        {/* Title */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: buyerEditorial ? '6px' : '12px' }}>
+            {buyerDisplayName}
           </div>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', padding: '8px 14px' }}>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '16px', fontWeight: 700, color: '#d4ad45', lineHeight: 1 }}>+</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Add wines to build your order</span>
+          {buyerEditorial && (
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', fontStyle: 'italic', color: 'rgba(253,250,245,0.55)', marginBottom: '12px', maxWidth: '480px', lineHeight: 1.5 }}>
+              {buyerEditorial}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', padding: '6px 12px' }}>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 700, color: '#d4ad45', lineHeight: 1 }}>+</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Add wines to build your order</span>
             </div>
             {womenCount > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(155,58,74,0.12)', border: '1px solid rgba(155,58,74,0.25)', padding: '8px 14px' }}>
-                <span style={{ color: '#d4748a', fontSize: '13px' }}>♀</span>
-                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Hover for women winemaker info</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'rgba(155,58,74,0.12)', border: '1px solid rgba(155,58,74,0.25)', padding: '6px 12px' }}>
+                <span style={{ color: '#d4748a', fontSize: '12px' }}>♀</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Hover for women winemaker info</span>
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(212,173,69,0.08)', border: '1px solid rgba(212,173,69,0.15)', padding: '8px 14px' }}>
-              <span style={{ color: '#d4ad45', fontSize: '12px', fontFamily: 'DM Mono, monospace' }}>i</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Hover wine icon for producer info</span>
-            </div>
           </div>
         </div>
 
         {/* Filters */}
-        <div style={{ background: 'rgba(255,255,255,0.06)', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '14px 0', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ background: 'rgba(255,255,255,0.05)', borderTop: '1px solid rgba(255,255,255,0.07)', padding: '10px 0', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines…"
-            style={{ flex: 1, minWidth: '200px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}
+            style={{ flex: 1, minWidth: '160px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}
           />
           <select value={filterColour} onChange={e => setFilterColour(e.target.value)}
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
             <option value="" style={{ background: '#1a1208' }}>All Colours</option>
             <option value="Red" style={{ background: '#1a1208' }}>Red</option>
             <option value="White" style={{ background: '#1a1208' }}>White</option>
             <option value="Rosé" style={{ background: '#1a1208' }}>Rosé</option>
           </select>
           <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)}
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
             <option value="" style={{ background: '#1a1208' }}>All Regions</option>
             {regions.map(r => <option key={r} value={r} style={{ background: '#1a1208' }}>{r}</option>)}
           </select>
           {womenCount > 0 && (
             <button onClick={() => setFilterWomen(v => !v)}
-              style={{ background: filterWomen ? '#9b3a4a' : 'rgba(155,58,74,0.15)', color: filterWomen ? 'var(--white)' : '#d4748a', border: '1px solid rgba(155,58,74,0.4)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              ♀ Women in wine {filterWomen ? '✓' : ''}
+              style={{ background: filterWomen ? '#9b3a4a' : 'rgba(155,58,74,0.15)', color: filterWomen ? 'var(--white)' : '#d4748a', border: '1px solid rgba(155,58,74,0.4)', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              ♀ {filterWomen ? '✓' : ''}
             </button>
           )}
-          <div style={{ marginLeft: 'auto', fontSize: '11px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>
+          <div style={{ marginLeft: 'auto', fontSize: '10px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>
             {filtered.length} wine{filtered.length !== 1 ? 's' : ''}
-            {womenCount > 0 && !filterWomen && <span style={{ marginLeft: '10px', color: '#d4748a' }}>♀ {womenCount}</span>}
           </div>
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 110px 90px 40px', padding: '10px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           {colHead('Wine', 'description')}
           {colHead('Size', 'format')}
           {colHead('Qty', 'quantity', 'center')}
@@ -254,9 +318,13 @@ export default function BuyerPage() {
 
       {/* Wine list */}
       {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', marginBottom: '8px' }}>No wines match your filters</div>
-          <div style={{ fontSize: '12px', fontFamily: 'DM Mono, monospace' }}>Try adjusting your search or filters</div>
+        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--muted)' }}>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', marginBottom: '6px' }}>
+            {wines.length === 0 ? 'No wines assigned yet' : 'No wines match your filters'}
+          </div>
+          <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace' }}>
+            {wines.length === 0 ? 'Check back soon' : 'Try adjusting your search or filters'}
+          </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
@@ -278,77 +346,77 @@ export default function BuyerPage() {
 
             return (
               <div key={w.id} style={{ background: 'var(--white)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 110px 90px 40px', padding: '14px 0 14px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '10px 0 10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
 
                   {/* Wine name */}
-                  <div style={{ paddingLeft: isSelected ? '13px' : '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                      <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 400, color: 'var(--ink)', lineHeight: 1.3 }}>{w.description}</span>
+                  <div style={{ paddingLeft: isSelected ? '13px' : '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '1px' }}>
+                      <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
+                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 400, color: 'var(--ink)', lineHeight: 1.25 }}>{w.description}</span>
                       {w.women_note && (
                         <button onMouseEnter={e => showTooltip(e, w.women_note, 'women')} onMouseLeave={() => setTooltip(null)}
-                          style={{ background: 'none', border: 'none', color: '#9b3a4a', fontSize: '12px', cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0 }}>♀</button>
+                          style={{ background: 'none', border: 'none', color: '#9b3a4a', fontSize: '11px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0 }}>♀</button>
                       )}
                       {w.producer_note && (
                         <button onMouseEnter={e => showTooltip(e, w.producer_note, 'producer')} onMouseLeave={() => setTooltip(null)}
-                          style={{ background: 'none', border: 'none', fontSize: '11px', cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0, opacity: 0.75 }}>🍷</button>
+                          style={{ background: 'none', border: 'none', fontSize: '10px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0, opacity: 0.7 }}>🍷</button>
                       )}
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--muted)', paddingLeft: '13px' }}>
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--wine)', marginRight: '6px' }}>{w.vintage}</span>
+                    <div style={{ fontSize: '10px', color: 'var(--muted)', paddingLeft: '11px' }}>
+                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '12px', color: 'var(--wine)', marginRight: '5px' }}>{w.vintage}</span>
                       {w.region}{w.country ? ` · ${w.country}` : ''}
                     </div>
                     {hasNotes && (
                       <button onClick={() => toggleExpanded(w.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)', letterSpacing: '0.08em', padding: '4px 0 0 13px', textTransform: 'uppercase' }}>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em', padding: '3px 0 0 11px', textTransform: 'uppercase' }}>
                         {isExpanded ? '▲ hide' : '▼ notes'}
                       </button>
                     )}
                   </div>
 
                   {/* Size */}
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--ink)', fontWeight: isMag ? 600 : 400 }}>{size}</div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: isMag ? 600 : 400 }}>{size}</div>
 
                   {/* Qty */}
                   <div style={{ textAlign: 'center' }}>
                     {isSelected ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'center' }}>
                         <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1}
-                          style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '14px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 500, minWidth: '16px', textAlign: 'center' }}>{qty}</span>
+                          style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '13px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 500, minWidth: '14px', textAlign: 'center' }}>{qty}</span>
                         <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty}
-                          style={{ width: '22px', height: '22px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '14px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
+                          style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '13px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
                       </div>
                     ) : (
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{maxQty} avail</span>
+                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>{maxQty}</span>
                     )}
                   </div>
 
                   {/* Price */}
-                  <div style={{ textAlign: 'right', paddingRight: '8px' }}>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
-                    {isBelowWs && <div style={{ fontSize: '9px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>−£{saving} vs WS</div>}
-                    {isSelected && <div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
+                  <div style={{ textAlign: 'right', paddingRight: '6px' }}>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
+                    {isBelowWs && <div style={{ fontSize: '8px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>−£{saving} vs WS</div>}
+                    {isSelected && <div style={{ fontSize: '8px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
                   </div>
 
-                  {/* WS avg */}
-                  <div style={{ textAlign: 'right', paddingRight: '8px' }}>
+                  {/* WS */}
+                  <div style={{ textAlign: 'right', paddingRight: '6px' }}>
                     {isBelowWs ? (
                       <div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#2a7a4b', fontWeight: 600 }}>Below WS</div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#2a7a4b', fontWeight: 600 }}>Below WS</div>
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
                       </div>
                     ) : wsDp ? (
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
                     ) : (
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--border)' }}>—</div>
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--border)' }}>—</div>
                     )}
                   </div>
 
-                  {/* Add/remove button */}
+                  {/* Add/remove */}
                   <div style={{ textAlign: 'center' }}>
                     <button onClick={() => toggleSelected(w.id)}
-                      style={{ width: '28px', height: '28px', border: isSelected ? '2px solid var(--wine)' : '1px solid var(--border)', background: isSelected ? 'var(--wine)' : 'transparent', color: isSelected ? 'var(--white)' : 'var(--muted)', borderRadius: '2px', cursor: 'pointer', fontSize: '18px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>
+                      style={{ width: '26px', height: '26px', border: isSelected ? '2px solid var(--wine)' : '1px solid var(--border)', background: isSelected ? 'var(--wine)' : 'transparent', color: isSelected ? 'var(--white)' : 'var(--muted)', borderRadius: '2px', cursor: 'pointer', fontSize: '16px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>
                       {isSelected ? '✓' : '+'}
                     </button>
                   </div>
@@ -356,9 +424,9 @@ export default function BuyerPage() {
 
                 {/* Expanded notes */}
                 {isExpanded && hasNotes && (
-                  <div style={{ padding: '0 16px 16px 29px', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent', background: 'var(--cream)' }}>
+                  <div style={{ padding: '0 14px 12px 25px', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent', background: 'var(--cream)' }}>
                     {w.buyer_note && (
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.6 }}>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.6 }}>
                         {w.buyer_note}
                       </div>
                     )}
@@ -372,9 +440,9 @@ export default function BuyerPage() {
 
       {/* Order bar */}
       {selectedCount > 0 && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 28px', zIndex: 200 }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
-          <button onClick={sendWishlist} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Order</button>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', zIndex: 200 }}>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
+          <button onClick={sendWishlist} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '8px 18px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Order</button>
         </div>
       )}
     </div>
