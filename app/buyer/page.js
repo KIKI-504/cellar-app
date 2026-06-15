@@ -55,7 +55,6 @@ export default function BuyerPage() {
     setLoading(true)
 
     if (role === 'admin') {
-      // Admin sees the master buyer view (all include_in_buyer_view wines)
       setBuyerDisplayName('Master Buyer View')
       setBuyerName('Admin')
       const { data } = await supabase
@@ -70,7 +69,6 @@ export default function BuyerPage() {
       return
     }
 
-    // Resolve buyer from PIN
     const { data: buyer } = await supabase
       .from('buyer_access')
       .select('id, name, display_name, editorial')
@@ -78,7 +76,6 @@ export default function BuyerPage() {
       .maybeSingle()
 
     if (!buyer) {
-      // Fallback: show all buyer view wines (legacy behaviour)
       setBuyerDisplayName('Current Selection')
       setBuyerName('Guest')
       const { data } = await supabase
@@ -93,7 +90,6 @@ export default function BuyerPage() {
       return
     }
 
-    // Buyer found — load their assigned wines only
     setBuyerAccessId(buyer.id)
     setBuyerName(buyer.name)
     setBuyerDisplayName(buyer.display_name || buyer.name)
@@ -213,6 +209,93 @@ export default function BuyerPage() {
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(body)}`
   }
 
+  // ── Print price list ────────────────────────────────────────────────────────
+  function printPriceList() {
+    const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+
+    const rows = wines.map(w => {
+      const size = formatBottleSize(w.bottle_volume, w.bottle_format)
+      const isMag = size === '150cl' || size === '300cl'
+      const duty = isMag ? 6 : 3
+      const salePrice = parseFloat(w.sale_price)
+      const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
+      const wsDp = ws ? (ws + duty) * 1.2 : null
+      const isBelowWs = wsDp && salePrice < wsDp
+      const saving = isBelowWs ? (wsDp - salePrice).toFixed(2) : null
+
+      return `<tr>
+        <td style="padding:9px 10px 9px 0;border-bottom:1px solid #ede6d6;font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:500;">${w.description}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">♀</span>' : ''}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.vintage || '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.region || '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${size}</td>
+        <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;">
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:#1a1008;">£${salePrice.toFixed(2)}</div>
+          ${isBelowWs ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:#2a7a4b;margin-top:1px;">−£${saving} vs WS</div>` : ''}
+        </td>
+      </tr>`
+    }).join('')
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${buyerDisplayName}</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'DM Mono', monospace; color: #1a1008; background: #fff; padding: 48px; font-size: 12px; }
+      @media print { body { padding: 24px; } }
+    </style>
+    </head><body>
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #1a1008;">
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:300;letter-spacing:0.08em;">Belle Année</div>
+        <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:2px;">Wines &amp; Studio</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:400;color:#6b1e2e;">${buyerDisplayName}</div>
+        ${buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest'
+          ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-top:3px;">For ${buyerName}</div>`
+          : ''}
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;margin-top:3px;">${date}</div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="border-bottom:2px solid #1a1008;">
+          <th style="padding:7px 10px 7px 0;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Wine</th>
+          <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Vintage</th>
+          <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Region</th>
+          <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Size</th>
+          <th style="padding:7px 0 7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Price / btl</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid #ede6d6;display:flex;justify-content:space-between;align-items:baseline;">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;letter-spacing:0.06em;">
+        ${wines.length} wine${wines.length !== 1 ? 's' : ''} · All prices per bottle · In bond (ex-duty and VAT)
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;letter-spacing:0.06em;">
+        BELLE ANNÉE WINES · jessica.bride@gmail.com
+      </div>
+    </div>
+
+    </body></html>`
+
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none;'
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe) }, 3000)
+    }
+    iframe.contentDocument.open()
+    iframe.contentDocument.write(html)
+    iframe.contentDocument.close()
+  }
+
   const regions = [...new Set(wines.map(w => w.region).filter(Boolean))].sort()
   const selectedCount = Object.keys(selected).length
   const totalBottles = Object.values(selected).reduce((sum, q) => sum + q, 0)
@@ -247,7 +330,18 @@ export default function BuyerPage() {
       {/* Nav */}
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '48px', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
-        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>Sign Out</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {wines.length > 0 && (
+            <button onClick={printPriceList}
+              style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>
+              🖨 Print
+            </button>
+          )}
+          <button onClick={() => { sessionStorage.clear(); router.push('/') }}
+            style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>
+            Sign Out
+          </button>
+        </div>
       </div>
 
       {/* Header */}
@@ -255,9 +349,14 @@ export default function BuyerPage() {
 
         {/* Title */}
         <div style={{ marginBottom: '16px' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: buyerEditorial ? '6px' : '12px' }}>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '4px' }}>
             {buyerDisplayName}
           </div>
+          {buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest' && (
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: buyerEditorial ? '6px' : '12px' }}>
+              For {buyerName}
+            </div>
+          )}
           {buyerEditorial && (
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', fontStyle: 'italic', color: 'rgba(253,250,245,0.55)', marginBottom: '12px', maxWidth: '480px', lineHeight: 1.5 }}>
               {buyerEditorial}
