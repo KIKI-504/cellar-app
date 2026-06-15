@@ -35,13 +35,20 @@ export default function AdminPage() {
   const [releaseOrders, setReleaseOrders] = useState([])
   const [showReleaseHistory, setShowReleaseHistory] = useState(false)
   const [expandedReleaseOrder, setExpandedReleaseOrder] = useState(null)
+  // ── Buyer Access (NEW) ──────────────────────────────────────────────────────
+  const [buyerAccess, setBuyerAccess] = useState([])
+  const [showBuyerSection, setShowBuyerSection] = useState(false)
+  const [showAssignBuyer, setShowAssignBuyer] = useState(false)
+  const [buyerForm, setBuyerForm] = useState({ name: '', pin: '', display_name: '', editorial: '' })
+  const [buyerSaving, setBuyerSaving] = useState(false)
+  const [editingBuyerId, setEditingBuyerId] = useState(null)
 
   const PAGE_SIZE = 50
 
   useEffect(() => {
     const role = sessionStorage.getItem('role')
     if (role !== 'admin') router.push('/')
-    else { fetchWines(); fetchReleaseOrders() }
+    else { fetchWines(); fetchReleaseOrders(); fetchBuyerAccess() }
   }, [])
 
   async function fetchWines() {
@@ -55,6 +62,48 @@ export default function AdminPage() {
   async function fetchReleaseOrders() {
     const { data } = await supabase.from('release_orders').select('*').order('order_date', { ascending: false }).order('created_at', { ascending: false })
     setReleaseOrders(data || [])
+  }
+
+  // ── Buyer Access functions (NEW) ────────────────────────────────────────────
+  async function fetchBuyerAccess() {
+    const { data } = await supabase.from('buyer_access').select('id, name, pin, display_name, editorial').order('name')
+    setBuyerAccess(data || [])
+  }
+
+  async function saveBuyerAccess() {
+    if (!buyerForm.name.trim() || !buyerForm.pin.trim()) return
+    setBuyerSaving(true)
+    if (editingBuyerId) {
+      await supabase.from('buyer_access').update({
+        name: buyerForm.name, pin: buyerForm.pin,
+        display_name: buyerForm.display_name || null, editorial: buyerForm.editorial || null,
+      }).eq('id', editingBuyerId)
+      setEditingBuyerId(null)
+    } else {
+      await supabase.from('buyer_access').insert({
+        name: buyerForm.name, pin: buyerForm.pin,
+        display_name: buyerForm.display_name || null, editorial: buyerForm.editorial || null,
+      })
+    }
+    setBuyerForm({ name: '', pin: '', display_name: '', editorial: '' })
+    await fetchBuyerAccess()
+    setBuyerSaving(false)
+  }
+
+  async function deleteBuyerAccess(id, name) {
+    if (!confirm(`Remove buyer access for ${name}? Their wine assignments will also be deleted.`)) return
+    await supabase.from('buyer_access').delete().eq('id', id)
+    await fetchBuyerAccess()
+  }
+
+  async function assignWinesToBuyer(buyerAccessId, wineIds) {
+    if (!buyerAccessId || !wineIds.length) return
+    const rows = wineIds.map(wine_id => ({ buyer_access_id: buyerAccessId, wine_id }))
+    const { error } = await supabase.from('buyer_wine_assignments').upsert(rows, { onConflict: 'buyer_access_id,wine_id', ignoreDuplicates: true })
+    if (error) { alert('Assignment failed: ' + error.message); return }
+    setShowAssignBuyer(false)
+    setReleaseBasket({})
+    alert(`✓ ${wineIds.length} wine${wineIds.length !== 1 ? 's' : ''} assigned successfully.`)
   }
 
   useEffect(() => {
@@ -73,7 +122,6 @@ export default function AdminPage() {
       let av = a[sortCol] ?? '', bv = b[sortCol] ?? ''
       const aEmpty = av === '' || av === null || av === undefined
       const bEmpty = bv === '' || bv === null || bv === undefined
-      // Empties to TOP when ascending, BOTTOM when descending
       if (aEmpty && !bEmpty) return sortDir === 1 ? -1 : 1
       if (!aEmpty && bEmpty) return sortDir === 1 ? 1 : -1
       if (aEmpty && bEmpty) return 0
@@ -88,14 +136,10 @@ export default function AdminPage() {
     setPage(0)
   }, [wines.length, search, filterSource, filterColour, filterBuyer, sortCol, sortDir])
 
-  // Keep `filtered` in sync with wine edits, but PRESERVE the displayOrder
-  // so editing a price doesn't reshuffle rows mid-task.
   useEffect(() => {
     if (displayOrder.length === 0) return
     const byId = new Map(wines.map(w => [w.id, w]))
     const reordered = displayOrder.map(id => byId.get(id)).filter(Boolean)
-    // Apply current filters (so checking 'In Buyer View' etc still works,
-    // but order is preserved within the filtered set)
     let result = reordered
     if (filterSource) result = result.filter(w => w.source === filterSource)
     if (filterColour) result = result.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
@@ -519,7 +563,6 @@ export default function AdminPage() {
     const duty = dutyForWine(w)
     const mag = isMagnum(w)
     const dp = ib ? (ib + duty) * 1.2 : null
-    const retail = w.retail_price ? parseFloat(w.retail_price) : null
     const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
     const livex = w.livex_market_price ? parseFloat(w.livex_market_price) : null
     const sale = w.sale_price ? parseFloat(w.sale_price) : null
@@ -550,7 +593,7 @@ export default function AdminPage() {
         {ws && row('WS lowest IB (ex duty/VAT)', ws)}
         {ws && row('WS DP  75cl', wsDP75, wsDP75 && dp && dp < wsDP75 ? '#86efac' : null)}
         {ws && row('WS DP  150cl', wsDP150, null, !mag)}
-        {(livex || retail || sale) && divider()}
+        {(livex || sale) && divider()}
         {livex && row('Livex (ex duty)', livex)}
         {sale && row('Your sale price', sale, '#d4ad45')}
         {!ib && <div style={{ fontSize: '10px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace' }}>No cost data available</div>}
@@ -564,6 +607,7 @@ export default function AdminPage() {
   }
 
   const basketCount = Object.keys(releaseBasket).length
+  const basketWineIds = Object.keys(releaseBasket)
   const slice = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const bbCount = wines.filter(w => w.source === 'Berry Brothers').length
@@ -602,6 +646,7 @@ export default function AdminPage() {
           <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{filtered.length} wines</div>
         </div>
 
+        {/* Stats bar */}
         <div style={{ display: 'flex', gap: '20px', padding: '12px 16px', background: 'var(--white)', border: '1px solid var(--border)', marginBottom: '12px', fontSize: '11px', flexWrap: 'wrap' }}>
           {[['wines total', wines.length], ['Berry Brothers', bbCount], ['Flint', flintCount], ['in buyer view', inBuyerCount], ['competitive', competitiveCount], ['need retail price', missingRetailCount], ['women-led', womenCount]].map(([label, n]) => (
             <div key={label} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
@@ -611,6 +656,7 @@ export default function AdminPage() {
           ))}
         </div>
 
+        {/* Collection value */}
         <div style={{ marginBottom: '16px' }}>
           <button onClick={() => setShowValues(v => !v)} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', color: 'var(--muted)' }}>
             {showValues ? '▲ Hide collection value' : '▼ Show collection value'}
@@ -636,6 +682,7 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* Release Orders */}
         <div style={{ marginBottom: '16px' }}>
           <button onClick={() => setShowReleaseHistory(v => !v)} style={{ background: releaseOrders.length > 0 ? 'rgba(107,30,46,0.06)' : 'none', border: '1px solid rgba(107,30,46,0.2)', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', color: 'var(--wine)' }}>
             {showReleaseHistory ? '▲' : '▼'} Release Orders {releaseOrders.length > 0 ? `· ${releaseOrders.length}` : ''}
@@ -698,6 +745,55 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* ── Buyer Access Section (NEW) ── */}
+        <div style={{ marginBottom: '16px' }}>
+          <button onClick={() => setShowBuyerSection(v => !v)} style={{ background: buyerAccess.length > 0 ? 'rgba(45,106,79,0.06)' : 'none', border: '1px solid rgba(45,106,79,0.3)', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', color: '#2d6a4f' }}>
+            {showBuyerSection ? '▲' : '▼'} Buyer Access {buyerAccess.length > 0 ? `· ${buyerAccess.length} buyer${buyerAccess.length !== 1 ? 's' : ''}` : ''}
+          </button>
+          {showBuyerSection && (
+            <div style={{ marginTop: '8px', background: 'var(--white)', border: '1px solid var(--border)' }}>
+              {buyerAccess.map(buyer => (
+                <div key={buyer.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #ede6d6', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 500 }}>{buyer.name}</span>
+                      {buyer.display_name && <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>"{buyer.display_name}"</span>}
+                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', background: 'rgba(107,30,46,0.08)', color: 'var(--wine)', padding: '1px 6px', borderRadius: '2px', letterSpacing: '0.12em' }}>PIN: {buyer.pin}</span>
+                    </div>
+                    {buyer.editorial && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', marginTop: '2px', fontStyle: 'italic' }}>{buyer.editorial}</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <button onClick={() => { setEditingBuyerId(buyer.id); setBuyerForm({ name: buyer.name, pin: buyer.pin, display_name: buyer.display_name || '', editorial: buyer.editorial || '' }); setShowBuyerSection(true) }}
+                      style={{ background: 'none', border: '1px solid var(--border)', padding: '3px 8px', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer' }}>✏</button>
+                    <button onClick={() => deleteBuyerAccess(buyer.id, buyer.name)}
+                      style={{ background: 'none', border: 'none', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--muted)', cursor: 'pointer' }}>✕</button>
+                  </div>
+                </div>
+              ))}
+              {/* Add/edit form */}
+              <div style={{ padding: '14px', background: editingBuyerId ? 'rgba(107,30,46,0.03)' : 'transparent', borderTop: buyerAccess.length ? '1px solid #ede6d6' : 'none' }}>
+                {editingBuyerId && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>Editing buyer</div>}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '8px', marginBottom: '8px' }}>
+                  <input value={buyerForm.name} onChange={e => setBuyerForm(f => ({...f, name: e.target.value}))} placeholder="Name (e.g. Dorian)" style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '7px 10px', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                  <input value={buyerForm.pin} onChange={e => setBuyerForm(f => ({...f, pin: e.target.value}))} placeholder="PIN (e.g. Do2222)" style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '7px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box', letterSpacing: '0.1em' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                  <input value={buyerForm.display_name} onChange={e => setBuyerForm(f => ({...f, display_name: e.target.value}))} placeholder='Page title (e.g. "Wines for Dorian")' style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '7px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', boxSizing: 'border-box' }} />
+                  <input value={buyerForm.editorial} onChange={e => setBuyerForm(f => ({...f, editorial: e.target.value}))} placeholder='Editorial note (e.g. "Special outdoor wines")' style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '7px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', fontStyle: 'italic', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button onClick={saveBuyerAccess} disabled={!buyerForm.name.trim() || !buyerForm.pin.trim() || buyerSaving}
+                    style={{ background: buyerForm.name.trim() && buyerForm.pin.trim() ? '#2d6a4f' : '#ccc', color: 'var(--white)', border: 'none', padding: '7px 16px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>
+                    {buyerSaving ? 'Saving…' : editingBuyerId ? '✓ Update' : '+ Add Buyer'}
+                  </button>
+                  {editingBuyerId && <button onClick={() => { setEditingBuyerId(null); setBuyerForm({ name: '', pin: '', display_name: '', editorial: '' }) }} style={{ background: 'none', border: '1px solid var(--border)', padding: '7px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer' }}>Cancel</button>}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Filters + imports */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by description, region, vintage…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
@@ -761,6 +857,7 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Wine table */}
         <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
@@ -778,7 +875,7 @@ export default function AdminPage() {
                 ))}
                 <th onClick={() => handleSort('ws_lowest_per_bottle')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', color: sortCol === 'ws_lowest_per_bottle' ? '#d4ad45' : 'var(--white)', minWidth: '240px' }}>
                   Pricing {sortCol === 'ws_lowest_per_bottle' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
-                  <span style={{ display: 'block', fontSize: '9px', color: '#fdfaf5', fontWeight: 400, letterSpacing: '0.04em', textTransform: 'none', marginTop: '2px', opacity: 0.85 }}>sorts by WS IB · click again to re-sort</span>
+                  <span style={{ display: 'block', fontSize: '9px', color: '#fdfaf5', fontWeight: 400, letterSpacing: '0.04em', textTransform: 'none', marginTop: '2px', opacity: 0.85 }}>sorts by WS IB</span>
                 </th>
                 <th onClick={() => handleSort('sale_price')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'sale_price' ? '#d4ad45' : 'var(--white)' }}>
                   Sell {sortCol === 'sale_price' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
@@ -823,7 +920,7 @@ export default function AdminPage() {
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{w.bottle_volume || (w.bottle_format === 'Magnum' ? '150cl' : w.bottle_format ? '75cl' : '—')}</td>
                     <td style={{ padding: '9px 12px' }}>{w.quantity || '—'}</td>
 
-                    {/* ── Pricing 2×2 grid ── */}
+                    {/* Pricing 2×2 grid */}
                     {(() => {
                       const ib = pp ? parseFloat(pp) : null
                       const duty = dutyForWine(w)
@@ -890,7 +987,7 @@ export default function AdminPage() {
                       )
                     })()}
 
-                    {/* Sell Price + margin % */}
+                    {/* Sell price */}
                     {(() => {
                       const myDP = pp ? dpForWine(w) : null
                       const sale = w.sale_price ? parseFloat(w.sale_price) : null
@@ -935,20 +1032,6 @@ export default function AdminPage() {
                                     style={{ width: '100%', minHeight: '60px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '4px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', resize: 'vertical' }} />
                                 </div>
                               )}
-                              {!w.women_note && (
-                                <div>
-                                  <div style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9b3a4a', marginBottom: '3px' }}>♀ Add women's story</div>
-                                  <textarea placeholder="Add women's story…" onBlur={e => { if (e.target.value) updateWine(w.id, 'women_note', e.target.value) }}
-                                    style={{ width: '100%', minHeight: '40px', border: '1px solid #9b3a4a', background: 'rgba(155,58,74,0.03)', padding: '4px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', resize: 'vertical' }} />
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {!w.producer_note && isExpanded && (
-                            <div style={{ marginTop: '6px' }}>
-                              <div style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '3px' }}>📋 Add producer note</div>
-                              <textarea placeholder="Add producer note…" onBlur={e => { if (e.target.value) updateWine(w.id, 'producer_note', e.target.value) }}
-                                style={{ width: '100%', minHeight: '40px', border: '1px solid var(--border)', background: 'var(--cream)', padding: '4px 6px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', resize: 'vertical' }} />
                             </div>
                           )}
                         </div>
@@ -1001,21 +1084,60 @@ export default function AdminPage() {
         )}
       </div>
 
+      {/* ── Release / Assign basket bar ── */}
       {basketCount > 0 && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', padding: '12px 24px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 200, borderTop: '2px solid rgba(212,173,69,0.4)', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--white)' }}>
-            {basketCount} wine{basketCount !== 1 ? 's' : ''} selected for release
+            {basketCount} wine{basketCount !== 1 ? 's' : ''} selected
             <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: '#d4ad45', marginLeft: '12px' }}>
               Duty+VAT est: £{releaseBasketItems().reduce((s, i) => s + i.dutyVatTotal, 0).toFixed(2)}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={() => setReleaseBasket({})} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', letterSpacing: '0.08em' }}>✕ Clear</button>
+            {buyerAccess.length > 0 && (
+              <button onClick={() => setShowAssignBuyer(true)} style={{ background: '#2d6a4f', color: 'var(--white)', border: 'none', padding: '8px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>
+                👤 Assign to Buyer →
+              </button>
+            )}
             <button onClick={() => setShowReleaseModal(true)} style={{ background: '#d4ad45', color: 'var(--ink)', border: 'none', padding: '8px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>Build Release Order →</button>
           </div>
         </div>
       )}
 
+      {/* ── Assign to Buyer Modal (NEW) ── */}
+      {showAssignBuyer && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.8)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '400px', border: '1px solid var(--border)', padding: '24px' }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, marginBottom: '6px' }}>Assign to Buyer</div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: '20px' }}>{basketCount} wine{basketCount !== 1 ? 's' : ''} selected</div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px', fontFamily: 'DM Mono, monospace' }}>Select buyer</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {buyerAccess.map(buyer => (
+                  <button key={buyer.id} onClick={() => assignWinesToBuyer(buyer.id, basketWineIds)}
+                    style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '12px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', fontFamily: 'DM Mono, monospace' }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = '#2d6a4f'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  >
+                    <div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 500, color: 'var(--ink)' }}>{buyer.name}</div>
+                      {buyer.display_name && <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '1px' }}>{buyer.display_name}</div>}
+                    </div>
+                    <span style={{ fontSize: '9px', background: 'rgba(107,30,46,0.08)', color: 'var(--wine)', padding: '2px 6px', borderRadius: '2px', letterSpacing: '0.1em' }}>PIN: {buyer.pin}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ padding: '10px 14px', background: 'rgba(45,106,79,0.06)', border: '1px solid rgba(45,106,79,0.2)', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#2d6a4f', lineHeight: 1.6, marginBottom: '16px' }}>
+              Wines are assigned exclusively to the selected buyer. The same wine can be assigned to multiple buyers separately.
+            </div>
+            <button onClick={() => setShowAssignBuyer(false)} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', color: 'var(--muted)' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Release Order Modal */}
       {showReleaseModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.8)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '700px', border: '1px solid var(--border)', marginTop: '8px' }}>
@@ -1052,7 +1174,6 @@ export default function AdminPage() {
                                 <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 500 }}>{w.description}</div>
                                 <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
                                   {w.vintage} · {w.source_id || '—'} · IB £{ib.toFixed(2)}/btl · DP £{dpPerBottle.toFixed(2)}/btl
-                                  <span style={{ marginLeft: '6px', color: 'rgba(0,0,0,0.3)' }}>case={caseSize}</span>
                                 </div>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1086,7 +1207,6 @@ export default function AdminPage() {
                     <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Est. duty + VAT due</span>
                     <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 500, color: 'var(--wine)' }}>£{releaseBasketItems().reduce((s, i) => s + i.dutyVatTotal, 0).toFixed(2)}</span>
                   </div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)', marginTop: '3px' }}>DP = (IB + £{isMagnum(wines.find(w => releaseBasket[w.id]) || {}) ? '6' : '3'} duty) × 1.2 per bottle</div>
                 </div>
               </div>
               <div style={{ marginBottom: '16px' }}>
@@ -1106,6 +1226,7 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Override Modal */}
       {overrideModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'var(--cream)', width: '100%', maxWidth: '440px', padding: '28px', border: '1px solid var(--border)' }}>
@@ -1129,7 +1250,6 @@ export default function AdminPage() {
               </label>
               <input type="text" value={overrideNote} onChange={e => setOverrideNote(e.target.value)} placeholder="e.g. Supplier corrected invoice price"
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-              <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px', fontFamily: 'DM Mono, monospace' }}>This note will appear as a warning if the next import has a different price.</div>
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => { setOverrideModal(null); setOverrideNote('') }} style={{ background: 'none', border: '1px solid var(--border)', padding: '9px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
@@ -1282,7 +1402,7 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
         </div>
         <div style={{ padding: '24px' }}>
           <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)', marginBottom: '20px', lineHeight: 1.6 }}>
-            Pick two wines — the <strong>survivor</strong> (kept) and the <strong>loser</strong> (deleted). For each field, choose which value wins. Studio entries and box items pointing at the loser will be migrated to the survivor. A full JSON snapshot is saved before anything is deleted.
+            Pick two wines — the <strong>survivor</strong> (kept) and the <strong>loser</strong> (deleted). For each field, choose which value wins. Studio entries and box items pointing at the loser will be migrated to the survivor.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
             <div style={{ border: '1px solid rgba(45,106,79,0.3)', background: 'rgba(45,106,79,0.04)', padding: '14px' }}>
@@ -1383,7 +1503,6 @@ function MergeDuplicatesModal({ wines, onClose, onMerged }) {
             <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '10px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>
                 Similarity reason <span style={{ color: 'var(--wine)' }}>*</span>
-                <span style={{ textTransform: 'none', letterSpacing: 0, marginLeft: '6px', fontSize: '10px' }}>(e.g. "naming convention", "accent differences")</span>
               </label>
               <input type="text" value={similarityReason} onChange={e => setSimilarityReason(e.target.value)} placeholder="Why were these duplicates?" disabled={merging}
                 style={{ width: '100%', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
