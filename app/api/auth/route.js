@@ -2,11 +2,6 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
-
 const STATIC_PINS = {
   admin: process.env.PIN_ADMIN,
   local:  process.env.PIN_LOCAL,
@@ -45,6 +40,12 @@ export async function POST(request) {
   }
 
   // 3. Per-buyer PINs from buyer_access table
+  // Client created inside handler so env vars are available at runtime
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
+
   const { data: buyer } = await supabase
     .from('buyer_access')
     .select('id')
