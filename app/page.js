@@ -29,6 +29,7 @@ export default function LoginPage() {
     const { role } = await res.json()
 
     sessionStorage.setItem('role', role)
+    if (role === 'buyer') sessionStorage.setItem('pin', pin)
 
     if (role === 'admin') router.push('/admin')
     else if (role === 'buyer') router.push('/buyer')
