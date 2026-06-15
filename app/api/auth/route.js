@@ -1,32 +1,69 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-const PINS = {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
+
+const STATIC_PINS = {
   admin: process.env.PIN_ADMIN,
-  buyer: process.env.PIN_BUYER,
-  local: process.env.PIN_LOCAL,
+  local:  process.env.PIN_LOCAL,
 }
 
 export async function POST(request) {
   const { pin } = await request.json()
+  if (!pin) return NextResponse.json({ error: 'No PIN' }, { status: 400 })
 
-  let role = null
-  for (const [r, p] of Object.entries(PINS)) {
-    if (p && pin === p) { role = r; break }
+  // 1. Static admin / local PINs
+  for (const [role, p] of Object.entries(STATIC_PINS)) {
+    if (p && pin === p) {
+      const response = NextResponse.json({ role })
+      response.cookies.set('cellar_role', role, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7,
+        path: '/',
+      })
+      return response
+    }
   }
 
-  if (!role) {
-    return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
+  // 2. Legacy single buyer PIN (PIN_BUYER env var)
+  if (process.env.PIN_BUYER && pin === process.env.PIN_BUYER) {
+    const response = NextResponse.json({ role: 'buyer' })
+    response.cookies.set('cellar_role', 'buyer', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    })
+    return response
   }
 
-  const response = NextResponse.json({ role })
-  response.cookies.set('cellar_role', role, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7,
-    path: '/',
-  })
-  return response
+  // 3. Per-buyer PINs from buyer_access table
+  const { data: buyer } = await supabase
+    .from('buyer_access')
+    .select('id')
+    .eq('pin', pin)
+    .maybeSingle()
+
+  if (buyer) {
+    const response = NextResponse.json({ role: 'buyer' })
+    response.cookies.set('cellar_role', 'buyer', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    })
+    return response
+  }
+
+  return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
 }
 
 export async function DELETE() {
