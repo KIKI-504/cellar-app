@@ -222,12 +222,20 @@ export default function BuyerPage() {
       const wsDp = ws ? (ws + duty) * 1.2 : null
       const isBelowWs = wsDp && salePrice < wsDp
       const saving = isBelowWs ? (wsDp - salePrice).toFixed(2) : null
+      const qty = parseInt(w.quantity) || 0
+      const col = (w.colour || '').toLowerCase()
+      const dotCol = col.includes('red') ? '#8b2535' : col.includes('white') ? '#b5a430' : col.includes('ros') ? '#d4748a' : col.includes('spark') ? '#5a8fa8' : '#aaa'
 
       return `<tr>
-        <td style="padding:9px 10px 9px 0;border-bottom:1px solid #ede6d6;font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:500;">${w.description}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">♀</span>' : ''}</td>
+        <td style="padding:9px 10px 9px 0;border-bottom:1px solid #ede6d6;">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotCol};margin-right:5px;vertical-align:middle;"></span>
+          <span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:500;vertical-align:middle;">${w.description}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">♀</span>' : ''}</span>
+        </td>
         <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.vintage || '—'}</td>
         <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.region || '—'}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${size}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.colour || '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:${isMag ? '12px' : '11px'};font-weight:${isMag ? '700' : '400'};color:${isMag ? '#1a1008' : '#7a6652'};">${size}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${qty}</td>
         <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;">
           <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:#1a1008;">£${salePrice.toFixed(2)}</div>
           ${isBelowWs ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:#2a7a4b;margin-top:1px;">−£${saving} vs WS</div>` : ''}
@@ -265,7 +273,9 @@ export default function BuyerPage() {
           <th style="padding:7px 10px 7px 0;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Wine</th>
           <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Vintage</th>
           <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Region</th>
+          <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Colour</th>
           <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Size</th>
+          <th style="padding:7px 8px;text-align:center;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Avail</th>
           <th style="padding:7px 0 7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Price / btl</th>
         </tr>
       </thead>
