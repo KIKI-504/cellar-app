@@ -296,6 +296,7 @@ export default function BuyerPage() {
   const totalBottles = Object.values(selected).reduce((sum, q) => sum + q, 0)
   const womenCount = wines.filter(w => w.women_note).length
   const sortingByRegion = sortCol === 'region'
+  const CONTENT = '1400px'
 
   const colHead = (label, field, align = 'left') => (
     <div onClick={() => cycleSort(field)}
@@ -324,25 +325,27 @@ export default function BuyerPage() {
       )}
 
       {/* Nav */}
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '48px', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {wines.length > 0 && (
-            <button onClick={printPriceList}
+      <div style={{ background: 'var(--ink)', color: 'var(--white)', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '48px' }}>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {wines.length > 0 && (
+              <button onClick={printPriceList}
+                style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>
+                🖨 Print
+              </button>
+            )}
+            <button onClick={() => { sessionStorage.clear(); router.push('/') }}
               style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>
-              🖨 Print
+              Sign Out
             </button>
-          )}
-          <button onClick={() => { sessionStorage.clear(); router.push('/') }}
-            style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>
-            Sign Out
-          </button>
+          </div>
         </div>
       </div>
 
       {/* Hero */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 28% 0%, rgba(107,30,46,0.28) 0%, transparent 68%)', color: 'var(--white)', padding: '30px 20px 32px' }}>
-        <div>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto' }}>
           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.85)', marginBottom: '12px' }}>
             Belle Année · Wines &amp; Studio
           </div>
@@ -350,7 +353,7 @@ export default function BuyerPage() {
             {buyerDisplayName}
           </div>
           {buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest' && (
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.45)', marginBottom: buyerEditorial ? '14px' : '0' }}>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.62)', marginBottom: buyerEditorial ? '14px' : '0' }}>
               For {buyerName}
             </div>
           )}
@@ -359,7 +362,7 @@ export default function BuyerPage() {
               {buyerEditorial}
             </div>
           )}
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(253,250,245,0.4)', marginTop: '18px' }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', color: 'rgba(253,250,245,0.7)', marginTop: '18px' }}>
             Tap + to add a wine to your order{womenCount > 0 ? " · hover ♀ for the winemaker's story" : ''}
           </div>
         </div>
@@ -367,7 +370,7 @@ export default function BuyerPage() {
 
       {/* Standing terms — cream card, shown to every buyer */}
       <div style={{ background: 'var(--cream)', padding: '22px 20px 0' }}>
-        <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderTop: '2px solid var(--wine)', padding: '20px 24px' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', background: 'var(--white)', border: '1px solid var(--border)', borderTop: '2px solid var(--wine)', padding: '20px 24px' }}>
           <button onClick={() => setShowTerms(v => !v)}
             style={{ background: 'none', border: 'none', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             {showTerms ? '▾' : '▸'} How this works
@@ -393,6 +396,7 @@ export default function BuyerPage() {
 
       {/* Controls — filters + column headers, on cream */}
       <div style={{ background: 'var(--cream)', padding: '18px 20px 0' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto' }}>
 
         {/* Filters */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' }}>
@@ -427,19 +431,20 @@ export default function BuyerPage() {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 110px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           {colHead('Wine', 'description')}
           {colHead('Size', 'format')}
           {colHead('Qty', 'quantity', 'center')}
           {colHead('Price / btl', 'sale_price', 'right')}
-          {colHead('WS Avg', 'ws', 'right')}
+          {colHead('Market Price', 'ws', 'right')}
           <div></div>
+        </div>
         </div>
       </div>
 
       {/* Wine list */}
       {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--muted)' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', textAlign: 'center', padding: '48px 20px', color: 'var(--muted)' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', marginBottom: '6px' }}>
             {wines.length === 0 ? 'No wines assigned yet' : 'No wines match your filters'}
           </div>
@@ -448,7 +453,7 @@ export default function BuyerPage() {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
           {filtered.map(w => {
             const isSelected = !!selected[w.id]
             const qty = selected[w.id] || 1
@@ -467,7 +472,7 @@ export default function BuyerPage() {
 
             return (
               <div key={w.id} style={{ background: 'var(--white)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 110px 36px', padding: '10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
                   <div style={{ paddingLeft: isSelected ? '13px' : '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '1px' }}>
                       <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
@@ -506,17 +511,11 @@ export default function BuyerPage() {
                   </div>
                   <div style={{ textAlign: 'right', paddingRight: '6px' }}>
                     <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
-                    {isBelowWs && <div style={{ fontSize: '8px', color: '#2a7a4b', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>−£{saving} vs WS</div>}
                     {isSelected && <div style={{ fontSize: '8px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
                   </div>
                   <div style={{ textAlign: 'right', paddingRight: '6px' }}>
-                    {isBelowWs ? (
-                      <div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#2a7a4b', fontWeight: 600 }}>Below WS</div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
-                      </div>
-                    ) : wsDp ? (
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
+                    {wsDp ? (
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
                     ) : (
                       <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--border)' }}>—</div>
                     )}
@@ -541,9 +540,11 @@ export default function BuyerPage() {
 
       {/* Order bar */}
       {selectedCount > 0 && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', zIndex: 200 }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
-          <button onClick={sendWishlist} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '8px 18px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Order</button>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', color: 'var(--white)', zIndex: 200 }}>
+          <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px' }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
+            <button onClick={sendWishlist} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '8px 18px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Order</button>
+          </div>
         </div>
       )}
     </div>
