@@ -342,7 +342,7 @@ export default function BuyerPage() {
 
       {/* Hero */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 28% 0%, rgba(107,30,46,0.28) 0%, transparent 68%)', color: 'var(--white)', padding: '30px 20px 32px' }}>
-        <div style={{ maxWidth: '760px' }}>
+        <div>
           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.85)', marginBottom: '12px' }}>
             Belle Année · Wines &amp; Studio
           </div>
@@ -367,7 +367,7 @@ export default function BuyerPage() {
 
       {/* Standing terms — cream card, shown to every buyer */}
       <div style={{ background: 'var(--cream)', padding: '22px 20px 0' }}>
-        <div style={{ maxWidth: '760px', background: 'var(--white)', border: '1px solid var(--border)', borderTop: '2px solid var(--wine)', padding: '20px 24px' }}>
+        <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderTop: '2px solid var(--wine)', padding: '20px 24px' }}>
           <button onClick={() => setShowTerms(v => !v)}
             style={{ background: 'none', border: 'none', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             {showTerms ? '▾' : '▸'} How this works
