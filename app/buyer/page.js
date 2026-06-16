@@ -126,7 +126,7 @@ export default function BuyerPage() {
 
   function sortArrow(field) {
     if (sortCol !== field) return <span style={{ opacity: 0.3 }}>↕</span>
-    return <span style={{ color: '#d4ad45' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+    return <span style={{ color: 'var(--wine)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
   useEffect(() => {
@@ -299,7 +299,7 @@ export default function BuyerPage() {
 
   const colHead = (label, field, align = 'left') => (
     <div onClick={() => cycleSort(field)}
-      style={{ textAlign: align, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start', color: sortCol === field ? '#d4ad45' : 'rgba(253,250,245,0.5)', transition: 'color 0.15s' }}>
+      style={{ textAlign: align, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start', color: sortCol === field ? 'var(--wine)' : 'var(--muted)', transition: 'color 0.15s' }}>
       {label} {sortArrow(field)}
     </div>
   )
@@ -340,95 +340,94 @@ export default function BuyerPage() {
         </div>
       </div>
 
-      {/* Header */}
-      <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '20px 20px 0' }}>
-
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '4px' }}>
+      {/* Hero */}
+      <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 28% 0%, rgba(107,30,46,0.28) 0%, transparent 68%)', color: 'var(--white)', padding: '30px 20px 32px' }}>
+        <div style={{ maxWidth: '760px' }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.85)', marginBottom: '12px' }}>
+            Belle Année · Wines &amp; Studio
+          </div>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '34px', fontWeight: 300, letterSpacing: '0.01em', color: 'var(--white)', lineHeight: 1.1, marginBottom: ((buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest') || buyerEditorial) ? '12px' : '0' }}>
             {buyerDisplayName}
           </div>
           {buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest' && (
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: buyerEditorial ? '6px' : '12px' }}>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.45)', marginBottom: buyerEditorial ? '14px' : '0' }}>
               For {buyerName}
             </div>
           )}
           {buyerEditorial && (
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', fontStyle: 'italic', color: 'rgba(253,250,245,0.55)', marginBottom: '12px', maxWidth: '480px', lineHeight: 1.5 }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontStyle: 'italic', fontWeight: 300, color: 'rgba(253,250,245,0.78)', maxWidth: '560px', lineHeight: 1.55 }}>
               {buyerEditorial}
             </div>
           )}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', padding: '6px 12px' }}>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 700, color: '#d4ad45', lineHeight: 1 }}>+</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Add wines to build your order</span>
-            </div>
-            {womenCount > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'rgba(155,58,74,0.12)', border: '1px solid rgba(155,58,74,0.25)', padding: '6px 12px' }}>
-                <span style={{ color: '#d4748a', fontSize: '12px' }}>♀</span>
-                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.6)' }}>Hover for women winemaker info</span>
-              </div>
-            )}
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(253,250,245,0.4)', marginTop: '18px' }}>
+            Tap + to add a wine to your order{womenCount > 0 ? " · hover ♀ for the winemaker's story" : ''}
           </div>
         </div>
+      </div>
 
-        {/* Standing terms — hardcoded, shown to every buyer */}
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '12px 0' }}>
+      {/* Standing terms — cream card, shown to every buyer */}
+      <div style={{ background: 'var(--cream)', padding: '22px 20px 0' }}>
+        <div style={{ maxWidth: '760px', background: 'var(--white)', border: '1px solid var(--border)', borderTop: '2px solid var(--wine)', padding: '20px 24px' }}>
           <button onClick={() => setShowTerms(v => !v)}
-            style={{ background: 'none', border: 'none', color: '#d4ad45', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            style={{ background: 'none', border: 'none', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             {showTerms ? '▾' : '▸'} How this works
           </button>
           {showTerms && (
-            <div style={{ marginTop: '12px', maxWidth: '620px', display: 'flex', flexDirection: 'column', gap: '11px' }}>
-              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '17px', fontStyle: 'italic', color: 'rgba(253,250,245,0.9)', lineHeight: 1.5, margin: 0 }}>
+            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontStyle: 'italic', fontWeight: 400, color: 'var(--ink)', lineHeight: 1.45, margin: 0 }}>
                 This is a curated selection of wines offered to you on consignment. Please enjoy the shopping!
               </p>
-              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'rgba(253,250,245,0.6)', lineHeight: 1.75, margin: 0 }}>
+              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15.5px', color: 'var(--ink)', lineHeight: 1.7, margin: 0 }}>
                 A few notes: I am flexible on how many bottles you take, with one exception: where a wine is offered as a set of 12, you will need to take at least 6, as I pull the full case of 12 from bonded storage. For everything else, take as few or as many as you like.
               </p>
-              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'rgba(253,250,245,0.6)', lineHeight: 1.75, margin: 0 }}>
+              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15.5px', color: 'var(--ink)', lineHeight: 1.7, margin: 0 }}>
                 I provide a full inventory and a physical and emailed copy of a delivery note with quantity and pricing each time I make a delivery. Each month, when your team runs its wine stock count, simply send me the current consignment inventory. I invoice every 60 days for what has sold. If any wines are faulted, simply let me know and I will remove them from your inventory at no cost to you.
               </p>
-              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#d4ad45', letterSpacing: '0.04em', lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.05em', color: 'var(--wine)', lineHeight: 1.6, margin: 0, paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
                 I am not VAT registered. Prices shown reflect VAT and duty paid.
               </p>
             </div>
           )}
         </div>
+      </div>
 
-        {/* Filters — with Sort by Region button */}
-        <div style={{ background: 'rgba(255,255,255,0.05)', borderTop: '1px solid rgba(255,255,255,0.07)', padding: '10px 0', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* Controls — filters + column headers, on cream */}
+      <div style={{ background: 'var(--cream)', padding: '18px 20px 0' }}>
+
+        {/* Filters */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines…"
-            style={{ flex: 1, minWidth: '160px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
+            style={{ flex: 1, minWidth: '160px', background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
           <select value={filterColour} onChange={e => setFilterColour(e.target.value)}
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
-            <option value="" style={{ background: '#1a1208' }}>All Colours</option>
-            <option value="Red" style={{ background: '#1a1208' }}>Red</option>
-            <option value="White" style={{ background: '#1a1208' }}>White</option>
-            <option value="Rosé" style={{ background: '#1a1208' }}>Rosé</option>
+            style={{ background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
+            <option value="">All Colours</option>
+            <option value="Red">Red</option>
+            <option value="White">White</option>
+            <option value="Rosé">Rosé</option>
           </select>
           <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)}
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '6px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
-            <option value="" style={{ background: '#1a1208' }}>All Regions</option>
-            {regions.map(r => <option key={r} value={r} style={{ background: '#1a1208' }}>{r}</option>)}
+            style={{ background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
+            <option value="">All Regions</option>
+            {regions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           {/* Sort by Region toggle */}
           <button onClick={toggleRegionSort}
-            style={{ background: sortingByRegion ? 'rgba(212,173,69,0.2)' : 'rgba(255,255,255,0.07)', color: sortingByRegion ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: `1px solid ${sortingByRegion ? 'rgba(212,173,69,0.5)' : 'rgba(255,255,255,0.12)'}`, padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ background: sortingByRegion ? 'var(--wine)' : 'var(--white)', color: sortingByRegion ? 'var(--white)' : 'var(--muted)', border: `1px solid ${sortingByRegion ? 'var(--wine)' : 'var(--border)'}`, padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             {sortingByRegion ? '✓ By Region' : 'Sort: Region'}
           </button>
           {womenCount > 0 && (
             <button onClick={() => setFilterWomen(v => !v)}
-              style={{ background: filterWomen ? '#9b3a4a' : 'rgba(155,58,74,0.15)', color: filterWomen ? 'var(--white)' : '#d4748a', border: '1px solid rgba(155,58,74,0.4)', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              style={{ background: filterWomen ? '#9b3a4a' : 'var(--white)', color: filterWomen ? 'var(--white)' : '#9b3a4a', border: '1px solid rgba(155,58,74,0.45)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               ♀ {filterWomen ? '✓' : ''}
             </button>
           )}
-          <div style={{ marginLeft: 'auto', fontSize: '10px', color: 'rgba(253,250,245,0.4)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>
+          <div style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>
             {filtered.length} wine{filtered.length !== 1 ? 's' : ''}
           </div>
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 80px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           {colHead('Wine', 'description')}
           {colHead('Size', 'format')}
           {colHead('Qty', 'quantity', 'center')}
