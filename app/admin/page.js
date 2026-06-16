@@ -3,6 +3,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
+function searchTokens(s) { return (s || '').toLowerCase().split(/[\s,]+/).filter(Boolean) }
+function matchesSearch(w, s) {
+  const tokens = searchTokens(s)
+  if (tokens.length === 0) return true
+  const hay = [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase()
+  return tokens.every(t => hay.includes(t))
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const [wines, setWines] = useState([])
@@ -114,10 +122,7 @@ export default function AdminPage() {
     if (filterBuyer === 'missing-retail') result = result.filter(w => !w.retail_price)
     if (filterBuyer === 'competitive') result = result.filter(w => isCompetitive(w))
     if (filterBuyer === 'women') result = result.filter(w => w.women_note)
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter(w => [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase().includes(q))
-    }
+    if (search) result = result.filter(w => matchesSearch(w, search))
     result.sort((a, b) => {
       let av = a[sortCol] ?? '', bv = b[sortCol] ?? ''
       const aEmpty = av === '' || av === null || av === undefined
@@ -147,10 +152,7 @@ export default function AdminPage() {
     if (filterBuyer === 'missing-retail') result = result.filter(w => !w.retail_price)
     if (filterBuyer === 'competitive') result = result.filter(w => isCompetitive(w))
     if (filterBuyer === 'women') result = result.filter(w => w.women_note)
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter(w => [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase().includes(q))
-    }
+    if (search) result = result.filter(w => matchesSearch(w, search))
     setFiltered(result)
   }, [wines])
 
@@ -795,7 +797,7 @@ export default function AdminPage() {
 
         {/* Filters + imports */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by description, region, vintage…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search — e.g. Burgundy 2014 (matches all terms)" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
           <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Sources</option>
             <option value="Berry Brothers">Berry Brothers</option>
