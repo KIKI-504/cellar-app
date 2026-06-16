@@ -221,10 +221,8 @@ export default function BuyerPage() {
         <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.colour || '—'}</td>
         <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:${isMag ? '12px' : '11px'};font-weight:${isMag ? '700' : '400'};color:${isMag ? '#1a1008' : '#7a6652'};">${size}</td>
         <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${qty}</td>
-        <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;">
-          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:#1a1008;">£${salePrice.toFixed(2)}</div>
-          ${isBelowWs ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:#2a7a4b;margin-top:1px;">−£${saving} vs WS</div>` : ''}
-        </td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:#1a1008;">£${salePrice.toFixed(2)}</td>
+        <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${wsDp ? '£' + wsDp.toFixed(2) : '—'}</td>
       </tr>`
     }).join('')
 
@@ -261,7 +259,8 @@ export default function BuyerPage() {
           <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Colour</th>
           <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Size</th>
           <th style="padding:7px 8px;text-align:center;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Avail</th>
-          <th style="padding:7px 0 7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Price / btl</th>
+          <th style="padding:7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Price / btl</th>
+          <th style="padding:7px 0 7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Market Price</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -331,14 +330,10 @@ export default function BuyerPage() {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {wines.length > 0 && (
               <button onClick={printPriceList}
-                style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>
-                🖨 Print
+                style={{ background: 'rgba(212,173,69,0.12)', border: '1px solid rgba(212,173,69,0.55)', color: '#d4ad45', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', padding: '7px 14px' }}>
+                🖨 Print Options
               </button>
             )}
-            <button onClick={() => { sessionStorage.clear(); router.push('/') }}
-              style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px' }}>
-              Sign Out
-            </button>
           </div>
         </div>
       </div>
@@ -346,14 +341,14 @@ export default function BuyerPage() {
       {/* Hero */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 28% 0%, rgba(107,30,46,0.28) 0%, transparent 68%)', color: 'var(--white)', padding: '30px 20px 32px' }}>
         <div style={{ maxWidth: CONTENT, margin: '0 auto' }}>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.85)', marginBottom: '12px' }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.68)', marginBottom: '14px' }}>
             Belle Année · Wines &amp; Studio
           </div>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '34px', fontWeight: 300, letterSpacing: '0.01em', color: 'var(--white)', lineHeight: 1.1, marginBottom: ((buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest') || buyerEditorial) ? '12px' : '0' }}>
             {buyerDisplayName}
           </div>
           {buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest' && (
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.62)', marginBottom: buyerEditorial ? '14px' : '0' }}>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.68)', marginBottom: buyerEditorial ? '14px' : '0' }}>
               For {buyerName}
             </div>
           )}
@@ -362,7 +357,7 @@ export default function BuyerPage() {
               {buyerEditorial}
             </div>
           )}
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', color: 'rgba(253,250,245,0.7)', marginTop: '18px' }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.06em', color: 'rgba(253,250,245,0.68)', marginTop: '18px' }}>
             Tap + to add a wine to your order{womenCount > 0 ? " · hover ♀ for the winemaker's story" : ''}
           </div>
         </div>
@@ -431,8 +426,9 @@ export default function BuyerPage() {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 110px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 60px 100px 110px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           {colHead('Wine', 'description')}
+          {colHead('Vintage', 'vintage')}
           {colHead('Size', 'format')}
           {colHead('Qty', 'quantity', 'center')}
           {colHead('Price / btl', 'sale_price', 'right')}
@@ -457,7 +453,9 @@ export default function BuyerPage() {
           {filtered.map(w => {
             const isSelected = !!selected[w.id]
             const qty = selected[w.id] || 1
-            const maxQty = parseInt(w.quantity) || 1
+            const stock = parseInt(w.quantity) || 0
+            const soldOut = stock <= 0
+            const maxQty = stock
             const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
             const size = formatBottleSize(w.bottle_volume, w.bottle_format)
             const isMag = size === '150cl' || size === '300cl'
@@ -472,7 +470,7 @@ export default function BuyerPage() {
 
             return (
               <div key={w.id} style={{ background: 'var(--white)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px 110px 36px', padding: '10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 60px 100px 110px 36px', padding: '10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent', opacity: soldOut ? 0.5 : 1 }}>
                   <div style={{ paddingLeft: isSelected ? '13px' : '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '1px' }}>
                       <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
@@ -487,7 +485,6 @@ export default function BuyerPage() {
                       )}
                     </div>
                     <div style={{ fontSize: '10px', color: 'var(--muted)', paddingLeft: '11px' }}>
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '12px', color: 'var(--wine)', marginRight: '5px' }}>{w.vintage}</span>
                       {w.region}{w.country ? ` · ${w.country}` : ''}
                     </div>
                     {hasNotes && (
@@ -497,9 +494,12 @@ export default function BuyerPage() {
                       </button>
                     )}
                   </div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--ink)' }}>{w.vintage || '—'}</div>
                   <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: isMag ? 600 : 400 }}>{size}</div>
                   <div style={{ textAlign: 'center' }}>
-                    {isSelected ? (
+                    {soldOut ? (
+                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sold out</span>
+                    ) : isSelected ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'center' }}>
                         <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1} style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '13px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 500, minWidth: '14px', textAlign: 'center' }}>{qty}</span>
@@ -521,10 +521,12 @@ export default function BuyerPage() {
                     )}
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <button onClick={() => toggleSelected(w.id)}
-                      style={{ width: '26px', height: '26px', border: isSelected ? '2px solid var(--wine)' : '1px solid var(--border)', background: isSelected ? 'var(--wine)' : 'transparent', color: isSelected ? 'var(--white)' : 'var(--muted)', borderRadius: '2px', cursor: 'pointer', fontSize: '16px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>
-                      {isSelected ? '✓' : '+'}
-                    </button>
+                    {!soldOut && (
+                      <button onClick={() => toggleSelected(w.id)}
+                        style={{ width: '26px', height: '26px', border: isSelected ? '2px solid var(--wine)' : '1px solid var(--border)', background: isSelected ? 'var(--wine)' : 'transparent', color: isSelected ? 'var(--white)' : 'var(--muted)', borderRadius: '2px', cursor: 'pointer', fontSize: '16px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>
+                        {isSelected ? '✓' : '+'}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {isExpanded && hasNotes && (
