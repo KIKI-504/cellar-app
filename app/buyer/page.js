@@ -397,7 +397,7 @@ export default function BuyerPage() {
 
       {/* Hero */}
       <section style={{ background: heroGrad, color: C.white }}>
-        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: '60px 40px 76px', minHeight: '300px', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: '40px 40px 46px', minHeight: '210px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
           {heroImg && (
             <img src={heroImg} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
               style={{ position: 'absolute', right: '0', bottom: '0', height: '118%', maxWidth: '52%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none' }} />
