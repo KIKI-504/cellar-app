@@ -481,7 +481,7 @@ export default function BuyerPage() {
               {headCell('Size', 'format')}
               {headCell('Qty', 'quantity', 'center')}
               {headCell('Price / btl', 'sale_price', 'right')}
-              {headCell('Market Price', 'ws', 'right')}
+              <div style={{ paddingRight: '22px' }}>{headCell('Market Price', 'ws', 'right')}</div>
               <div></div>
             </div>
 
@@ -511,7 +511,7 @@ export default function BuyerPage() {
                     <div style={{ paddingRight: '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '2px' }}>
                         <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
-                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
+                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
                         {w.women_note && (
                           <button onMouseEnter={e => showTooltip(e, w.women_note, 'women')} onMouseLeave={() => setTooltip(null)}
                             style={{ background: 'none', border: 'none', color: '#9b3a4a', fontSize: '12px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0 }}>♀</button>
@@ -521,14 +521,14 @@ export default function BuyerPage() {
                             style={{ background: 'none', border: 'none', fontSize: '11px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0, opacity: 0.75 }}>🍷</button>
                         )}
                       </div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.muted, paddingLeft: '14px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.muted, fontWeight: isMag ? 700 : 400, paddingLeft: '14px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
                       {hasNotes && (
                         <button onClick={() => toggleExpanded(w.id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: C.muted, letterSpacing: '0.04em', padding: '3px 0 0 14px' }}>{isExpanded ? '▲ hide' : '▼ notes'}</button>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: C.muted, fontWeight: isMag ? 700 : 400, letterSpacing: '0.04em', padding: '3px 0 0 14px' }}>{isExpanded ? '▲ hide' : '▼ notes'}</button>
                       )}
                     </div>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>{w.vintage || '—'}</div>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text, fontWeight: isMag ? 600 : 400 }}>{size}</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text, fontWeight: isMag ? 700 : 400 }}>{w.vintage || '—'}</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text, fontWeight: isMag ? 700 : 400 }}>{size}</div>
                     <div style={{ textAlign: 'center' }}>
                       {soldOut ? (
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sold out</span>
@@ -539,18 +539,18 @@ export default function BuyerPage() {
                           <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty} style={{ width: '22px', height: '22px', borderRadius: '5px', border: '1px solid ' + C.line, background: C.cream, cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '14px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
                         </div>
                       ) : (
-                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>{maxQty}</span>
+                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text, fontWeight: isMag ? 700 : 400 }}>{maxQty}</span>
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 500, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
                       {isSelected && <div style={{ fontSize: '9px', color: C.wine, fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'right', paddingRight: '22px' }}>
                       {wsDp ? (
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', color: C.muted }}>£{wsDp.toFixed(2)}</div>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', fontWeight: isMag ? 700 : 400, color: C.muted }}>£{wsDp.toFixed(2)}</div>
                       ) : (
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', color: C.line }}>—</div>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', fontWeight: isMag ? 700 : 400, color: C.line }}>—</div>
                       )}
                     </div>
                     <div style={{ textAlign: 'center' }}>
