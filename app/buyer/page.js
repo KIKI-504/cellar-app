@@ -310,13 +310,67 @@ export default function BuyerPage() {
     </div>
   )
 
+  // ── Design tokens ────────────────────────────────────────────────
+  const C = {
+    inkDeep: '#1b070d',
+    ink: '#34101c',
+    wine: '#6e1f2e',
+    gold: '#c6a15b',
+    cream: '#f4efe6',
+    card: '#fbf8f1',
+    line: '#e7decd',
+    text: '#352a20',
+    muted: '#9a8c76',
+    white: '#fffdf9',
+  }
+  const GRID = '1fr 90px 90px 70px 130px 130px 56px'
+  const heroGrad = 'linear-gradient(100deg, #3a0e1a 0%, #2a0a12 46%, #15060b 100%)'
+
+  // ── Per-client hero image + title / date split ───────────────────
+  const heroSlug = (buyerName && buyerName !== 'Admin' && buyerName !== 'Guest')
+    ? buyerName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    : ''
+  const heroImg = heroSlug ? '/clients/' + heroSlug + '.png' : ''
+  const dashIdx = buyerDisplayName.lastIndexOf(' - ')
+  const titleMain = dashIdx > -1 ? buyerDisplayName.slice(0, dashIdx) : buyerDisplayName
+  const titleDate = dashIdx > -1 ? buyerDisplayName.slice(dashIdx + 3).toUpperCase() : ''
+  const editorialText = buyerEditorial || 'A curated selection of wines offered to you on consignment. Enjoy the shopping!'
+
+  // ── Inline icons ─────────────────────────────────────────────────
+  const ic = { width: 22, height: 22, fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  const IconBox = (<svg viewBox="0 0 24 24" {...ic}><path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v8l9 5 9-5V8" /><path d="M12 13v8" /></svg>)
+  const IconCheck = (<svg viewBox="0 0 24 24" {...ic}><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 3h6v3H9z" /><path d="M9 13l2 2 4-4" /></svg>)
+  const IconCal = (<svg viewBox="0 0 24 24" {...ic}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 9h18M8 3v4M16 3v4" /></svg>)
+  const IconGlass = (<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke={C.gold} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3h10l-1 7a4 4 0 0 1-8 0L7 3z" /><path d="M12 17v3M9 21h6" /></svg>)
+  const IconSearch = (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>)
+  const IconPrinter = (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V3h12v6" /><rect x="4" y="9" width="16" height="8" rx="1" /><path d="M7 17h10v4H7z" /></svg>)
+
+  const pillar = (icon, title, body) => (
+    <div style={{ display: 'flex', gap: '14px' }}>
+      <div style={{ color: C.wine, flexShrink: 0, marginTop: '2px' }}>{icon}</div>
+      <div>
+        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 500, color: C.text, marginBottom: '4px' }}>{title}</div>
+        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15.5px', color: '#5c4f3f', lineHeight: 1.5 }}>{body}</div>
+      </div>
+    </div>
+  )
+
+  const headCell = (label, field, align = 'left') => (
+    <div onClick={() => cycleSort(field)}
+      style={{ display: 'flex', alignItems: 'center', gap: '5px', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start', cursor: 'pointer', userSelect: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: sortCol === field ? C.gold : 'rgba(255,253,249,0.72)' }}>
+      {label}<span style={{ fontSize: '9px', opacity: sortCol === field ? 1 : 0.45 }}>{sortCol === field ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+    </div>
+  )
+
+  const pillBtn = (active) => ({ background: active ? C.wine : C.white, color: active ? C.white : C.text, border: '1px solid ' + (active ? C.wine : C.line), borderRadius: '999px', padding: '11px 18px', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', cursor: 'pointer', whiteSpace: 'nowrap', outline: 'none' })
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--cream)', paddingBottom: selectedCount > 0 ? '80px' : '40px' }}>
+    <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: selectedCount > 0 ? '88px' : '48px' }}>
 
       {/* Tooltip */}
       {tooltip && (
-        <div style={{ position: 'fixed', top: tooltip.y, left: tooltip.x, zIndex: 1000, background: 'var(--ink)', color: 'var(--white)', padding: '10px 14px', maxWidth: '280px', fontSize: '11px', lineHeight: 1.6, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', pointerEvents: 'none' }}>
-          <div style={{ fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: tooltip.type === 'women' ? '#d4748a' : '#d4ad45', marginBottom: '5px' }}>
+        <div style={{ position: 'fixed', top: tooltip.y, left: tooltip.x, zIndex: 1000, background: C.inkDeep, color: C.white, padding: '10px 14px', maxWidth: '280px', fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.5, boxShadow: '0 8px 28px rgba(0,0,0,0.35)', borderRadius: '8px', pointerEvents: 'none' }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: tooltip.type === 'women' ? '#e0a4b2' : C.gold, marginBottom: '5px' }}>
             {tooltip.type === 'women' ? '♀ Women in wine' : 'Producer note'}
           </div>
           {tooltip.text}
@@ -324,228 +378,203 @@ export default function BuyerPage() {
       )}
 
       {/* Nav */}
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '48px' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45' }}>Cellar</div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {wines.length > 0 && (
-              <button onClick={printPriceList}
-                style={{ background: 'rgba(212,173,69,0.12)', border: '1px solid rgba(212,173,69,0.55)', color: '#d4ad45', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', padding: '7px 14px' }}>
-                🖨 Print Options
-              </button>
-            )}
+      <header style={{ background: C.inkDeep, color: C.white, position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', padding: '14px 40px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 400, color: C.white, lineHeight: 1 }}>Belle Année</div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.26em', textTransform: 'uppercase', color: C.gold, marginTop: '3px' }}>Wines &amp; Studio</div>
           </div>
+          <nav style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
+            {['Wines', 'Buyers', 'About', 'Services', 'Contact'].map(item => (
+              <span key={item} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '17px', color: item === 'Buyers' ? C.white : 'rgba(255,253,249,0.62)', borderBottom: item === 'Buyers' ? '2px solid ' + C.gold : '2px solid transparent', paddingBottom: '3px', cursor: 'default' }}>{item}</span>
+            ))}
+          </nav>
+          {wines.length > 0 ? (
+            <button onClick={printPriceList}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,253,249,0.08)', border: '1px solid rgba(255,253,249,0.45)', color: C.white, fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', padding: '9px 18px', borderRadius: '9px', cursor: 'pointer' }}>
+              {IconPrinter} Print
+            </button>
+          ) : <div style={{ width: '90px' }} />}
         </div>
-      </div>
+      </header>
 
       {/* Hero */}
-      <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 28% 0%, rgba(107,30,46,0.28) 0%, transparent 68%)', color: 'var(--white)', padding: '30px 20px 32px' }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto' }}>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.68)', marginBottom: '14px' }}>
-            Belle Année · Wines &amp; Studio
-          </div>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '34px', fontWeight: 300, letterSpacing: '0.01em', color: 'var(--white)', lineHeight: 1.1, marginBottom: ((buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest') || buyerEditorial) ? '12px' : '0' }}>
-            {buyerDisplayName}
-          </div>
-          {buyerName && buyerName !== buyerDisplayName && buyerName !== 'Admin' && buyerName !== 'Guest' && (
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.68)', marginBottom: buyerEditorial ? '14px' : '0' }}>
-              For {buyerName}
-            </div>
+      <section style={{ background: heroGrad, color: C.white }}>
+        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: '60px 40px 76px', minHeight: '300px', overflow: 'hidden' }}>
+          {heroImg && (
+            <img src={heroImg} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
+              style={{ position: 'absolute', right: '0', bottom: '0', height: '118%', maxWidth: '52%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none' }} />
           )}
-          {buyerEditorial && (
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontStyle: 'italic', fontWeight: 300, color: 'rgba(253,250,245,0.78)', maxWidth: '560px', lineHeight: 1.55 }}>
-              {buyerEditorial}
-            </div>
-          )}
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.06em', color: 'rgba(253,250,245,0.68)', marginTop: '18px' }}>
-            Tap + to add a wine to your order{womenCount > 0 ? " · hover ♀ for the winemaker's story" : ''}
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(21,6,11,0.92) 0%, rgba(21,6,11,0.72) 38%, rgba(21,6,11,0) 64%)' }} />
+          <div style={{ position: 'relative', maxWidth: '640px' }}>
+            <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '52px', fontWeight: 400, lineHeight: 1.05, color: C.white, margin: 0 }}>{titleMain}</h1>
+            {titleDate && (
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.22em', color: C.gold, marginTop: '14px' }}>{titleDate}</div>
+            )}
+            <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '21px', fontWeight: 400, color: 'rgba(255,253,249,0.84)', lineHeight: 1.45, margin: '20px 0 0', maxWidth: '520px' }}>{editorialText}</p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Standing terms — cream card, shown to every buyer */}
-      <div style={{ background: 'var(--cream)', padding: '22px 20px 0' }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', background: 'var(--white)', border: '1px solid var(--border)', borderTop: '2px solid var(--wine)', padding: '20px 24px' }}>
-          <button onClick={() => setShowTerms(v => !v)}
-            style={{ background: 'none', border: 'none', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {showTerms ? '▾' : '▸'} How this works
-          </button>
-          {showTerms && (
-            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontStyle: 'italic', fontWeight: 400, color: 'var(--ink)', lineHeight: 1.45, margin: 0 }}>
-                This is a curated selection of wines offered to you on consignment. Please enjoy the shopping!
-              </p>
-              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15.5px', color: 'var(--ink)', lineHeight: 1.7, margin: 0 }}>
-                A few notes: I am flexible on how many bottles you take, with one exception: where a wine is offered as a set of 12, you will need to take at least 6, as I pull the full case of 12 from bonded storage. For everything else, take as few or as many as you like.
-              </p>
-              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15.5px', color: 'var(--ink)', lineHeight: 1.7, margin: 0 }}>
-                I provide a full inventory and a physical and emailed copy of a delivery note with quantity and pricing each time I make a delivery. Each month, when your team runs its wine stock count, simply send me the current consignment inventory. I invoice every 60 days for what has sold. If any wines are faulted, simply let me know and I will remove them from your inventory at no cost to you.
-              </p>
-              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.05em', color: 'var(--wine)', lineHeight: 1.6, margin: 0, paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-                I am not VAT registered. Prices shown reflect VAT and duty paid.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Controls — filters + column headers, on cream */}
-      <div style={{ background: 'var(--cream)', padding: '18px 20px 0' }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto' }}>
-
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines…"
-            style={{ flex: 1, minWidth: '160px', background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }} />
-          <select value={filterColour} onChange={e => setFilterColour(e.target.value)}
-            style={{ background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
-            <option value="">All Colours</option>
-            <option value="Red">Red</option>
-            <option value="White">White</option>
-            <option value="Rosé">Rosé</option>
-          </select>
-          <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)}
-            style={{ background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none' }}>
-            <option value="">All Regions</option>
-            {regions.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          {/* Sort by Region toggle */}
-          <button onClick={toggleRegionSort}
-            style={{ background: sortingByRegion ? 'var(--wine)' : 'var(--white)', color: sortingByRegion ? 'var(--white)' : 'var(--muted)', border: `1px solid ${sortingByRegion ? 'var(--wine)' : 'var(--border)'}`, padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            {sortingByRegion ? '✓ By Region' : 'Sort: Region'}
-          </button>
-          {womenCount > 0 && (
-            <button onClick={() => setFilterWomen(v => !v)}
-              style={{ background: filterWomen ? '#9b3a4a' : 'var(--white)', color: filterWomen ? 'var(--white)' : '#9b3a4a', border: '1px solid rgba(155,58,74,0.45)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              ♀ {filterWomen ? '✓' : ''}
-            </button>
-          )}
-          <div style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>
-            {filtered.length} wine{filtered.length !== 1 ? 's' : ''}
-          </div>
-        </div>
-
-        {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 60px 100px 110px 36px', padding: '8px 0', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-          {colHead('Wine', 'description')}
-          {colHead('Vintage', 'vintage')}
-          {colHead('Size', 'format')}
-          {colHead('Qty', 'quantity', 'center')}
-          {colHead('Price / btl', 'sale_price', 'right')}
-          {colHead('Market Price', 'ws', 'right')}
-          <div></div>
-        </div>
-        </div>
-      </div>
-
-      {/* Wine list */}
-      {filtered.length === 0 ? (
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', textAlign: 'center', padding: '48px 20px', color: 'var(--muted)' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', marginBottom: '6px' }}>
-            {wines.length === 0 ? 'No wines assigned yet' : 'No wines match your filters'}
-          </div>
-          <div style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace' }}>
-            {wines.length === 0 ? 'Check back soon' : 'Try adjusting your search or filters'}
-          </div>
-        </div>
-      ) : (
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
-          {filtered.map(w => {
-            const isSelected = !!selected[w.id]
-            const qty = selected[w.id] || 1
-            const stock = parseInt(w.quantity) || 0
-            const soldOut = stock <= 0
-            const maxQty = stock
-            const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#d4c88a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
-            const size = formatBottleSize(w.bottle_volume, w.bottle_format)
-            const isMag = size === '150cl' || size === '300cl'
-            const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
-            const duty = isMag ? 6 : 3
-            const wsDp = ws ? (ws + duty) * 1.2 : null
-            const salePrice = parseFloat(w.sale_price)
-            const isBelowWs = wsDp && salePrice < wsDp
-            const saving = isBelowWs ? (wsDp - salePrice).toFixed(2) : null
-            const isExpanded = expanded[w.id]
-            const hasNotes = !!w.buyer_note
-
-            return (
-              <div key={w.id} style={{ background: 'var(--white)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 60px 100px 110px 36px', padding: '10px 0', alignItems: 'center', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent', opacity: soldOut ? 0.5 : 1 }}>
-                  <div style={{ paddingLeft: isSelected ? '13px' : '14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '1px' }}>
-                      <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: dotColor, flexShrink: 0 }}></span>
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 400, color: 'var(--ink)', lineHeight: 1.25 }}>{w.description}</span>
-                      {w.women_note && (
-                        <button onMouseEnter={e => showTooltip(e, w.women_note, 'women')} onMouseLeave={() => setTooltip(null)}
-                          style={{ background: 'none', border: 'none', color: '#9b3a4a', fontSize: '11px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0 }}>♀</button>
-                      )}
-                      {w.producer_note && (
-                        <button onMouseEnter={e => showTooltip(e, w.producer_note, 'producer')} onMouseLeave={() => setTooltip(null)}
-                          style={{ background: 'none', border: 'none', fontSize: '10px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0, opacity: 0.7 }}>🍷</button>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'var(--muted)', paddingLeft: '11px' }}>
-                      {w.region}{w.country ? ` · ${w.country}` : ''}
-                    </div>
-                    {hasNotes && (
-                      <button onClick={() => toggleExpanded(w.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '8px', color: 'var(--muted)', letterSpacing: '0.08em', padding: '3px 0 0 11px', textTransform: 'uppercase' }}>
-                        {isExpanded ? '▲ hide' : '▼ notes'}
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--ink)' }}>{w.vintage || '—'}</div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: isMag ? 600 : 400 }}>{size}</div>
-                  <div style={{ textAlign: 'center' }}>
-                    {soldOut ? (
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sold out</span>
-                    ) : isSelected ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'center' }}>
-                        <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1} style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '13px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 500, minWidth: '14px', textAlign: 'center' }}>{qty}</span>
-                        <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty} style={{ width: '20px', height: '20px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '13px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
-                      </div>
-                    ) : (
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)' }}>{maxQty}</span>
-                    )}
-                  </div>
-                  <div style={{ textAlign: 'right', paddingRight: '6px' }}>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
-                    {isSelected && <div style={{ fontSize: '8px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
-                  </div>
-                  <div style={{ textAlign: 'right', paddingRight: '6px' }}>
-                    {wsDp ? (
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>£{wsDp.toFixed(2)}</div>
-                    ) : (
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--border)' }}>—</div>
-                    )}
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    {!soldOut && (
-                      <button onClick={() => toggleSelected(w.id)}
-                        style={{ width: '26px', height: '26px', border: isSelected ? '2px solid var(--wine)' : '1px solid var(--border)', background: isSelected ? 'var(--wine)' : 'transparent', color: isSelected ? 'var(--white)' : 'var(--muted)', borderRadius: '2px', cursor: 'pointer', fontSize: '16px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>
-                        {isSelected ? '✓' : '+'}
-                      </button>
-                    )}
-                  </div>
+      {/* How this works — floating card */}
+      <div style={{ background: C.cream }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: '0 40px' }}>
+          <div style={{ marginTop: '-44px', background: C.card, borderRadius: '18px', boxShadow: '0 20px 50px rgba(40,12,20,0.16)', padding: '32px 38px', position: 'relative', zIndex: 5 }}>
+            <div style={{ display: 'flex', gap: '28px', alignItems: 'flex-start' }}>
+              <div style={{ flexShrink: 0, width: '74px', height: '74px', borderRadius: '50%', background: C.wine, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{IconGlass}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: C.wine, fontWeight: 500, marginBottom: '20px' }}>How this works</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '34px' }}>
+                  {pillar(IconBox, 'Flexible quantities', 'You choose how many bottles to take. If a wine is offered as a set of 12, please take at least 6, or the full case.')}
+                  {pillar(IconCheck, 'Full transparency', 'You receive a full inventory and a delivery note with quantity and pricing on every delivery. Any faulted wine is removed at no cost to you.')}
+                  {pillar(IconCal, 'Up to date', 'Each month when your team runs stock, send the current inventory. I invoice every 60 days for what has sold.')}
                 </div>
-                {isExpanded && hasNotes && (
-                  <div style={{ padding: '0 14px 12px 25px', borderLeft: isSelected ? '3px solid var(--wine)' : '3px solid transparent', background: 'var(--cream)' }}>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.6 }}>{w.buyer_note}</div>
-                  </div>
-                )}
               </div>
-            )
-          })}
+            </div>
+            <div style={{ borderTop: '1px solid ' + C.line, marginTop: '24px', paddingTop: '16px' }}>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.04em', color: C.wine }}>I am not VAT registered. Prices shown reflect VAT and duty paid.</div>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Filters */}
+      <div style={{ background: C.cream }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: '28px 40px 0' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' }}>{IconSearch}</span>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, regions, vintages…"
+                style={{ width: '100%', background: C.white, border: '1px solid ' + C.line, borderRadius: '999px', padding: '12px 18px 12px 46px', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text, outline: 'none' }} />
+            </div>
+            <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={pillBtn(false)}>
+              <option value="">All Colours</option>
+              <option value="Red">Red</option>
+              <option value="White">White</option>
+              <option value="Rosé">Rosé</option>
+            </select>
+            <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={pillBtn(false)}>
+              <option value="">All Regions</option>
+              {regions.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <button onClick={toggleRegionSort} style={pillBtn(sortingByRegion)}>{sortingByRegion ? '✓ By Region' : 'Sort: Region'}</button>
+            {womenCount > 0 && (
+              <button onClick={() => setFilterWomen(v => !v)} style={{ ...pillBtn(filterWomen), color: filterWomen ? C.white : '#9b3a4a', background: filterWomen ? '#9b3a4a' : C.white, border: '1px solid rgba(155,58,74,0.5)' }}>♀ {filterWomen ? '✓' : ''}</button>
+            )}
+            <div style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, whiteSpace: 'nowrap' }}>{filtered.length} wine{filtered.length !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div style={{ background: C.cream }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: '20px 40px 0' }}>
+          <div style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid ' + C.line, boxShadow: '0 12px 34px rgba(40,12,20,0.07)' }}>
+
+            {/* Header band */}
+            <div style={{ background: C.ink, display: 'grid', gridTemplateColumns: GRID, padding: '14px 24px', alignItems: 'center' }}>
+              <div></div>
+              {headCell('Vintage', 'vintage')}
+              {headCell('Size', 'format')}
+              {headCell('Qty', 'quantity', 'center')}
+              {headCell('Price / btl', 'sale_price', 'right')}
+              {headCell('Market Price', 'ws', 'right')}
+              <div></div>
+            </div>
+
+            {filtered.length === 0 ? (
+              <div style={{ background: C.white, textAlign: 'center', padding: '54px 20px' }}>
+                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', color: C.text, marginBottom: '6px' }}>{wines.length === 0 ? 'No wines assigned yet' : 'No wines match your filters'}</div>
+                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.muted }}>{wines.length === 0 ? 'Please check back soon.' : 'Try clearing a filter.'}</div>
+              </div>
+            ) : filtered.map((w, i) => {
+              const isSelected = !!selected[w.id]
+              const qty = selected[w.id] || 1
+              const stock = parseInt(w.quantity) || 0
+              const soldOut = stock <= 0
+              const maxQty = stock
+              const dotColor = w.colour?.toLowerCase().includes('red') ? '#8b2535' : w.colour?.toLowerCase().includes('white') ? '#c9b76a' : w.colour?.toLowerCase().includes('ros') ? '#d4748a' : '#aaa'
+              const size = formatBottleSize(w.bottle_volume, w.bottle_format)
+              const isMag = size === '150cl' || size === '300cl'
+              const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
+              const duty = isMag ? 6 : 3
+              const wsDp = ws ? (ws + duty) * 1.2 : null
+              const salePrice = parseFloat(w.sale_price)
+              const isExpanded = expanded[w.id]
+              const hasNotes = !!w.buyer_note
+              return (
+                <div key={w.id} style={{ background: C.white }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: GRID, padding: '16px 24px', alignItems: 'center', borderBottom: i === filtered.length - 1 ? 'none' : '1px solid ' + C.line, borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent', opacity: soldOut ? 0.5 : 1 }}>
+                    <div style={{ paddingRight: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '2px' }}>
+                        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
+                        {w.women_note && (
+                          <button onMouseEnter={e => showTooltip(e, w.women_note, 'women')} onMouseLeave={() => setTooltip(null)}
+                            style={{ background: 'none', border: 'none', color: '#9b3a4a', fontSize: '12px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0 }}>♀</button>
+                        )}
+                        {w.producer_note && (
+                          <button onMouseEnter={e => showTooltip(e, w.producer_note, 'producer')} onMouseLeave={() => setTooltip(null)}
+                            style={{ background: 'none', border: 'none', fontSize: '11px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0, opacity: 0.75 }}>🍷</button>
+                        )}
+                      </div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14.5px', color: C.muted, paddingLeft: '14px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
+                      {hasNotes && (
+                        <button onClick={() => toggleExpanded(w.id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '9px', color: C.muted, letterSpacing: '0.08em', padding: '4px 0 0 14px', textTransform: 'uppercase' }}>{isExpanded ? '▲ hide' : '▼ notes'}</button>
+                      )}
+                    </div>
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.text }}>{w.vintage || '—'}</div>
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.text, fontWeight: isMag ? 600 : 400 }}>{size}</div>
+                    <div style={{ textAlign: 'center' }}>
+                      {soldOut ? (
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sold out</span>
+                      ) : isSelected ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                          <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1} style={{ width: '22px', height: '22px', borderRadius: '5px', border: '1px solid ' + C.line, background: C.cream, cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '14px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
+                          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 500, minWidth: '16px', textAlign: 'center' }}>{qty}</span>
+                          <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty} style={{ width: '22px', height: '22px', borderRadius: '5px', border: '1px solid ' + C.line, background: C.cream, cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '14px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
+                        </div>
+                      ) : (
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.muted }}>{maxQty}</span>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 500, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
+                      {isSelected && <div style={{ fontSize: '9px', color: C.wine, fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      {wsDp ? (
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.muted }}>£{wsDp.toFixed(2)}</div>
+                      ) : (
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.line }}>—</div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      {!soldOut && (
+                        <button onClick={() => toggleSelected(w.id)}
+                          style={{ width: '34px', height: '34px', borderRadius: '8px', border: isSelected ? '2px solid ' + C.wine : '1px solid ' + C.line, background: isSelected ? C.wine : C.white, color: isSelected ? C.white : C.wine, cursor: 'pointer', fontSize: '18px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', transition: 'all 0.15s' }}>{isSelected ? '✓' : '+'}</button>
+                      )}
+                    </div>
+                  </div>
+                  {isExpanded && hasNotes && (
+                    <div style={{ background: C.cream, padding: '0 24px 14px 28px', borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent' }}>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: C.text, lineHeight: 1.6 }}>{w.buyer_note}</div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* Order bar */}
       {selectedCount > 0 && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', color: 'var(--white)', zIndex: 200 }}>
-          <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px' }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
-            <button onClick={sendWishlist} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '8px 18px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Send Order</button>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.inkDeep, color: C.white, zIndex: 200, boxShadow: '0 -8px 30px rgba(0,0,0,0.25)' }}>
+          <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 40px' }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
+            <button onClick={sendWishlist} style={{ background: C.gold, color: C.inkDeep, border: 'none', padding: '11px 26px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', borderRadius: '8px', fontWeight: 500 }}>Send Order</button>
           </div>
         </div>
       )}
