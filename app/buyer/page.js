@@ -334,7 +334,8 @@ export default function BuyerPage() {
   const dashIdx = buyerDisplayName.lastIndexOf(' - ')
   const titleMain = dashIdx > -1 ? buyerDisplayName.slice(0, dashIdx) : buyerDisplayName
   const titleDate = dashIdx > -1 ? buyerDisplayName.slice(dashIdx + 3).toUpperCase() : ''
-  const editorialText = buyerEditorial || 'A curated selection of wines offered to you on consignment. Enjoy the shopping!'
+  const titleRest = (heroSlug && titleMain.startsWith(buyerName)) ? titleMain.slice(buyerName.length).trim() : ''
+  const editorialText = buyerEditorial || ''
 
   // ── Inline icons ─────────────────────────────────────────────────
   const ic = { width: 22, height: 22, fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }
@@ -407,11 +408,13 @@ export default function BuyerPage() {
           )}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(21,6,11,0.92) 0%, rgba(21,6,11,0.72) 38%, rgba(21,6,11,0) 64%)' }} />
           <div style={{ position: 'relative', maxWidth: '640px' }}>
-            <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '52px', fontWeight: 400, lineHeight: 1.05, color: C.white, margin: 0 }}>{titleMain}</h1>
+            <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '52px', fontWeight: 400, lineHeight: 1.08, color: C.white, margin: 0 }}>{titleRest ? (<>{buyerName}<br />{titleRest}</>) : titleMain}</h1>
             {titleDate && (
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.22em', color: C.gold, marginTop: '14px' }}>{titleDate}</div>
             )}
-            <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '21px', fontWeight: 400, color: 'rgba(255,253,249,0.84)', lineHeight: 1.45, margin: '20px 0 0', maxWidth: '520px' }}>{editorialText}</p>
+            {editorialText && (
+              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '21px', fontWeight: 400, color: 'rgba(255,253,249,0.84)', lineHeight: 1.45, margin: '20px 0 0', maxWidth: '520px' }}>{editorialText}</p>
+            )}
           </div>
         </div>
       </section>
@@ -425,14 +428,14 @@ export default function BuyerPage() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: C.wine, fontWeight: 500, marginBottom: '20px' }}>How this works</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '34px' }}>
-                  {pillar(IconBox, 'Flexible quantities', 'You choose how many bottles to take. If a wine is offered as a set of 12, please take at least 6, or the full case.')}
+                  {pillar(IconBox, 'Flexible quantities', 'You choose how many bottles to take. Except that if a wine is offered as a set of 12, please take at least 6. Otherwise take as many or as few as you would like.')}
                   {pillar(IconCheck, 'Full transparency', 'You receive a full inventory and a delivery note with quantity and pricing on every delivery. Any faulted wine is removed at no cost to you.')}
                   {pillar(IconCal, 'Up to date', 'Each month when your team runs stock, send the current inventory. I invoice every 60 days for what has sold.')}
                 </div>
               </div>
             </div>
             <div style={{ borderTop: '1px solid ' + C.line, marginTop: '24px', paddingTop: '16px' }}>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.04em', color: C.wine }}>I am not VAT registered. Prices shown reflect VAT and duty paid.</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.04em', color: C.wine }}>Please note: Belle Année and Studio Jessica Bride are not VAT registered. Prices shown reflect VAT and duty paid.</div>
             </div>
           </div>
         </div>
@@ -508,7 +511,7 @@ export default function BuyerPage() {
                     <div style={{ paddingRight: '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '2px' }}>
                         <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
-                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
+                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
                         {w.women_note && (
                           <button onMouseEnter={e => showTooltip(e, w.women_note, 'women')} onMouseLeave={() => setTooltip(null)}
                             style={{ background: 'none', border: 'none', color: '#9b3a4a', fontSize: '12px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0 }}>♀</button>
@@ -518,14 +521,14 @@ export default function BuyerPage() {
                             style={{ background: 'none', border: 'none', fontSize: '11px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0, opacity: 0.75 }}>🍷</button>
                         )}
                       </div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14.5px', color: C.muted, paddingLeft: '14px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.muted, paddingLeft: '14px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
                       {hasNotes && (
                         <button onClick={() => toggleExpanded(w.id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '9px', color: C.muted, letterSpacing: '0.08em', padding: '4px 0 0 14px', textTransform: 'uppercase' }}>{isExpanded ? '▲ hide' : '▼ notes'}</button>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: C.muted, letterSpacing: '0.04em', padding: '3px 0 0 14px' }}>{isExpanded ? '▲ hide' : '▼ notes'}</button>
                       )}
                     </div>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.text }}>{w.vintage || '—'}</div>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.text, fontWeight: isMag ? 600 : 400 }}>{size}</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>{w.vintage || '—'}</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text, fontWeight: isMag ? 600 : 400 }}>{size}</div>
                     <div style={{ textAlign: 'center' }}>
                       {soldOut ? (
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sold out</span>
@@ -536,18 +539,18 @@ export default function BuyerPage() {
                           <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty} style={{ width: '22px', height: '22px', borderRadius: '5px', border: '1px solid ' + C.line, background: C.cream, cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '14px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
                         </div>
                       ) : (
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.muted }}>{maxQty}</span>
+                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>{maxQty}</span>
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 500, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 500, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
                       {isSelected && <div style={{ fontSize: '9px', color: C.wine, fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       {wsDp ? (
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.muted }}>£{wsDp.toFixed(2)}</div>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', color: C.muted }}>£{wsDp.toFixed(2)}</div>
                       ) : (
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.line }}>—</div>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', color: C.line }}>—</div>
                       )}
                     </div>
                     <div style={{ textAlign: 'center' }}>
