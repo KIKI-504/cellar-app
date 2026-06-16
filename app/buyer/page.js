@@ -42,6 +42,7 @@ export default function BuyerPage() {
   const [buyerEditorial, setBuyerEditorial] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [buyerAccessId, setBuyerAccessId] = useState(null)
+  const [showTerms, setShowTerms] = useState(true)
 
   useEffect(() => {
     const role = sessionStorage.getItem('role')
@@ -187,7 +188,7 @@ export default function BuyerPage() {
       const size = formatBottleSize(w.bottle_volume, w.bottle_format)
       return [`${w.vintage}  ${w.description}`, `      ${w.region}${w.country ? ' · ' + w.country : ''} · ${w.colour} · ${size}`, `      £${parseFloat(w.sale_price).toFixed(2)} per bottle · Qty: ${qty} · Subtotal: £${total}`].join('\n')
     })
-    const body = [`WISHLIST — ${buyerDisplayName.toUpperCase()}`, date, '', 'WINES SELECTED', divider, '', wineLines.join('\n\n'), '', divider, `TOTAL: ${list.length} wine${list.length !== 1 ? 's' : ''} · ${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} · £${totalValue.toFixed(2)}`, '', 'All prices per bottle, in bond (ex-duty and VAT).', 'Please reply to confirm availability.'].join('\n')
+    const body = [`WISHLIST — ${buyerDisplayName.toUpperCase()}`, date, '', 'WINES SELECTED', divider, '', wineLines.join('\n\n'), '', divider, `TOTAL: ${list.length} wine${list.length !== 1 ? 's' : ''} · ${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} · £${totalValue.toFixed(2)}`, '', 'All prices per bottle, duty and VAT paid.', 'Please reply to confirm availability.'].join('\n')
     const subject = encodeURIComponent(`Wishlist — ${buyerDisplayName} — ${new Date().toLocaleDateString('en-GB')}`)
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(body)}`
   }
@@ -268,7 +269,7 @@ export default function BuyerPage() {
 
     <div style="margin-top:28px;padding-top:16px;border-top:1px solid #ede6d6;display:flex;justify-content:space-between;align-items:baseline;">
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;letter-spacing:0.06em;">
-        ${wines.length} wine${wines.length !== 1 ? 's' : ''} · All prices per bottle · In bond (ex-duty and VAT)
+        ${wines.length} wine${wines.length !== 1 ? 's' : ''} · All prices per bottle · Duty and VAT paid
       </div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;letter-spacing:0.06em;">
         jessica.bride@gmail.com
@@ -368,6 +369,30 @@ export default function BuyerPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Standing terms — hardcoded, shown to every buyer */}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '12px 0' }}>
+          <button onClick={() => setShowTerms(v => !v)}
+            style={{ background: 'none', border: 'none', color: '#d4ad45', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {showTerms ? '▾' : '▸'} How this works
+          </button>
+          {showTerms && (
+            <div style={{ marginTop: '12px', maxWidth: '620px', display: 'flex', flexDirection: 'column', gap: '11px' }}>
+              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '17px', fontStyle: 'italic', color: 'rgba(253,250,245,0.9)', lineHeight: 1.5, margin: 0 }}>
+                This is a curated selection of wines offered to you on consignment. Please enjoy the shopping!
+              </p>
+              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'rgba(253,250,245,0.6)', lineHeight: 1.75, margin: 0 }}>
+                A few notes: I am flexible on how many bottles you take, with one exception: where a wine is offered as a set of 12, you will need to take at least 6, as I pull the full case of 12 from bonded storage. For everything else, take as few or as many as you like.
+              </p>
+              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'rgba(253,250,245,0.6)', lineHeight: 1.75, margin: 0 }}>
+                I provide a full inventory and a physical and emailed copy of a delivery note with quantity and pricing each time I make a delivery. Each month, when your team runs its wine stock count, simply send me the current consignment inventory. I invoice every 60 days for what has sold. If any wines are faulted, simply let me know and I will remove them from your inventory at no cost to you.
+              </p>
+              <p style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#d4ad45', letterSpacing: '0.04em', lineHeight: 1.6, margin: 0 }}>
+                I am not VAT registered. Prices shown reflect VAT and duty paid.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Filters — with Sort by Region button */}
