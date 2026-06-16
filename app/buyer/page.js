@@ -385,11 +385,7 @@ export default function BuyerPage() {
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 400, color: C.white, lineHeight: 1 }}>Belle Année</div>
             <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.26em', textTransform: 'uppercase', color: C.gold, marginTop: '3px' }}>Wines &amp; Studio</div>
           </div>
-          <nav style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
-            {['Wines', 'Buyers', 'About', 'Services', 'Contact'].map(item => (
-              <span key={item} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '17px', color: item === 'Buyers' ? C.white : 'rgba(255,253,249,0.62)', borderBottom: item === 'Buyers' ? '2px solid ' + C.gold : '2px solid transparent', paddingBottom: '3px', cursor: 'default' }}>{item}</span>
-            ))}
-          </nav>
+          <div style={{ flex: 1 }} />
           {wines.length > 0 ? (
             <button onClick={printPriceList}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,253,249,0.08)', border: '1px solid rgba(255,253,249,0.45)', color: C.white, fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', padding: '9px 18px', borderRadius: '9px', cursor: 'pointer' }}>
@@ -428,14 +424,14 @@ export default function BuyerPage() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: C.wine, fontWeight: 500, marginBottom: '20px' }}>How this works</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '34px' }}>
-                  {pillar(IconBox, 'Flexible quantities', 'You choose how many bottles to take. Except that if a wine is offered as a set of 12, please take at least 6. Otherwise take as many or as few as you would like.')}
-                  {pillar(IconCheck, 'Full transparency', 'You receive a full inventory and a delivery note with quantity and pricing on every delivery. Any faulted wine is removed at no cost to you.')}
-                  {pillar(IconCal, 'Up to date', 'Each month when your team runs stock, send the current inventory. I invoice every 60 days for what has sold.')}
+                  {pillar(IconBox, 'Flexible quantities', 'Take as many or as few bottles as you like. The one exception: wines offered by the case carry a six-bottle minimum, since I release the full twelve from bond.')}
+                  {pillar(IconCheck, 'Full transparency', 'Every delivery comes with a full inventory and a delivery note showing quantities and prices. If a bottle is ever faulted, just tell me and I will remove it at no cost.')}
+                  {pillar(IconCal, 'Up to date', 'Each month, send your latest stock count and I will refresh the consignment list. I invoice every 60 days for whatever has sold.')}
                 </div>
               </div>
             </div>
             <div style={{ borderTop: '1px solid ' + C.line, marginTop: '24px', paddingTop: '16px' }}>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.04em', color: C.wine }}>Please note: Belle Année and Studio Jessica Bride are not VAT registered. Prices shown reflect VAT and duty paid.</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.04em', color: C.wine }}>Please note: Belle Année and Studio Jessica Bride are not VAT registered. Prices shown reflect the duty and VAT already paid.</div>
             </div>
           </div>
         </div>
