@@ -404,7 +404,7 @@ export default function BuyerPage() {
           )}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(21,6,11,0.92) 0%, rgba(21,6,11,0.72) 38%, rgba(21,6,11,0) 64%)' }} />
           <div style={{ position: 'relative', maxWidth: '640px' }}>
-            <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '52px', fontWeight: 400, lineHeight: 1.08, color: C.white, margin: 0 }}>{titleRest ? (<>{buyerName}<br />{titleRest}</>) : titleMain}</h1>
+            <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 400, lineHeight: 1.1, color: C.white, margin: 0 }}>{titleRest ? (<>{buyerName}<br />{titleRest}</>) : titleMain}</h1>
             {titleDate && (
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.22em', color: C.gold, marginTop: '14px' }}>{titleDate}</div>
             )}
