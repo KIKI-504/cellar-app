@@ -474,7 +474,6 @@ export default function BuyerPage() {
             )}
             <div style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, whiteSpace: 'nowrap' }}>{filtered.length} wine{filtered.length !== 1 ? 's' : ''}</div>
           </div>
-          <div style={{ paddingTop: '12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.05em', color: C.muted }}>🍷 wine note · 🍇 producer · ♀ women</div>
         </div>
       </div>
 
@@ -522,6 +521,11 @@ export default function BuyerPage() {
               const salePrice = parseFloat(w.sale_price)
               const openType = expanded[w.id]
               const hasNotes = !!w.buyer_note
+              const noteTabs = [
+                { type: 'wine', label: 'Wine info', show: !!w.buyer_note, color: C.wine },
+                { type: 'producer', label: 'Producer info', show: !!w.producer_note, color: C.wine },
+                { type: 'women', label: 'Women in wine', show: !!w.women_note, color: '#9b3a4a' },
+              ].filter(t => t.show)
               return (
                 <div key={w.id} style={{ background: C.white }}>
                   <div style={{ display: 'grid', gridTemplateColumns: GRID, padding: '16px 24px', alignItems: 'center', borderBottom: i === filtered.length - 1 ? 'none' : '1px solid ' + C.line, borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent', opacity: soldOut ? 0.5 : 1 }}>
@@ -531,20 +535,15 @@ export default function BuyerPage() {
                         <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
                       </div>
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.muted, fontWeight: isMag ? 700 : 400, paddingLeft: '14px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
-                      {(w.buyer_note || w.producer_note || w.women_note) && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '13px', marginTop: '6px' }}>
-                          {w.buyer_note && (
-                            <button onClick={() => toggleNote(w.id, 'wine')} title="Wine note"
-                              style={{ background: openType === 'wine' ? 'rgba(110,31,46,0.12)' : 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '3px 6px', opacity: openType === 'wine' ? 1 : 0.7 }}>🍷</button>
-                          )}
-                          {w.producer_note && (
-                            <button onClick={() => toggleNote(w.id, 'producer')} title="Producer"
-                              style={{ background: openType === 'producer' ? 'rgba(110,31,46,0.12)' : 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '3px 6px', opacity: openType === 'producer' ? 1 : 0.7 }}>🍇</button>
-                          )}
-                          {w.women_note && (
-                            <button onClick={() => toggleNote(w.id, 'women')} title="Women in wine"
-                              style={{ background: openType === 'women' ? 'rgba(155,58,74,0.14)' : 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '3px 6px', color: '#9b3a4a', opacity: openType === 'women' ? 1 : 0.8 }}>♀</button>
-                          )}
+                      {noteTabs.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', paddingLeft: '14px', marginTop: '5px' }}>
+                          {noteTabs.map((t, idx) => (
+                            <span key={t.type} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                              {idx > 0 && <span style={{ color: C.line, margin: '0 8px', fontSize: '10px' }}>·</span>}
+                              <button onClick={() => toggleNote(w.id, t.type)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 1px', fontFamily: 'DM Mono, monospace', fontSize: '9.5px', letterSpacing: '0.1em', textTransform: 'uppercase', color: openType === t.type ? t.color : C.muted, fontWeight: openType === t.type ? 600 : 400, borderBottom: openType === t.type ? '1px solid ' + t.color : '1px solid transparent', lineHeight: 1.4 }}>{t.label}</button>
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -583,7 +582,7 @@ export default function BuyerPage() {
                   </div>
                   {openType && (
                     <div style={{ background: C.cream, padding: '4px 24px 16px 28px', borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent' }}>
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine, marginBottom: '5px' }}>{openType === 'wine' ? 'Wine note' : openType === 'producer' ? 'Producer' : 'Women in wine'}</div>
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine, marginBottom: '5px' }}>{openType === 'wine' ? 'Wine info' : openType === 'producer' ? 'Producer info' : 'Women in wine'}</div>
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: C.text, lineHeight: 1.6, maxWidth: '760px' }}>{openType === 'wine' ? w.buyer_note : openType === 'producer' ? w.producer_note : w.women_note}</div>
                     </div>
                   )}
