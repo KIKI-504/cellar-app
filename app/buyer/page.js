@@ -263,19 +263,21 @@ export default function BuyerPage() {
       const qty = parseInt(w.quantity) || 0
       const col = (w.colour || '').toLowerCase()
       const dotCol = col.includes('red') ? '#8b2535' : col.includes('white') ? '#b5a430' : col.includes('ros') ? '#d4748a' : col.includes('spark') ? '#5a8fa8' : '#aaa'
+      const fw = isMag ? '700' : '400'
+      const fc = isMag ? '#1a1008' : '#7a6652'
 
       return `<tr>
         <td style="padding:9px 10px 9px 0;border-bottom:1px solid #ede6d6;">
           <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotCol};margin-right:5px;vertical-align:middle;"></span>
-          <span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:500;vertical-align:middle;">${w.description}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">♀</span>' : ''}</span>
+          <span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:${isMag ? '700' : '500'};vertical-align:middle;">${w.description}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">♀</span>' : ''}</span>
         </td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.vintage || '—'}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.region || '—'}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.colour || '—'}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:${isMag ? '12px' : '11px'};font-weight:${isMag ? '700' : '400'};color:${isMag ? '#1a1008' : '#7a6652'};">${size}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${qty}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:#1a1008;">£${salePrice.toFixed(2)}</td>
-        <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${wsDp ? '£' + wsDp.toFixed(2) : '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:${fc};">${w.vintage || '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:${fc};">${w.region || '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:${fc};">${w.colour || '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:${isMag ? '12px' : '11px'};font-weight:${fw};color:${fc};">${size}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:${fc};">${qty}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:${isMag ? '700' : '600'};color:#1a1008;">£${salePrice.toFixed(2)}</td>
+        <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:${fc};">${wsDp ? '£' + wsDp.toFixed(2) : '—'}</td>
       </tr>`
     }).join('')
 
@@ -450,14 +452,14 @@ export default function BuyerPage() {
       </header>
 
       {/* Hero */}
-      <section style={{ background: heroGrad, color: C.white }}>
-        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: isMobile ? '30px 18px 38px' : '40px 40px 50px', minHeight: isMobile ? '250px' : '330px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
-          {heroImg && (
-            <img src={heroImg} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
-              style={{ position: 'absolute', right: isMobile ? '-4px' : '12px', bottom: isMobile ? '-22px' : '-30px', height: isMobile ? '120%' : '118%', width: 'auto', maxWidth: isMobile ? '52%' : '46%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none' }} />
-          )}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(21,6,11,0.92) 0%, rgba(21,6,11,0.72) 38%, rgba(21,6,11,0) 64%)' }} />
-          <div style={{ position: 'relative', maxWidth: '640px' }}>
+      <section style={{ position: 'relative', background: heroGrad, color: C.white, overflow: 'hidden' }}>
+        {heroImg && (
+          <img src={heroImg} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
+            style={{ position: 'absolute', right: 0, bottom: isMobile ? '-14px' : '-24px', height: isMobile ? '116%' : '132%', width: 'auto', maxWidth: isMobile ? '54%' : '40%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none', zIndex: 1 }} />
+        )}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(21,6,11,0.94) 0%, rgba(21,6,11,0.6) 42%, rgba(21,6,11,0) 68%)', zIndex: 2 }} />
+        <div style={{ position: 'relative', zIndex: 3, maxWidth: CONTENT, margin: '0 auto', padding: isMobile ? '30px 18px 40px' : '44px 40px 56px', minHeight: isMobile ? '250px' : '340px', display: 'flex', alignItems: 'center' }}>
+          <div style={{ maxWidth: '640px' }}>
             <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '32px' : '28px', fontWeight: 400, lineHeight: 1.1, color: C.white, margin: 0 }}>{titleRest ? (<>{buyerName}<br />{titleRest}</>) : titleMain}</h1>
             {titleDate && (
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.22em', color: C.gold, marginTop: '14px' }}>{titleDate}</div>
@@ -466,10 +468,10 @@ export default function BuyerPage() {
               <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '21px', fontWeight: 400, color: 'rgba(255,253,249,0.84)', lineHeight: 1.45, margin: '20px 0 0', maxWidth: '520px' }}>{editorialText}</p>
             )}
           </div>
-          <svg viewBox="0 0 1440 40" preserveAspectRatio="none" style={{ position: 'absolute', left: 0, right: 0, bottom: '-1px', width: '100%', height: isMobile ? '26px' : '38px', display: 'block', zIndex: 4 }}>
-            <path d="M0,40 L0,22 C 300,5 560,34 840,18 C 1080,5 1280,30 1440,13 L1440,40 Z" fill={C.cream} />
-          </svg>
         </div>
+        <svg viewBox="0 0 1440 40" preserveAspectRatio="none" style={{ position: 'absolute', left: 0, right: 0, bottom: '-1px', width: '100%', height: isMobile ? '26px' : '40px', display: 'block', zIndex: 4 }}>
+          <path d="M0,40 L0,22 C 300,5 560,34 840,18 C 1080,5 1280,30 1440,13 L1440,40 Z" fill={C.cream} />
+        </svg>
       </section>
 
       {/* How this works — floating card */}
