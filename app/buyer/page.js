@@ -37,6 +37,9 @@ export default function BuyerPage() {
   const [expanded, setExpanded] = useState({})
   const [tooltip, setTooltip] = useState(null)
   const [mktInfo, setMktInfo] = useState(false)
+  const [editKey, setEditKey] = useState(null)
+  const [draft, setDraft] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
 
   const [buyerName, setBuyerName] = useState('')
   const [buyerDisplayName, setBuyerDisplayName] = useState('')
@@ -181,6 +184,31 @@ export default function BuyerPage() {
 
   function toggleNote(id, type) {
     setExpanded(prev => ({ ...prev, [id]: prev[id] === type ? null : type }))
+  }
+
+  async function saveNote(id, type) {
+    const field = type === 'wine' ? 'buyer_note' : type === 'producer' ? 'producer_note' : 'women_note'
+    setSavingNote(true)
+    try {
+      const pin = sessionStorage.getItem('pin')
+      const res = await fetch('/api/buyer/update-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, field, value: draft, pin }),
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(result.error || 'Save failed')
+      const newVal = result.value
+      const apply = arr => arr.map(w => w.id === id ? { ...w, [field]: newVal } : w)
+      setWines(apply)
+      setFiltered(apply)
+      setEditKey(null)
+      setDraft('')
+    } catch (e) {
+      alert('Could not save: ' + e.message)
+    } finally {
+      setSavingNote(false)
+    }
   }
 
   function showTooltip(e, text, type) {
@@ -522,10 +550,11 @@ export default function BuyerPage() {
               const openType = expanded[w.id]
               const hasNotes = !!w.buyer_note
               const noteTabs = [
-                { type: 'wine', label: 'Wine info', show: !!w.buyer_note, color: C.wine },
-                { type: 'producer', label: 'Producer info', show: !!w.producer_note, color: C.wine },
-                { type: 'women', label: 'Women in wine', show: !!w.women_note, color: '#9b3a4a' },
+                { type: 'wine', label: 'Wine info', show: isAdmin || !!w.buyer_note, color: C.wine },
+                { type: 'producer', label: 'Producer info', show: isAdmin || !!w.producer_note, color: C.wine },
+                { type: 'women', label: 'Women in wine', show: isAdmin || !!w.women_note, color: '#9b3a4a' },
               ].filter(t => t.show)
+              const noteText = openType === 'wine' ? w.buyer_note : openType === 'producer' ? w.producer_note : openType === 'women' ? w.women_note : null
               return (
                 <div key={w.id} style={{ background: C.white }}>
                   <div style={{ display: 'grid', gridTemplateColumns: GRID, padding: '16px 24px', alignItems: 'center', borderBottom: i === filtered.length - 1 ? 'none' : '1px solid ' + C.line, borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent', opacity: soldOut ? 0.5 : 1 }}>
@@ -582,8 +611,27 @@ export default function BuyerPage() {
                   </div>
                   {openType && (
                     <div style={{ background: C.cream, padding: '4px 24px 16px 28px', borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent' }}>
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine, marginBottom: '5px' }}>{openType === 'wine' ? 'Wine info' : openType === 'producer' ? 'Producer info' : 'Women in wine'}</div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: C.text, lineHeight: 1.6, maxWidth: '760px' }}>{openType === 'wine' ? w.buyer_note : openType === 'producer' ? w.producer_note : w.women_note}</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '5px' }}>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine }}>{openType === 'wine' ? 'Wine info' : openType === 'producer' ? 'Producer info' : 'Women in wine'}</span>
+                        {isAdmin && editKey !== w.id + ':' + openType && (
+                          <button onClick={() => { setEditKey(w.id + ':' + openType); setDraft(noteText || '') }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, textDecoration: 'underline', padding: 0 }}>Edit</button>
+                        )}
+                      </div>
+                      {isAdmin && editKey === w.id + ':' + openType ? (
+                        <div>
+                          <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={5}
+                            style={{ width: '100%', maxWidth: '760px', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', lineHeight: 1.6, padding: '9px 11px', border: '1px solid ' + C.line, borderRadius: '6px', background: C.white, color: C.text, resize: 'vertical', boxSizing: 'border-box' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                            <button onClick={() => saveNote(w.id, openType)} disabled={savingNote}
+                              style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '6px', padding: '6px 16px', cursor: savingNote ? 'default' : 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: savingNote ? 0.6 : 1 }}>{savingNote ? 'Saving…' : 'Save'}</button>
+                            <button onClick={() => { setEditKey(null); setDraft('') }} disabled={savingNote}
+                              style={{ background: 'none', color: C.muted, border: '1px solid ' + C.line, borderRadius: '6px', padding: '6px 16px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: noteText ? C.text : C.muted, fontStyle: noteText ? 'normal' : 'italic', lineHeight: 1.6, maxWidth: '760px' }}>{noteText || (isAdmin ? 'No note yet.' : '')}</div>
+                      )}
                     </div>
                   )}
                 </div>
