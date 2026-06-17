@@ -16,7 +16,7 @@ export async function POST(request) {
       return json({ error: 'Bad request' }, 400)
     }
 
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!key) {
       return json({ error: 'Server not configured (missing service role key)' }, 500)
     }
