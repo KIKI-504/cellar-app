@@ -40,6 +40,7 @@ export default function BuyerPage() {
   const [editKey, setEditKey] = useState(null)
   const [draft, setDraft] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
   const [buyerName, setBuyerName] = useState('')
   const [buyerDisplayName, setBuyerDisplayName] = useState('')
@@ -47,6 +48,13 @@ export default function BuyerPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [buyerAccessId, setBuyerAccessId] = useState(null)
   const [showTerms, setShowTerms] = useState(true)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 720)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   useEffect(() => {
     const id = 'cormorant-weights'
@@ -364,6 +372,7 @@ export default function BuyerPage() {
     white: '#fffdf9',
   }
   const GRID = '1fr 90px 90px 70px 130px 130px 56px'
+  const SIDE = isMobile ? '18px' : '40px'
   const heroGrad = 'linear-gradient(100deg, #3a0e1a 0%, #2a0a12 46%, #15060b 100%)'
 
   // ── Per-client hero image + title / date split ───────────────────
@@ -420,7 +429,7 @@ export default function BuyerPage() {
 
       {/* Nav */}
       <header style={{ background: C.inkDeep, color: C.white, position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', padding: '14px 40px', flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', padding: `14px ${SIDE}`, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 400, color: C.white, lineHeight: 1 }}>Belle Année</div>
             <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.26em', textTransform: 'uppercase', color: C.gold, marginTop: '3px' }}>Wines &amp; Studio</div>
@@ -437,14 +446,14 @@ export default function BuyerPage() {
 
       {/* Hero */}
       <section style={{ background: heroGrad, color: C.white }}>
-        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: '40px 40px 46px', minHeight: '210px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: isMobile ? '30px 18px 34px' : '40px 40px 46px', minHeight: isMobile ? '180px' : '210px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
           {heroImg && (
             <img src={heroImg} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
-              style={{ position: 'absolute', right: '0', bottom: '0', height: '118%', maxWidth: '52%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none' }} />
+              style={{ position: 'absolute', right: '0', bottom: '0', height: '118%', maxWidth: isMobile ? '46%' : '52%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none' }} />
           )}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(21,6,11,0.92) 0%, rgba(21,6,11,0.72) 38%, rgba(21,6,11,0) 64%)' }} />
           <div style={{ position: 'relative', maxWidth: '640px' }}>
-            <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 400, lineHeight: 1.1, color: C.white, margin: 0 }}>{titleRest ? (<>{buyerName}<br />{titleRest}</>) : titleMain}</h1>
+            <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '32px' : '28px', fontWeight: 400, lineHeight: 1.1, color: C.white, margin: 0 }}>{titleRest ? (<>{buyerName}<br />{titleRest}</>) : titleMain}</h1>
             {titleDate && (
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.22em', color: C.gold, marginTop: '14px' }}>{titleDate}</div>
             )}
@@ -457,13 +466,13 @@ export default function BuyerPage() {
 
       {/* How this works — floating card */}
       <div style={{ background: C.cream }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: '0 40px' }}>
-          <div style={{ marginTop: '-44px', background: C.card, borderRadius: '18px', boxShadow: '0 20px 50px rgba(40,12,20,0.16)', padding: '32px 38px', position: 'relative', zIndex: 5 }}>
-            <div style={{ display: 'flex', gap: '28px', alignItems: 'flex-start' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: `0 ${SIDE}` }}>
+          <div style={{ marginTop: isMobile ? '-28px' : '-44px', background: C.card, borderRadius: '18px', boxShadow: '0 20px 50px rgba(40,12,20,0.16)', padding: isMobile ? '22px 20px' : '32px 38px', position: 'relative', zIndex: 5 }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '18px' : '28px', alignItems: 'flex-start' }}>
               <div style={{ flexShrink: 0, width: '74px', height: '74px', borderRadius: '50%', background: C.wine, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{IconGlass}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: C.wine, fontWeight: 500, marginBottom: '20px' }}>How this works</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '34px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? '20px' : '34px' }}>
                   {pillar(IconBox, 'Flexible quantities', 'Take as many or as few bottles as you like. The one exception: wines offered by the case carry a six-bottle minimum, since I release the full twelve from bond.')}
                   {pillar(IconCheck, 'Full transparency', 'Every delivery comes with a full inventory and a delivery note showing quantities and prices. If a bottle is ever faulted, just tell me and I will remove it at no cost.')}
                   {pillar(IconCal, 'Up to date', 'Each month, send your latest stock count and I will refresh the consignment list. I invoice every 60 days for whatever has sold.')}
@@ -479,7 +488,7 @@ export default function BuyerPage() {
 
       {/* Filters */}
       <div style={{ background: C.cream }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: '28px 40px 0' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: `28px ${SIDE} 0` }}>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
               <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' }}>{IconSearch}</span>
@@ -507,10 +516,11 @@ export default function BuyerPage() {
 
       {/* Table */}
       <div style={{ background: C.cream }}>
-        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: '20px 40px 0' }}>
+        <div style={{ maxWidth: CONTENT, margin: '0 auto', padding: `20px ${SIDE} 0` }}>
           <div style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid ' + C.line, boxShadow: '0 12px 34px rgba(40,12,20,0.07)' }}>
 
             {/* Header band */}
+            {!isMobile && (
             <div style={{ background: C.ink, display: 'grid', gridTemplateColumns: GRID, padding: '14px 24px', alignItems: 'center' }}>
               <div></div>
               {headCell('Vintage', 'vintage')}
@@ -528,6 +538,7 @@ export default function BuyerPage() {
               </div>
               <div></div>
             </div>
+            )}
 
             {filtered.length === 0 ? (
               <div style={{ background: C.white, textAlign: 'center', padding: '54px 20px' }}>
@@ -557,6 +568,56 @@ export default function BuyerPage() {
               const noteText = openType === 'wine' ? w.buyer_note : openType === 'producer' ? w.producer_note : openType === 'women' ? w.women_note : null
               return (
                 <div key={w.id} style={{ background: C.white }}>
+                  {isMobile && (
+                    <div style={{ padding: '16px 18px', borderBottom: i === filtered.length - 1 ? 'none' : '1px solid ' + C.line, borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent', opacity: soldOut ? 0.55 : 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '7px' }}>
+                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '8px' }} />
+                            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '19px', fontWeight: isMag ? 700 : 600, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
+                          </div>
+                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: C.wine, fontWeight: isMag ? 700 : 400, paddingLeft: '15px', marginTop: '3px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0, fontFamily: 'Cormorant Garamond, serif', fontWeight: isMag ? 700 : 400, lineHeight: 1.3 }}>
+                          <div style={{ fontSize: '15px', color: C.text }}>{w.vintage || '—'}</div>
+                          <div style={{ fontSize: '15px', color: C.muted }}>{size}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px', marginTop: '14px' }}>
+                        <div>
+                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '25px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
+                          {wsDp && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontStyle: 'italic', color: C.muted, marginTop: '3px' }}>Market £{wsDp.toFixed(2)}</div>}
+                          {isSelected && <div style={{ fontSize: '10px', color: C.wine, fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
+                        </div>
+                        <div style={{ flexShrink: 0 }}>
+                          {soldOut ? (
+                            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sold out</span>
+                          ) : isSelected ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button onClick={() => setQuantity(w.id, qty - 1, maxQty)} disabled={qty <= 1} style={{ width: '34px', height: '34px', borderRadius: '7px', border: '1px solid ' + C.line, background: C.cream, cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '18px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
+                              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '15px', fontWeight: 500, minWidth: '18px', textAlign: 'center' }}>{qty}</span>
+                              <button onClick={() => setQuantity(w.id, qty + 1, maxQty)} disabled={qty >= maxQty} style={{ width: '34px', height: '34px', borderRadius: '7px', border: '1px solid ' + C.line, background: C.cream, cursor: qty >= maxQty ? 'default' : 'pointer', fontSize: '18px', opacity: qty >= maxQty ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
+                              <button onClick={() => toggleSelected(w.id)} style={{ width: '34px', height: '34px', borderRadius: '7px', border: '2px solid ' + C.wine, background: C.wine, color: C.white, cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>✓</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => toggleSelected(w.id)} style={{ background: C.gold, color: C.inkDeep, border: 'none', borderRadius: '8px', padding: '11px 22px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 500 }}>+ Add</button>
+                          )}
+                        </div>
+                      </div>
+                      {noteTabs.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', marginTop: '14px', paddingTop: '11px', borderTop: '1px solid ' + C.line }}>
+                          {noteTabs.map((t, idx) => (
+                            <span key={t.type} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                              {idx > 0 && <span style={{ color: C.line, margin: '0 8px', fontSize: '10px' }}>·</span>}
+                              <button onClick={() => toggleNote(w.id, t.type)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 1px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: openType === t.type ? t.color : C.muted, fontWeight: openType === t.type ? 600 : 400, borderBottom: openType === t.type ? '1px solid ' + t.color : '1px solid transparent', lineHeight: 1.4 }}>{t.label}</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!isMobile && (
                   <div style={{ display: 'grid', gridTemplateColumns: GRID, padding: '16px 24px', alignItems: 'center', borderBottom: i === filtered.length - 1 ? 'none' : '1px solid ' + C.line, borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent', opacity: soldOut ? 0.5 : 1 }}>
                     <div style={{ paddingRight: '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '2px' }}>
@@ -609,8 +670,9 @@ export default function BuyerPage() {
                       )}
                     </div>
                   </div>
+                  )}
                   {openType && (
-                    <div style={{ background: C.cream, padding: '4px 24px 16px 28px', borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent' }}>
+                    <div style={{ background: C.cream, padding: isMobile ? '4px 18px 16px 18px' : '4px 24px 16px 28px', borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '5px' }}>
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine }}>{openType === 'wine' ? 'Wine info' : openType === 'producer' ? 'Producer info' : 'Women in wine'}</span>
                         {isAdmin && editKey !== w.id + ':' + openType && (
@@ -644,7 +706,7 @@ export default function BuyerPage() {
       {/* Order bar */}
       {selectedCount > 0 && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.inkDeep, color: C.white, zIndex: 200, boxShadow: '0 -8px 30px rgba(0,0,0,0.25)' }}>
-          <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 40px' }}>
+          <div style={{ maxWidth: CONTENT, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `14px ${SIDE}` }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} · {totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div>
             <button onClick={sendWishlist} style={{ background: C.gold, color: C.inkDeep, border: 'none', padding: '11px 26px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', borderRadius: '8px', fontWeight: 500 }}>Send Order</button>
           </div>
