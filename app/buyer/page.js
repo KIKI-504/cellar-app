@@ -41,6 +41,7 @@ export default function BuyerPage() {
   const [draft, setDraft] = useState('')
   const [savingNote, setSavingNote] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [howOpen, setHowOpen] = useState(true)
 
   const [buyerName, setBuyerName] = useState('')
   const [buyerDisplayName, setBuyerDisplayName] = useState('')
@@ -48,6 +49,10 @@ export default function BuyerPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [buyerAccessId, setBuyerAccessId] = useState(null)
   const [showTerms, setShowTerms] = useState(true)
+
+  useEffect(() => {
+    setHowOpen(window.innerWidth >= 720)
+  }, [])
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 720)
@@ -373,7 +378,7 @@ export default function BuyerPage() {
   }
   const GRID = '1fr 90px 90px 70px 130px 130px 56px'
   const SIDE = isMobile ? '18px' : '40px'
-  const heroGrad = 'linear-gradient(100deg, #3a0e1a 0%, #2a0a12 46%, #15060b 100%)'
+  const heroGrad = 'linear-gradient(100deg, #3a0e1a 0%, #26090f 46%, #000000 100%)'
 
   // ── Per-client hero image + title / date split ───────────────────
   const heroSlug = (buyerName && buyerName !== 'Admin' && buyerName !== 'Guest')
@@ -446,10 +451,10 @@ export default function BuyerPage() {
 
       {/* Hero */}
       <section style={{ background: heroGrad, color: C.white }}>
-        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: isMobile ? '30px 18px 34px' : '40px 40px 46px', minHeight: isMobile ? '180px' : '210px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+        <div style={{ position: 'relative', maxWidth: CONTENT, margin: '0 auto', padding: isMobile ? '30px 18px 38px' : '40px 40px 50px', minHeight: isMobile ? '250px' : '330px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
           {heroImg && (
             <img src={heroImg} alt="" onError={e => { e.currentTarget.style.display = 'none' }}
-              style={{ position: 'absolute', right: '0', bottom: '0', height: '118%', maxWidth: isMobile ? '46%' : '52%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none' }} />
+              style={{ position: 'absolute', right: isMobile ? '-4px' : '12px', bottom: isMobile ? '-22px' : '-30px', height: isMobile ? '120%' : '118%', width: 'auto', maxWidth: isMobile ? '52%' : '46%', objectFit: 'contain', objectPosition: 'right bottom', pointerEvents: 'none' }} />
           )}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(21,6,11,0.92) 0%, rgba(21,6,11,0.72) 38%, rgba(21,6,11,0) 64%)' }} />
           <div style={{ position: 'relative', maxWidth: '640px' }}>
@@ -461,6 +466,9 @@ export default function BuyerPage() {
               <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '21px', fontWeight: 400, color: 'rgba(255,253,249,0.84)', lineHeight: 1.45, margin: '20px 0 0', maxWidth: '520px' }}>{editorialText}</p>
             )}
           </div>
+          <svg viewBox="0 0 1440 40" preserveAspectRatio="none" style={{ position: 'absolute', left: 0, right: 0, bottom: '-1px', width: '100%', height: isMobile ? '26px' : '38px', display: 'block', zIndex: 4 }}>
+            <path d="M0,40 L0,22 C 300,5 560,34 840,18 C 1080,5 1280,30 1440,13 L1440,40 Z" fill={C.cream} />
+          </svg>
         </div>
       </section>
 
@@ -471,17 +479,24 @@ export default function BuyerPage() {
             <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '18px' : '28px', alignItems: 'flex-start' }}>
               <div style={{ flexShrink: 0, width: '74px', height: '74px', borderRadius: '50%', background: C.wine, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{IconGlass}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: C.wine, fontWeight: 500, marginBottom: '20px' }}>How this works</div>
+                <div onClick={() => setHowOpen(v => !v)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none', marginBottom: howOpen ? '20px' : '0' }}>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: C.wine, fontWeight: 500 }}>How this works</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', color: C.wine, marginLeft: '12px' }}>{howOpen ? '▾ Hide' : '▸ Read'}</span>
+                </div>
+                {howOpen && (
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? '20px' : '34px' }}>
                   {pillar(IconBox, 'Flexible quantities', 'Take as many or as few bottles as you like. The one exception: wines offered by the case carry a six-bottle minimum, since I release the full twelve from bond.')}
                   {pillar(IconCheck, 'Full transparency', 'Every delivery comes with a full inventory and a delivery note showing quantities and prices. If a bottle is ever faulted, just tell me and I will remove it at no cost.')}
                   {pillar(IconCal, 'Up to date', 'Each month, send your latest stock count and I will refresh the consignment list. I invoice every 60 days for whatever has sold.')}
                 </div>
+                )}
               </div>
             </div>
+            {howOpen && (
             <div style={{ borderTop: '1px solid ' + C.line, marginTop: '24px', paddingTop: '16px' }}>
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.04em', color: C.wine }}>Please note: Belle Année and Studio Jessica Bride are not VAT registered. Prices shown reflect the duty and VAT already paid.</div>
             </div>
+            )}
           </div>
         </div>
       </div>
