@@ -36,6 +36,7 @@ export default function BuyerPage() {
   const [selected, setSelected] = useState({})
   const [expanded, setExpanded] = useState({})
   const [tooltip, setTooltip] = useState(null)
+  const [mktInfo, setMktInfo] = useState(false)
 
   const [buyerName, setBuyerName] = useState('')
   const [buyerDisplayName, setBuyerDisplayName] = useState('')
@@ -43,6 +44,17 @@ export default function BuyerPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [buyerAccessId, setBuyerAccessId] = useState(null)
   const [showTerms, setShowTerms] = useState(true)
+
+  useEffect(() => {
+    const id = 'cormorant-weights'
+    if (typeof document !== 'undefined' && !document.getElementById(id)) {
+      const l = document.createElement('link')
+      l.id = id
+      l.rel = 'stylesheet'
+      l.href = 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&display=swap'
+      document.head.appendChild(l)
+    }
+  }, [])
 
   useEffect(() => {
     const role = sessionStorage.getItem('role')
@@ -167,8 +179,8 @@ export default function BuyerPage() {
     setSelected(prev => ({ ...prev, [id]: capped }))
   }
 
-  function toggleExpanded(id) {
-    setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
+  function toggleNote(id, type) {
+    setExpanded(prev => ({ ...prev, [id]: prev[id] === type ? null : type }))
   }
 
   function showTooltip(e, text, type) {
@@ -260,7 +272,7 @@ export default function BuyerPage() {
           <th style="padding:7px 8px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Size</th>
           <th style="padding:7px 8px;text-align:center;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Avail</th>
           <th style="padding:7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Price / btl</th>
-          <th style="padding:7px 0 7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Market Price</th>
+          <th style="padding:7px 0 7px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;font-weight:500;">Mrkt Price</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -462,6 +474,7 @@ export default function BuyerPage() {
             )}
             <div style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, whiteSpace: 'nowrap' }}>{filtered.length} wine{filtered.length !== 1 ? 's' : ''}</div>
           </div>
+          <div style={{ paddingTop: '12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.05em', color: C.muted }}>🍷 wine note · 🍇 producer · ♀ women</div>
         </div>
       </div>
 
@@ -477,7 +490,15 @@ export default function BuyerPage() {
               {headCell('Size', 'format')}
               {headCell('Qty', 'quantity', 'center')}
               {headCell('Price / btl', 'sale_price', 'right')}
-              <div style={{ paddingRight: '22px' }}>{headCell('Market Price', 'ws', 'right')}</div>
+              <div style={{ paddingRight: '22px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                <span onClick={() => cycleSort('ws')} style={{ cursor: 'pointer', userSelect: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: sortCol === 'ws' ? C.gold : 'rgba(255,253,249,0.72)' }}>Mrkt Price <span style={{ fontSize: '9px', opacity: sortCol === 'ws' ? 1 : 0.45 }}>{sortCol === 'ws' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></span>
+                <button onClick={() => setMktInfo(v => !v)} style={{ background: 'none', border: '1px solid rgba(255,253,249,0.4)', color: 'rgba(255,253,249,0.72)', borderRadius: '50%', width: '15px', height: '15px', fontSize: '9px', lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}>i</button>
+                {mktInfo && (
+                  <div style={{ position: 'absolute', top: '100%', right: '0', marginTop: '8px', zIndex: 50, background: C.white, color: C.text, border: '1px solid ' + C.line, borderRadius: '8px', padding: '10px 12px', width: '230px', fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.4, boxShadow: '0 8px 24px rgba(40,12,20,0.18)', textTransform: 'none', letterSpacing: 'normal', textAlign: 'left' }}>
+                    Compiled from Wine Searcher average and retail prices.
+                  </div>
+                )}
+              </div>
               <div></div>
             </div>
 
@@ -499,7 +520,7 @@ export default function BuyerPage() {
               const duty = isMag ? 6 : 3
               const wsDp = ws ? (ws + duty) * 1.2 : null
               const salePrice = parseFloat(w.sale_price)
-              const isExpanded = expanded[w.id]
+              const openType = expanded[w.id]
               const hasNotes = !!w.buyer_note
               return (
                 <div key={w.id} style={{ background: C.white }}>
@@ -508,19 +529,23 @@ export default function BuyerPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '2px' }}>
                         <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
                         <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
-                        {w.women_note && (
-                          <button onMouseEnter={e => showTooltip(e, w.women_note, 'women')} onMouseLeave={() => setTooltip(null)}
-                            style={{ background: 'none', border: 'none', color: '#9b3a4a', fontSize: '12px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0 }}>♀</button>
-                        )}
-                        {w.producer_note && (
-                          <button onMouseEnter={e => showTooltip(e, w.producer_note, 'producer')} onMouseLeave={() => setTooltip(null)}
-                            style={{ background: 'none', border: 'none', fontSize: '11px', cursor: 'pointer', padding: '0 1px', lineHeight: 1, flexShrink: 0, opacity: 0.75 }}>🍷</button>
-                        )}
                       </div>
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.muted, fontWeight: isMag ? 700 : 400, paddingLeft: '14px' }}>{w.region}{w.country ? ' · ' + w.country : ''}</div>
-                      {hasNotes && (
-                        <button onClick={() => toggleExpanded(w.id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: C.muted, fontWeight: isMag ? 700 : 400, letterSpacing: '0.04em', padding: '3px 0 0 14px' }}>{isExpanded ? '▲ hide' : '▼ notes'}</button>
+                      {(w.buyer_note || w.producer_note || w.women_note) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '13px', marginTop: '6px' }}>
+                          {w.buyer_note && (
+                            <button onClick={() => toggleNote(w.id, 'wine')} title="Wine note"
+                              style={{ background: openType === 'wine' ? 'rgba(110,31,46,0.12)' : 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '3px 6px', opacity: openType === 'wine' ? 1 : 0.7 }}>🍷</button>
+                          )}
+                          {w.producer_note && (
+                            <button onClick={() => toggleNote(w.id, 'producer')} title="Producer"
+                              style={{ background: openType === 'producer' ? 'rgba(110,31,46,0.12)' : 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '3px 6px', opacity: openType === 'producer' ? 1 : 0.7 }}>🍇</button>
+                          )}
+                          {w.women_note && (
+                            <button onClick={() => toggleNote(w.id, 'women')} title="Women in wine"
+                              style={{ background: openType === 'women' ? 'rgba(155,58,74,0.14)' : 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '3px 6px', color: '#9b3a4a', opacity: openType === 'women' ? 1 : 0.8 }}>♀</button>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text, fontWeight: isMag ? 700 : 400 }}>{w.vintage || '—'}</div>
@@ -539,14 +564,14 @@ export default function BuyerPage() {
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: isMag ? 700 : 400, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
                       {isSelected && <div style={{ fontSize: '9px', color: C.wine, fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
                     </div>
                     <div style={{ textAlign: 'right', paddingRight: '22px' }}>
                       {wsDp ? (
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', fontWeight: isMag ? 700 : 400, color: C.muted }}>£{wsDp.toFixed(2)}</div>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontStyle: 'italic', fontWeight: isMag ? 700 : 400, color: C.muted }}>£{wsDp.toFixed(2)}</div>
                       ) : (
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontStyle: 'italic', fontWeight: isMag ? 700 : 400, color: C.line }}>—</div>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontStyle: 'italic', fontWeight: isMag ? 700 : 400, color: C.line }}>—</div>
                       )}
                     </div>
                     <div style={{ textAlign: 'center' }}>
@@ -556,9 +581,10 @@ export default function BuyerPage() {
                       )}
                     </div>
                   </div>
-                  {isExpanded && hasNotes && (
-                    <div style={{ background: C.cream, padding: '0 24px 14px 28px', borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent' }}>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: C.text, lineHeight: 1.6 }}>{w.buyer_note}</div>
+                  {openType && (
+                    <div style={{ background: C.cream, padding: '4px 24px 16px 28px', borderLeft: isSelected ? '3px solid ' + C.wine : '3px solid transparent' }}>
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine, marginBottom: '5px' }}>{openType === 'wine' ? 'Wine note' : openType === 'producer' ? 'Producer' : 'Women in wine'}</div>
+                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: C.text, lineHeight: 1.6, maxWidth: '760px' }}>{openType === 'wine' ? w.buyer_note : openType === 'producer' ? w.producer_note : w.women_note}</div>
                     </div>
                   )}
                 </div>
