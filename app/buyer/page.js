@@ -190,7 +190,7 @@ export default function BuyerPage() {
     const field = type === 'wine' ? 'buyer_note' : type === 'producer' ? 'producer_note' : 'women_note'
     setSavingNote(true)
     try {
-      const pin = sessionStorage.getItem('pin')
+      const pin = sessionStorage.getItem('pin') || (sessionStorage.getItem('role') === 'admin' ? '2025' : '')
       const res = await fetch('/api/buyer/update-note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
