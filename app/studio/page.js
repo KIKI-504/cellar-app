@@ -63,6 +63,12 @@ function bottleSortKey(size) {
   return 75
 }
 
+function fmtChecked(d) {
+  if (!d) return ''
+  const dt = new Date(d + 'T00:00:00')
+  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
 function EditableCell({ value, onSave, type = 'text', step, min, placeholder, style, width }) {
   const [local, setLocal] = useState(value ?? '')
   const [focused, setFocused] = useState(false)
@@ -185,6 +191,18 @@ export default function StudioPage() {
   async function updateStudio(id, field, value) {
     const { error } = await supabase.from('studio').update({ [field]: value }).eq('id', id)
     if (!error) setStudioWines(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
+
+  async function markChecked(id) {
+    const today = new Date().toISOString().split('T')[0]
+    const { error } = await supabase.from('studio').update({ checked_on: today }).eq('id', id)
+    if (!error) { setStudioWines(prev => prev.map(s => s.id === id ? { ...s, checked_on: today } : s)); flashSave() }
+  }
+
+  async function updateQtyChecked(id, value) {
+    const today = new Date().toISOString().split('T')[0]
+    const { error } = await supabase.from('studio').update({ quantity: value, checked_on: today }).eq('id', id)
+    if (!error) setStudioWines(prev => prev.map(s => s.id === id ? { ...s, quantity: value, checked_on: today } : s))
   }
 
   async function updateWine(studioId, wineId, field, value) {
@@ -401,6 +419,7 @@ export default function StudioPage() {
       else if (sortField === 'ws_price') { const aWs = a.wines?.ws_lowest_per_bottle ? parseFloat(a.wines.ws_lowest_per_bottle) : 0; const bWs = b.wines?.ws_lowest_per_bottle ? parseFloat(b.wines.ws_lowest_per_bottle) : 0; av = aWs ? (aWs + dutyForSize(a.bottle_size)) * 1.2 : 0; bv = bWs ? (bWs + dutyForSize(b.bottle_size)) * 1.2 : 0 }
       else if (sortField === 'colour') { av = (a.wines?.colour || a.colour || '').toLowerCase(); bv = (b.wines?.colour || b.colour || '').toLowerCase() }
       else if (sortField === 'local') { av = a.include_in_local ? 1 : 0; bv = b.include_in_local ? 1 : 0 }
+      else if (sortField === 'checked') { av = a.checked_on || ''; bv = b.checked_on || '' }
       else if (sortField === 'ws_date') { av = a.wines?.ws_price_date || ''; bv = b.wines?.ws_price_date || '' }
       else { av = a.date_moved || ''; bv = b.date_moved || '' }
       if (typeof av === 'number') { if (av < bv) return sortDir === 'asc' ? -1 : 1; if (av > bv) return sortDir === 'asc' ? 1 : -1; return 0 }
@@ -415,6 +434,9 @@ export default function StudioPage() {
   const availableCount = studioWines.filter(s => s.status === 'Available').length
   const localCount = studioWines.filter(s => s.include_in_local && s.status === 'Available').length
   const totalBottles = studioWines.filter(s => s.status === 'Available').reduce((sum, s) => sum + (s.quantity || 0), 0)
+  const todayStr = new Date().toISOString().split('T')[0]
+  const checkedToday = studioWines.filter(s => s.status === 'Available' && s.checked_on === todayStr).length
+  const neverChecked = studioWines.filter(s => s.status === 'Available' && !s.checked_on).length
 
   const inputStyle = { border: '1px solid var(--border)', background: 'var(--white)', padding: '7px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', width: '100%' }
   const labelStyle = { fontSize: '9px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', display: 'block', marginBottom: '4px' }
@@ -449,7 +471,7 @@ export default function StudioPage() {
         </div>
 
         <div style={{ display:'flex', gap:'20px', padding:'12px 16px', background:'var(--white)', border:'1px solid var(--border)', marginBottom:'16px', fontSize:'11px', flexWrap:'wrap', alignItems:'baseline' }}>
-          {[['available', availableCount], ['on bottles on hand', localCount], ['total bottles', totalBottles]].map(([label, n]) => (
+          {[['available', availableCount], ['on bottles on hand', localCount], ['total bottles', totalBottles], ['checked today', checkedToday], ['never checked', neverChecked]].map(([label, n]) => (
             <div key={label} style={{ display:'flex', gap:'6px', alignItems:'baseline' }}>
               <span style={{ fontWeight:500, color:'var(--wine)', fontSize:'14px' }}>{n}</span>
               <span style={{ color:'var(--muted)' }}>{label}</span>
@@ -483,6 +505,9 @@ export default function StudioPage() {
           <button onClick={() => cycleSort('ws_date')} style={{ background:sortField==='ws_date'?'var(--wine)':'none', color:sortField==='ws_date'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
             Sort by WS Date {sortField === 'ws_date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </button>
+          <button onClick={() => cycleSort('checked')} style={{ background:sortField==='checked'?'var(--wine)':'none', color:sortField==='checked'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
+            Unchecked first {sortField === 'checked' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+          </button>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
@@ -498,6 +523,7 @@ export default function StudioPage() {
                 <th style={{ padding:'10px 8px', textAlign:'right', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('sale_price')}>Sale Price {sortIcon('sale_price')}</th>
                 <th style={{ padding:'10px 8px', textAlign:'right', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('ws_price')}>WS DP {sortIcon('ws_price')}</th>
                 <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:400 }}>Status</th>
+                <th style={{ padding:'10px 8px', textAlign:'center', cursor:'pointer', fontWeight:400, whiteSpace:'nowrap' }} onClick={() => cycleSort('checked')}>Checked {sortIcon('checked')}</th>
                 <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:400 }}>Notes</th>
                 <th style={{ padding:'10px 8px', textAlign:'center', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('local')}>Local {sortIcon('local')}</th>
                 <th style={{ padding:'10px 8px', textAlign:'center', fontWeight:400 }}>Label</th>
@@ -548,13 +574,18 @@ export default function StudioPage() {
                       <td style={{ padding:'10px 6px', fontFamily:'DM Mono, monospace', fontSize:'11px', fontWeight:600, color:'var(--ink)', whiteSpace:'nowrap' }}>{vintage}</td>
                       <td style={{ padding:'10px 8px', fontSize:'11px', color:'var(--muted)', whiteSpace:'nowrap' }}>{colour}</td>
                       <td style={{ padding:'10px 8px', fontSize:'11px', fontFamily:'DM Mono, monospace', whiteSpace:'nowrap', color:isMagnum(s.bottle_size)?'var(--wine)':'var(--muted)', fontWeight:isMagnum(s.bottle_size)?600:400 }}>{isMagnum(s.bottle_size)?'150cl':s.bottle_size==='37.5'?'37.5cl':s.bottle_size==='300'?'300cl':'75cl'}</td>
-                      <td style={{ padding:'10px 8px', textAlign:'center' }}><EditableCell value={s.quantity} type="number" min="0" step="1" width="52px" style={{ textAlign:'center', border:'1px solid var(--border)', padding:'4px 6px', fontFamily:'DM Mono, monospace', fontSize:'12px', background:'var(--cream)' }} onSave={v => updateStudio(s.id,'quantity',v)} /></td>
+                      <td style={{ padding:'10px 8px', textAlign:'center' }}><EditableCell value={s.quantity} type="number" min="0" step="1" width="52px" style={{ textAlign:'center', border:'1px solid var(--border)', padding:'4px 6px', fontFamily:'DM Mono, monospace', fontSize:'12px', background:'var(--cream)' }} onSave={v => updateQtyChecked(s.id, v)} /></td>
                       <td style={{ padding:'10px 8px', textAlign:'right', fontFamily:'DM Mono, monospace', fontSize:'12px', color:'var(--ink)', whiteSpace:'nowrap' }}>{dpVal ? `£${dpVal}` : '—'}</td>
                       <td style={{ padding:'10px 8px', textAlign:'right' }}><EditableCell value={s.sale_price} type="number" min="0" step="1" placeholder="—" width="64px" style={{ textAlign:'right', border:'1px solid var(--border)', padding:'4px 6px', fontFamily:'DM Mono, monospace', fontSize:'12px', background:'var(--cream)' }} onSave={v => updateStudio(s.id,'sale_price',v)} /></td>
                       <td style={{ padding:'10px 8px', textAlign:'right', whiteSpace:'nowrap' }}>
                         {wsDP ? (<div><div style={{ fontFamily:'DM Mono, monospace', fontSize:'12px', fontWeight:600, color:s.sale_price&&parseFloat(s.sale_price)<parseFloat(wsDP)?'#2d6a4f':s.sale_price&&parseFloat(s.sale_price)>parseFloat(wsDP)?'#c0392b':'var(--muted)' }}>£{wsDP}</div>{wsDate && <div style={{ fontSize:'9px', color:'var(--muted)', fontFamily:'DM Mono, monospace', marginTop:'1px' }}>{wsDate}</div>}</div>) : (<span style={{ fontSize:'11px', color:'var(--border)', fontFamily:'DM Mono, monospace' }}>—</span>)}
                       </td>
                       <td style={{ padding:'10px 8px' }}><select value={s.status||'Available'} onChange={e => updateStudio(s.id,'status',e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'4px 6px', fontFamily:'DM Mono, monospace', fontSize:'10px', color:s.status==='Available'?'#2d6a4f':s.status==='Consumed'?'#7a5e10':'#c0392b', outline:'none', cursor:'pointer' }}><option value="Available">Available</option><option value="Sold">Sold</option><option value="Consumed">Consumed</option></select></td>
+                      <td style={{ padding:'10px 8px', textAlign:'center', whiteSpace:'nowrap' }}>
+                        {s.checked_on
+                          ? <button onClick={() => markChecked(s.id)} title={`Checked ${s.checked_on} — tap to update to today`} style={{ background: s.checked_on === todayStr ? 'rgba(45,106,79,0.12)' : 'none', border:'1px solid rgba(45,106,79,0.35)', color:'#2d6a4f', padding:'3px 7px', fontFamily:'DM Mono, monospace', fontSize:'9px', cursor:'pointer', letterSpacing:'0.04em', whiteSpace:'nowrap' }}>✓ {fmtChecked(s.checked_on)}</button>
+                          : <button onClick={() => markChecked(s.id)} title="Mark checked today" style={{ background:'none', border:'1px dashed var(--border)', color:'var(--muted)', padding:'3px 10px', fontFamily:'DM Mono, monospace', fontSize:'9px', cursor:'pointer', letterSpacing:'0.04em', whiteSpace:'nowrap', opacity:0.75 }}>check</button>}
+                      </td>
                       <td style={{ padding:'10px 8px' }}><button onClick={() => setExpandedNote(isExpanded?null:s.id)} style={{ background:isExpanded?'var(--ink)':'none', color:isExpanded?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'4px 8px', fontFamily:'DM Mono, monospace', fontSize:'9px', cursor:'pointer', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>{isExpanded ? '▲ hide' : '▼ notes'}</button></td>
                       <td style={{ padding:'10px 8px', textAlign:'center' }}><input type="checkbox" checked={!!s.include_in_local} onChange={e => updateStudio(s.id,'include_in_local',e.target.checked)} style={{ cursor:'pointer', width:'16px', height:'16px' }} /></td>
                       <td style={{ padding:'10px 8px', textAlign:'center' }}><button onClick={() => printLabel(s)} style={{ background:'#f5e6c8', border:'1px solid #d4ad45', color:'#8b6914', padding:'4px 8px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.05em' }}>🏷</button></td>
@@ -566,7 +597,7 @@ export default function StudioPage() {
 
                     {isExpanded && (
                       <tr style={{ background: 'var(--cream)' }}>
-                        <td colSpan={13} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
+                        <td colSpan={14} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                             <div>
                               <label style={labelStyle}>Wine Notes <span style={{ color: '#2d6a4f', fontWeight: 400 }}>shown to buyers &amp; on pull list</span></label>
