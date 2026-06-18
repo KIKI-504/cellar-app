@@ -519,15 +519,6 @@ export default function BuyerPage() {
   const [assignQtys, setAssignQtys] = useState({}) // buyerId -> qty string
   const [assignSaving, setAssignSaving] = useState(false)
 
-  // Studio-to-roster modal state
-  const [showStudioModal, setShowStudioModal] = useState(false)
-  const [studioSearch, setStudioSearch] = useState('')
-  const [studioResults, setStudioResults] = useState([])
-  const [studioSearching, setStudioSearching] = useState(false)
-  const [studioSelected, setStudioSelected] = useState(null)
-  const [studioSalePrice, setStudioSalePrice] = useState('')
-  const [studioQty, setStudioQty] = useState('')
-  const [studioSaving, setStudioSaving] = useState(false)
 
   const SIDE = isMobile ? '16px' : '40px'
 
@@ -630,55 +621,6 @@ export default function BuyerPage() {
     setAssigningWineId(null)
     setAssignQtys({})
     setAssignSaving(false)
-  }
-
-  // ── Studio-to-roster ──────────────────────────────────────────────────────
-
-  async function searchStudio(q) {
-    setStudioSearch(q)
-    if (q.length < 2) { setStudioResults([]); return }
-    setStudioSearching(true)
-    const { data } = await supabase.from('studio')
-      .select('id, quantity, bottle_size, wine_id, unlinked_description, unlinked_vintage, wines(id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity)')
-      .eq('status', 'Available')
-      .not('wine_id', 'is', null)
-      .ilike('wines.description', `%${q}%`)
-      .limit(10)
-    // Also search by unlinked_description
-    const { data: data2 } = await supabase.from('studio')
-      .select('id, quantity, bottle_size, wine_id, unlinked_description, unlinked_vintage, wines(id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity)')
-      .eq('status', 'Available')
-      .is('wine_id', null)
-      .ilike('unlinked_description', `%${q}%`)
-      .limit(5)
-    const combined = [...(data || []).filter(r => r.wines), ...(data2 || [])]
-    setStudioResults(combined)
-    setStudioSearching(false)
-  }
-
-  async function addStudioToRoster() {
-    if (!studioSelected) return
-    if (!studioSalePrice || parseFloat(studioSalePrice) <= 0) { alert('Please set a sale price'); return }
-    setStudioSaving(true)
-    const wineId = studioSelected.wine_id || studioSelected.wines?.id
-    const qty = studioQty ? parseInt(studioQty) : studioSelected.quantity
-    if (wineId) {
-      // Update wines record: set include_in_buyer_view, sale_price, quantity
-      await supabase.from('wines').update({
-        include_in_buyer_view: true,
-        sale_price: parseFloat(studioSalePrice),
-        quantity: String(qty),
-      }).eq('id', wineId)
-      // Refresh master
-      await fetchMasterAdmin()
-    }
-    setShowStudioModal(false)
-    setStudioSelected(null)
-    setStudioSearch('')
-    setStudioResults([])
-    setStudioSalePrice('')
-    setStudioQty('')
-    setStudioSaving(false)
   }
 
   // ── Preview ───────────────────────────────────────────────────────────────
@@ -926,10 +868,7 @@ export default function BuyerPage() {
             <div style={{ background: C.ink, padding: '12px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                 <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,253,249,0.6)' }}>Master Sales Roster — {mFiltered.length}/{masterWines.length} wines</span>
-                <button onClick={() => setShowStudioModal(true)}
-                  style={{ background: C.gold, color: C.inkDeep, border: 'none', borderRadius: '6px', padding: '5px 12px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
-                  + Add studio wine
-                </button>
+
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <input value={masterSearch} onChange={e => setMasterSearch(e.target.value)} placeholder="Search..."
@@ -1085,71 +1024,6 @@ export default function BuyerPage() {
           </div>
         </div>
 
-        {/* Studio-to-roster modal */}
-        {showStudioModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.7)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-            <div style={{ background: C.white, width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', padding: '28px', borderRadius: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300 }}>Add studio wine to roster</div>
-                <button onClick={() => { setShowStudioModal(false); setStudioSelected(null); setStudioSearch(''); setStudioResults([]); setStudioSalePrice(''); setStudioQty('') }} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: C.muted }}>x</button>
-              </div>
-              {!studioSelected ? (
-                <div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginBottom: '12px' }}>Search studio wines with a linked inventory record.</div>
-                  <input value={studioSearch} onChange={e => searchStudio(e.target.value)} placeholder="Search by wine name..."
-                    style={{ width: '100%', border: '1.5px solid ' + C.line, borderRadius: '8px', padding: '10px 14px', fontFamily: 'DM Mono, monospace', fontSize: '13px', outline: 'none', background: C.white, boxSizing: 'border-box' }} />
-                  {studioSearching && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '8px' }}>Searching...</div>}
-                  {studioResults.length > 0 && (
-                    <div style={{ border: '1px solid ' + C.line, borderRadius: '8px', overflow: 'hidden', marginTop: '8px' }}>
-                      {studioResults.map(s => {
-                        const name = s.wines?.description || s.unlinked_description || '-'
-                        const vintage = s.wines?.vintage || s.unlinked_vintage || ''
-                        const alreadyOnRoster = s.wines?.include_in_buyer_view
-                        return (
-                          <button key={s.id} onClick={() => { setStudioSelected(s); setStudioQty(String(s.quantity)); setStudioSalePrice(s.wines?.sale_price ? String(s.wines.sale_price) : '') }}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', borderBottom: '1px solid ' + C.line, cursor: 'pointer', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>
-                            <span style={{ color: C.text }}>{name}</span>
-                            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginLeft: '8px' }}>{vintage} · {s.quantity} btl</span>
-                            {alreadyOnRoster && <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#2d6a4f', marginLeft: '8px', border: '1px solid rgba(45,106,79,0.3)', borderRadius: '3px', padding: '1px 5px' }}>on roster</span>}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <div style={{ background: C.cream, padding: '12px 14px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>{studioSelected.wines?.description || studioSelected.unlinked_description}</div>
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '2px' }}>{studioSelected.wines?.vintage} · {studioSelected.quantity} bottles in studio</div>
-                    </div>
-                    <button onClick={() => { setStudioSelected(null); setStudioSearch('') }} style={{ background: 'none', border: 'none', color: C.muted, fontSize: '16px', cursor: 'pointer' }}>x</button>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                    <div>
-                      <label style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, display: 'block', marginBottom: '6px' }}>Sale price / btl £ *</label>
-                      <input type="number" step="0.01" value={studioSalePrice} onChange={e => setStudioSalePrice(e.target.value)} placeholder="0.00"
-                        style={{ width: '100%', border: '1.5px solid ' + (studioSalePrice ? C.line : C.wine), borderRadius: '8px', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, display: 'block', marginBottom: '6px' }}>Qty to offer</label>
-                      <input type="number" min="1" value={studioQty} onChange={e => setStudioQty(e.target.value)} placeholder={studioSelected.quantity}
-                        style={{ width: '100%', border: '1.5px solid ' + C.line, borderRadius: '8px', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
-                    </div>
-                  </div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginBottom: '16px' }}>
-                    This will add the wine to the master roster with {studioQty || studioSelected.quantity} bottles available at £{studioSalePrice || '—'} per bottle. You can then assign it to specific buyers from the roster.
-                  </div>
-                  <button onClick={addStudioToRoster} disabled={studioSaving}
-                    style={{ width: '100%', background: C.wine, color: C.white, border: 'none', borderRadius: '8px', padding: '12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', cursor: studioSaving ? 'wait' : 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                    {studioSaving ? 'Adding...' : 'Add to master roster'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     )
   }
