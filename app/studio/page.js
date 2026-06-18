@@ -1,5 +1,5 @@
 'use client'
-// ✅ CORRECT VERSION — v7 — sommelier_note added to expanded notes panel
+// ✅ v8 — Add to Master Roster flow from studio
 export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -35,8 +35,8 @@ function getPriceAlert(s) {
       : null
   if (!dpPrice) return null
   const classification = classifyWine(s.wines?.description || '', s.unlinked_description || '')
-  if (classification === 'grandcru' && dpPrice < 100) return { icon: '⚠️', tooltip: 'Grand Cru under £100 DP' }
-  if (classification === 'village' && dpPrice > 100) return { icon: '⚠️', tooltip: 'Village wine over £100 DP' }
+  if (classification === 'grandcru' && dpPrice < 100) return { icon: '\u26a0\ufe0f', tooltip: 'Grand Cru under £100 DP' }
+  if (classification === 'village' && dpPrice > 100) return { icon: '\u26a0\ufe0f', tooltip: 'Village wine over £100 DP' }
   return null
 }
 
@@ -99,8 +99,8 @@ function printLabel(s) {
   const ws = s.wines?.ws_lowest_per_bottle ? parseFloat(s.wines.ws_lowest_per_bottle) : null
   const wsDate = s.wines?.ws_price_date || null
   const wsDP = ws ? ((ws + dutyForSize(s.bottle_size)) * 1.2).toFixed(2) : null
-  const wsLine = wsDP ? `WS Avg DP: £${wsDP}${wsDate ? '  ·  ' + wsDate : ''}` : 'WS Avg DP:'
-  const block = `<div class="label-copy">${mag ? '<div class="line magnum">MAGNUM</div>' : ''}<div class="line vintage">${vintage}</div><div class="line wine">${wineName}</div>${producer ? `<div class="line producer">${producer}</div>` : ''}<div class="line price">DP  £${dp || '—'}</div><div class="line price">Sale Price  £${salePrice || '—'}</div><div class="line ws">${wsLine}</div></div>`
+  const wsLine = wsDP ? `WS Avg DP: \u00a3${wsDP}${wsDate ? '  \u00b7  ' + wsDate : ''}` : 'WS Avg DP:'
+  const block = `<div class="label-copy">${mag ? '<div class="line magnum">MAGNUM</div>' : ''}<div class="line vintage">${vintage}</div><div class="line wine">${wineName}</div>${producer ? `<div class="line producer">${producer}</div>` : ''}<div class="line price">DP  \u00a3${dp || '\u2014'}</div><div class="line price">Sale Price  \u00a3${salePrice || '\u2014'}</div><div class="line ws">${wsLine}</div></div>`
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{size:4in 6in;margin:0}*{box-sizing:border-box;margin:0;padding:0}body{width:4in;height:6in;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;padding-top:0.25in}.label-copy{width:4in;height:3in;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.25in;border-bottom:1px dashed #ccc;box-sizing:border-box}.label-copy:last-child{border-bottom:none}.line{text-align:center;line-height:1.2;width:100%}.magnum{font-size:18pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:4pt;border:2px solid #000;padding:2pt 8pt;display:inline-block;width:auto}.vintage{font-size:28pt;font-weight:900;letter-spacing:0.05em;margin-bottom:4pt}.wine{font-size:22pt;font-weight:700;margin-bottom:2pt}.producer{font-size:18pt;font-weight:700;margin-bottom:6pt}.price{font-size:16pt;font-weight:400;margin-bottom:2pt}.ws{font-size:12pt;font-weight:300;margin-top:4pt;color:#555}</style></head><body>${block}${block}</body></html>`
   const blob = new Blob([html], { type: 'text/html' })
   const url = URL.createObjectURL(blob)
@@ -168,6 +168,12 @@ export default function StudioPage() {
   const [addWineId, setAddWineId] = useState('')
   const [addSaving, setAddSaving] = useState(false)
   const [saveFlash, setSaveFlash] = useState(null)
+
+  // Roster selection state
+  const [rosterSelected, setRosterSelected] = useState({}) // studioId -> true
+  const [showRosterModal, setShowRosterModal] = useState(false)
+  const [rosterItems, setRosterItems] = useState([]) // array of {studioId, wineId, name, vintage, qty, salePrice, alreadyOnRoster}
+  const [rosterSaving, setRosterSaving] = useState(false)
 
   useEffect(() => {
     const role = sessionStorage.getItem('role')
@@ -398,6 +404,57 @@ export default function StudioPage() {
     setScanSaving(false)
   }
 
+  // ── Roster selection ────────────────────────────────────────────────────
+
+  function toggleRosterSelect(studioId) {
+    setRosterSelected(prev => {
+      const next = { ...prev }
+      if (next[studioId]) delete next[studioId]; else next[studioId] = true
+      return next
+    })
+  }
+
+  function openRosterModal() {
+    const items = filtered
+      .filter(s => rosterSelected[s.id] && s.wine_id)
+      .map(s => ({
+        studioId: s.id,
+        wineId: s.wine_id,
+        name: s.wines?.description || '',
+        vintage: s.wines?.vintage || '',
+        qty: String(s.quantity || 0),
+        salePrice: s.wines?.sale_price ? String(parseFloat(s.wines.sale_price).toFixed(2)) : '',
+        alreadyOnRoster: !!s.wines?.include_in_buyer_view,
+        colour: s.wines?.colour || s.colour || '',
+        region: s.wines?.region || '',
+      }))
+    setRosterItems(items)
+    setShowRosterModal(true)
+  }
+
+  function updateRosterItem(studioId, field, value) {
+    setRosterItems(prev => prev.map(item => item.studioId === studioId ? { ...item, [field]: value } : item))
+  }
+
+  async function saveToRoster() {
+    const toSave = rosterItems.filter(item => item.salePrice && parseFloat(item.salePrice) > 0)
+    if (toSave.length === 0) { alert('Please set a sale price for at least one wine'); return }
+    setRosterSaving(true)
+    for (const item of toSave) {
+      await supabase.from('wines').update({
+        include_in_buyer_view: true,
+        sale_price: parseFloat(item.salePrice),
+        quantity: item.qty,
+      }).eq('id', item.wineId)
+    }
+    setRosterSaving(false)
+    setShowRosterModal(false)
+    setRosterSelected({})
+    await fetchStudio()
+    flashSave()
+  }
+
+
   const filtered = studioWines
     .filter(s => {
       if (filterStatus && s.status !== filterStatus) return false
@@ -437,11 +494,12 @@ export default function StudioPage() {
   const todayStr = new Date().toISOString().split('T')[0]
   const checkedToday = studioWines.filter(s => s.status === 'Available' && s.checked_on === todayStr).length
   const neverChecked = studioWines.filter(s => s.status === 'Available' && !s.checked_on).length
+  const rosterSelectedCount = Object.keys(rosterSelected).length
 
   const inputStyle = { border: '1px solid var(--border)', background: 'var(--white)', padding: '7px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', outline: 'none', width: '100%' }
   const labelStyle = { fontSize: '9px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', display: 'block', marginBottom: '4px' }
 
-  if (loading) return (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}><div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', color: 'var(--wine)' }}>Loading studio…</div></div>)
+  if (loading) return (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}><div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', color: 'var(--wine)' }}>Loading studio...</div></div>)
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
@@ -483,7 +541,7 @@ export default function StudioPage() {
         </div>
 
         <div style={{ display:'flex', gap:'10px', marginBottom:'8px', flexWrap:'wrap', alignItems:'center' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search studio…" autoCorrect="off" autoCapitalize="off" spellCheck={false} style={{ flex:1, minWidth:'160px', border:'1px solid var(--border)', background:'var(--white)', padding:'8px 12px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search studio..." autoCorrect="off" autoCapitalize="off" spellCheck={false} style={{ flex:1, minWidth:'160px', border:'1px solid var(--border)', background:'var(--white)', padding:'8px 12px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }} />
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'8px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }}>
             <option value="">All Status</option><option value="Available">Available</option><option value="Sold">Sold</option><option value="Consumed">Consumed</option>
           </select>
@@ -498,7 +556,7 @@ export default function StudioPage() {
           <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'6px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }} />
           <span style={{ fontSize:'10px', color:'var(--muted)' }}>to</span>
           <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'6px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }} />
-          {(filterDateFrom || filterDateTo) && (<button onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }} style={{ background:'none', border:'none', fontFamily:'DM Mono, monospace', fontSize:'10px', color:'var(--wine)', cursor:'pointer' }}>✕ clear</button>)}
+          {(filterDateFrom || filterDateTo) && (<button onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }} style={{ background:'none', border:'none', fontFamily:'DM Mono, monospace', fontSize:'10px', color:'var(--wine)', cursor:'pointer' }}>x clear</button>)}
           <button onClick={() => cycleSort('date_moved')} style={{ background:sortField==='date_moved'?'var(--wine)':'none', color:sortField==='date_moved'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
             Sort by Date {sortField === 'date_moved' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </button>
@@ -508,12 +566,24 @@ export default function StudioPage() {
           <button onClick={() => cycleSort('checked')} style={{ background:sortField==='checked'?'var(--wine)':'none', color:sortField==='checked'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
             Unchecked first {sortField === 'checked' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </button>
+          {rosterSelectedCount > 0 && (
+            <button onClick={openRosterModal} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'5px 14px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', marginLeft:'auto' }}>
+              Add {rosterSelectedCount} to Master Roster →
+            </button>
+          )}
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', paddingBottom: rosterSelectedCount > 0 ? '80px' : '0' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                <th style={{ padding:'10px 10px', textAlign:'center', fontWeight:400, width:'36px' }}>
+                  <input type="checkbox" onChange={e => {
+                    if (e.target.checked) {
+                      const sel = {}; filtered.filter(s => s.wine_id && s.status === 'Available').forEach(s => sel[s.id] = true); setRosterSelected(sel)
+                    } else { setRosterSelected({}) }
+                  }} style={{ cursor:'pointer', width:'14px', height:'14px' }} />
+                </th>
                 <th style={{ padding:'10px 12px', textAlign:'left', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('name')}>Wine {sortIcon('name')}</th>
                 <th style={{ padding:'10px 6px', textAlign:'left', cursor:'pointer', fontWeight:400, whiteSpace:'nowrap' }} onClick={() => cycleSort('vintage')}>Vin. {sortIcon('vintage')}</th>
                 <th style={{ padding:'10px 8px', textAlign:'left', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('colour')}>Colour {sortIcon('colour')}</th>
@@ -549,21 +619,32 @@ export default function StudioPage() {
                 const sommelierNote = s.wines?.sommelier_note || ''
                 const studioNote = s.notes || ''
                 const hasWineId = !!s.wine_id
+                const isRosterSelected = !!rosterSelected[s.id]
+                const onRoster = !!s.wines?.include_in_buyer_view
 
                 return (
                   <React.Fragment key={s.id}>
-                    <tr style={{ background:'var(--white)', borderBottom:'1px solid var(--border)', opacity: s.status === 'Sold' || s.status === 'Consumed' ? 0.55 : 1 }} onMouseEnter={e => e.currentTarget.style.background='var(--cream)'} onMouseLeave={e => e.currentTarget.style.background='var(--white)'}>
+                    <tr style={{ background: isRosterSelected ? 'rgba(110,31,46,0.05)' : 'var(--white)', borderBottom:'1px solid var(--border)', opacity: s.status === 'Sold' || s.status === 'Consumed' ? 0.55 : 1 }} onMouseEnter={e => { if (!isRosterSelected) e.currentTarget.style.background='var(--cream)' }} onMouseLeave={e => { if (!isRosterSelected) e.currentTarget.style.background='var(--white)' }}>
+                      <td style={{ padding:'10px 10px', textAlign:'center' }}>
+                        {hasWineId && s.status === 'Available' ? (
+                          <input type="checkbox" checked={isRosterSelected} onChange={() => toggleRosterSelect(s.id)}
+                            style={{ cursor:'pointer', width:'14px', height:'14px', accentColor:'var(--wine)' }} />
+                        ) : (
+                          <span style={{ display:'inline-block', width:'14px', height:'14px' }} />
+                        )}
+                      </td>
                       <td style={{ padding:'10px 12px', maxWidth:'280px' }}>
                         <div style={{ display:'flex', alignItems:'flex-start', gap:'6px' }}>
                           <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:dot, flexShrink:0, marginTop:'4px', display:'inline-block' }}></span>
                           <div>
-                            {isEditing ? (s.wines ? <EditableCell value={s.wines.description||''} onSave={v => updateWine(s.id,s.wines.id,'description',v)} placeholder="Wine name…" width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} /> : <EditableCell value={s.unlinked_description||''} onSave={v => updateStudio(s.id,'unlinked_description',v)} placeholder="Wine name…" width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} />) : (
+                            {isEditing ? (s.wines ? <EditableCell value={s.wines.description||''} onSave={v => updateWine(s.id,s.wines.id,'description',v)} placeholder="Wine name..." width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} /> : <EditableCell value={s.unlinked_description||''} onSave={v => updateStudio(s.id,'unlinked_description',v)} placeholder="Wine name..." width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} />) : (
                               <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', color:'var(--ink)', lineHeight:1.3, fontWeight:isMagnum(s.bottle_size)?700:400 }}>
                                 {womenNote && <span title={womenNote} style={{ marginRight:'4px', fontSize:'12px', cursor:'help' }}>♀</span>}
                                 {name}
                                 {alert && <span title={alert.tooltip} style={{ marginLeft:'4px', fontSize:'11px' }}>{alert.icon}</span>}
                                 {buyerNote && <span style={{ marginLeft:'4px', fontSize:'10px', color:'var(--muted)' }}>✎</span>}
                                 {sommelierNote && <span title={sommelierNote} style={{ marginLeft:'6px', fontSize:'10px', color:'#8b6914', cursor:'help' }}>★</span>}
+                                {onRoster && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', color:'#2d6a4f', border:'1px solid rgba(45,106,79,0.3)', padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>on roster</span>}
                                 {(s.status === 'Sold' || s.status === 'Consumed') && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase', color: s.status === 'Sold' ? '#c0392b' : '#7a5e10', border: `1px solid ${s.status === 'Sold' ? 'rgba(192,57,43,0.35)' : 'rgba(122,94,16,0.35)'}`, padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>{s.status}</span>}
                               </div>
                             )}
@@ -597,17 +678,16 @@ export default function StudioPage() {
 
                     {isExpanded && (
                       <tr style={{ background: 'var(--cream)' }}>
-                        <td colSpan={14} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
+                        <td colSpan={15} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                             <div>
-                              <label style={labelStyle}>Wine Notes <span style={{ color: '#2d6a4f', fontWeight: 400 }}>shown to buyers &amp; on pull list</span></label>
-                              <textarea defaultValue={buyerNote} placeholder="Tasting notes, producer story…" onBlur={e => { if (e.target.value !== buyerNote) updateWineNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
+                              <label style={labelStyle}>Wine Notes <span style={{ color: '#2d6a4f', fontWeight: 400 }}>shown to buyers & on pull list</span></label>
+                              <textarea defaultValue={buyerNote} placeholder="Tasting notes, producer story..." onBlur={e => { if (e.target.value !== buyerNote) updateWineNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
                             </div>
                             <div>
                               <label style={{ ...labelStyle, color: '#9b3a4a' }}>♀ Women in Wine <span style={{ color: 'var(--muted)', fontWeight: 400 }}>shown on Buyer View</span></label>
-                              {hasWineId ? (<textarea defaultValue={womenNote} placeholder="Women winemaker or producer story…" onBlur={e => { if (e.target.value !== womenNote) updateWine(s.id, s.wine_id, 'women_note', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
+                              {hasWineId ? (<textarea defaultValue={womenNote} placeholder="Women winemaker or producer story..." onBlur={e => { if (e.target.value !== womenNote) updateWine(s.id, s.wine_id, 'women_note', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
                             </div>
-                            {/* ✅ NEW: Sommelier hook field */}
                             <div>
                               <label style={{ ...labelStyle, color: '#8b6914' }}>★ Sommelier Hook <span style={{ color: 'var(--muted)', fontWeight: 400 }}>gold badge on Bottles on Hand · max 10 words</span></label>
                               {hasWineId ? (
@@ -622,7 +702,7 @@ export default function StudioPage() {
                             </div>
                             <div>
                               <label style={labelStyle}>Delivery Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>studio only</span></label>
-                              <textarea defaultValue={studioNote} placeholder="Condition, delivery ref…" onBlur={e => { if (e.target.value !== studioNote) updateStudio(s.id, 'notes', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
+                              <textarea defaultValue={studioNote} placeholder="Condition, delivery ref..." onBlur={e => { if (e.target.value !== studioNote) updateStudio(s.id, 'notes', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
                             </div>
                             <div>
                               <label style={labelStyle}>IB Price / btl (ex-duty)</label>
@@ -664,6 +744,79 @@ export default function StudioPage() {
         </div>
       </div>
 
+      {/* Roster selection sticky bar */}
+      {rosterSelectedCount > 0 && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', zIndex: 200, boxShadow: '0 -4px 20px rgba(0,0,0,0.3)', borderRadius: '12px 12px 0 0', padding: '14px 28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+            <div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: '#d4ad45' }}>{rosterSelectedCount} wine{rosterSelectedCount !== 1 ? 's' : ''} selected</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(253,250,245,0.45)', marginTop: '2px' }}>Tick wines to add to the Master Roster for buyer assignment</div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setRosterSelected({})} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '10px', cursor: 'pointer', borderRadius: '6px', letterSpacing: '0.06em' }}>Clear</button>
+              <button onClick={openRosterModal} style={{ background: '#b8922a', color: '#1b070d', border: 'none', padding: '8px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', borderRadius: '6px', letterSpacing: '0.08em', fontWeight: 500 }}>Add to Master Roster →</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Roster modal */}
+      {showRosterModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,15,10,0.75)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--white)', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', padding: '28px', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div>
+                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, color: 'var(--ink)' }}>Add to Master Roster</div>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>Set a sale price for each wine. Wines already on the roster will be updated.</div>
+              </div>
+              <button onClick={() => setShowRosterModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--muted)', marginLeft: '16px' }}>×</button>
+            </div>
+
+            <div style={{ marginTop: '20px' }}>
+              {rosterItems.map((item, idx) => {
+                const dpVal = item.qty && item.salePrice ? null : null // just display info
+                return (
+                  <div key={item.studioId} style={{ borderBottom: idx < rosterItems.length - 1 ? '1px solid var(--border)' : 'none', padding: '14px 0' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--ink)', lineHeight: 1.3 }}>{item.name}</div>
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
+                          {item.vintage}{item.region ? ' · ' + item.region : ''}{item.colour ? ' · ' + item.colour : ''}
+                          {item.alreadyOnRoster && <span style={{ marginLeft: '8px', color: '#2d6a4f', border: '1px solid rgba(45,106,79,0.3)', borderRadius: '3px', padding: '0 4px' }}>on roster</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Qty to offer</div>
+                          <input type="number" min="1" value={item.qty}
+                            onChange={e => updateRosterItem(item.studioId, 'qty', e.target.value)}
+                            style={{ width: '72px', border: '1px solid var(--border)', borderRadius: '6px', padding: '7px 8px', fontFamily: 'DM Mono, monospace', fontSize: '13px', textAlign: 'center', outline: 'none' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Sale price / btl £ *</div>
+                          <input type="number" step="0.01" value={item.salePrice} placeholder="0.00"
+                            onChange={e => updateRosterItem(item.studioId, 'salePrice', e.target.value)}
+                            style={{ width: '100px', border: `1.5px solid ${item.salePrice ? 'var(--border)' : 'var(--wine)'}`, borderRadius: '6px', padding: '7px 8px', fontFamily: 'DM Mono, monospace', fontSize: '13px', textAlign: 'right', outline: 'none' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowRosterModal(false)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 18px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveToRoster} disabled={rosterSaving}
+                style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', borderRadius: '8px', padding: '10px 24px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: rosterSaving ? 'wait' : 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {rosterSaving ? 'Saving...' : `Add ${rosterItems.length} wine${rosterItems.length !== 1 ? 's' : ''} to roster`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showScanModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.7)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}>
           <div style={{ background:'var(--white)', width:'100%', maxWidth:'560px', maxHeight:'90vh', overflowY:'auto', padding:'28px' }}>
@@ -679,7 +832,7 @@ export default function StudioPage() {
               <div style={{ marginBottom:'12px' }}>
                 <img src={scanPreview} alt="Preview" style={{ width:'100%', maxHeight:'200px', objectFit:'contain', background:'#f0f0f0' }} />
                 <button onClick={analyseLabel} disabled={scanAnalysing} style={{ width:'100%', marginTop:'8px', background:'var(--wine)', color:'var(--white)', border:'none', padding:'10px', fontFamily:'DM Mono, monospace', fontSize:'11px', cursor:scanAnalysing?'wait':'pointer', letterSpacing:'0.1em', textTransform:'uppercase' }}>
-                  {scanAnalysing ? 'Analysing…' : 'Read Label'}
+                  {scanAnalysing ? 'Analysing...' : 'Read Label'}
                 </button>
               </div>
             )}
@@ -694,7 +847,7 @@ export default function StudioPage() {
                 ) : (
                   <div style={{ marginBottom:'12px' }}>
                     <label style={labelStyle}>Search inventory</label>
-                    <input value={scanSearch} onChange={e => scanSearchWines(e.target.value)} placeholder="Search wines…" style={inputStyle} />
+                    <input value={scanSearch} onChange={e => scanSearchWines(e.target.value)} placeholder="Search wines..." style={inputStyle} />
                     {scanSearchResults.length > 0 && (
                       <div style={{ border:'1px solid var(--border)', background:'var(--white)', maxHeight:'160px', overflowY:'auto' }}>
                         {scanSearchResults.map(w => (<button key={w.id} onClick={() => selectScanWine(w)} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', background:'none', border:'none', cursor:'pointer', borderBottom:'1px solid var(--border)', fontFamily:'Cormorant Garamond, serif', fontSize:'14px' }}>{w.description} <span style={{ color:'var(--muted)', fontSize:'11px' }}>{w.vintage}</span></button>))}
@@ -708,7 +861,6 @@ export default function StudioPage() {
                   <div><label style={labelStyle}>Bottle Size</label><select value={scanBottleSize} onChange={e => setScanBottleSize(e.target.value)} style={inputStyle}><option value="37.5">37.5cl Half</option><option value="75">75cl Bottle</option><option value="150">150cl Magnum</option><option value="300">300cl Double Magnum</option></select></div>
                   <div><label style={labelStyle}>Sale Price £</label><input type="number" step="0.01" value={scanSalePrice} onChange={e => setScanSalePrice(e.target.value)} placeholder="0.00" style={inputStyle} /></div>
                 </div>
-                {/* IB / DP price entry */}
                 <div style={{ gridColumn:'1 / -1', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', background:'rgba(107,30,46,0.03)', border:'1px solid rgba(107,30,46,0.15)', padding:'12px', marginBottom:'12px' }}>
                   <div>
                     <label style={labelStyle}>IB Price / btl £ <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(ex-duty)</span></label>
@@ -735,7 +887,7 @@ export default function StudioPage() {
                 <div style={{ marginBottom: '12px' }}>
                   <label style={labelStyle}>Colour{scanWine && !scanWine.colour ? <span style={{ color: 'var(--wine)', fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}> — not set on record</span> : ''}</label>
                   <select value={scanColour} onChange={e => setScanColour(e.target.value)} style={{ ...inputStyle, border: scanColour ? '1px solid var(--border)' : '2px solid rgba(107,30,46,0.3)' }}>
-                    <option value="">Select colour…</option>
+                    <option value="">Select colour...</option>
                     {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -744,7 +896,7 @@ export default function StudioPage() {
                   <input value={scanNotes} onChange={e => setScanNotes(e.target.value)} placeholder="Optional note" style={inputStyle} />
                 </div>
                 <button onClick={saveScanEntry} disabled={scanSaving} style={{ width:'100%', background:'var(--wine)', color:'var(--white)', border:'none', padding:'12px', fontFamily:'DM Mono, monospace', fontSize:'11px', cursor:scanSaving?'wait':'pointer', letterSpacing:'0.12em', textTransform:'uppercase' }}>
-                  {scanSaving ? 'Saving…' : 'Add to Studio'}
+                  {scanSaving ? 'Saving...' : 'Add to Studio'}
                 </button>
               </div>
             )}
@@ -763,7 +915,7 @@ export default function StudioPage() {
               <div style={{ gridColumn:'1 / -1' }}><label style={labelStyle}>Wine Name *</label><input value={addDescription} onChange={e => updateAddField('addDescription',e.target.value)} placeholder="e.g. Gevrey-Chambertin, Joseph Roty" style={inputStyle} /></div>
               <div><label style={labelStyle}>Producer / Maker</label><input value={addProducer} onChange={e => updateAddField('addProducer',e.target.value)} placeholder="e.g. Joseph Roty" style={inputStyle} /></div>
               <div><label style={labelStyle}>Vintage</label><input value={addVintage} onChange={e => updateAddField('addVintage',e.target.value)} placeholder="e.g. 2019" style={inputStyle} /></div>
-              <div><label style={labelStyle}>Colour</label><select value={addColour} onChange={e => updateAddField('addColour',e.target.value)} style={inputStyle}><option value="">Select…</option>{COLOURS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+              <div><label style={labelStyle}>Colour</label><select value={addColour} onChange={e => updateAddField('addColour',e.target.value)} style={inputStyle}><option value="">Select...</option>{COLOURS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               <div><label style={labelStyle}>Bottle Size</label><select value={addBottleSize} onChange={e => updateAddField('addBottleSize',e.target.value)} style={inputStyle}><option value="37.5">37.5cl Half</option><option value="75">75cl Bottle</option><option value="150">150cl Magnum</option><option value="300">300cl Double Magnum</option></select></div>
               <div><label style={labelStyle}>Region</label><input value={addRegion} onChange={e => updateAddField('addRegion',e.target.value)} placeholder="e.g. Burgundy" style={inputStyle} /></div>
               <div><label style={labelStyle}>Country</label><input value={addCountry} onChange={e => updateAddField('addCountry',e.target.value)} placeholder="e.g. France" style={inputStyle} /></div>
@@ -776,7 +928,7 @@ export default function StudioPage() {
             </div>
             {addIBPrice && (<div style={{ padding:'10px 14px', background:'var(--cream)', fontSize:'11px', fontFamily:'DM Mono, monospace', color:'var(--muted)', marginBottom:'14px' }}>DP = £{((parseFloat(addIBPrice) + dutyForSize(addBottleSize)) * 1.2).toFixed(2)}</div>)}
             <button onClick={saveNewWine} disabled={addSaving} style={{ width:'100%', background:'var(--wine)', color:'var(--white)', border:'none', padding:'12px', fontFamily:'DM Mono, monospace', fontSize:'11px', cursor:addSaving?'wait':'pointer', letterSpacing:'0.12em', textTransform:'uppercase' }}>
-              {addSaving ? 'Saving…' : 'Add to Studio'}
+              {addSaving ? 'Saving...' : 'Add to Studio'}
             </button>
           </div>
         </div>
