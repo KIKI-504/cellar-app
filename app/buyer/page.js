@@ -865,14 +865,36 @@ export default function BuyerPage() {
   if (isAdmin) {
     // ADMIN: Buyer View preview tab 
     if (adminTab === 'preview') {
-      const displayList = previewBuyer ? previewWines : []
+      const rawList = previewBuyer ? previewWines : []
       const displayName = previewBuyer ? (previewBuyer.display_name || previewBuyer.name) : 'Buyer View Preview'
+
+      // Apply the same filter/sort logic as the buyer view
+      let displayList = [...rawList]
+      if (filterColour) displayList = displayList.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
+      if (filterRegion) displayList = displayList.filter(w => w.region === filterRegion)
+      if (filterWomen) displayList = displayList.filter(w => w.women_note)
+      if (search) {
+        const q = search.toLowerCase()
+        displayList = displayList.filter(w => [w.description, w.region, w.country, w.vintage].join(' ').toLowerCase().includes(q))
+      }
+      displayList.sort((a, b) => {
+        let av, bv
+        if (sortCol === 'description') { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
+        else if (sortCol === 'vintage') { av = a.vintage || ''; bv = b.vintage || '' }
+        else if (sortCol === 'region') { av = (a.region || '').toLowerCase(); bv = (b.region || '').toLowerCase() }
+        else if (sortCol === 'format') { av = bottleSortKey(a.bottle_volume, a.bottle_format); bv = bottleSortKey(b.bottle_volume, b.bottle_format) }
+        else if (sortCol === 'quantity') { av = parseInt(a.quantity) || 0; bv = parseInt(b.quantity) || 0 }
+        else if (sortCol === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
+        else { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
+        if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
+        return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+      })
 
       return (
         <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: selectedCount > 0 ? '88px' : '40px' }}>
           <Header
             displayName={displayName}
-            wineCount={previewBuyer ? displayList.length : null}
+            wineCount={previewBuyer ? rawList.length : null}
             onPrint={() => printPriceList(displayList, displayName)}
           />
           {!previewBuyer ? (
@@ -897,11 +919,11 @@ export default function BuyerPage() {
           ) : (
             <>
               <TermsAccordion />
-              <FiltersBar wineList={displayList} />
+              <FiltersBar wineList={rawList} />
               <div style={{ maxWidth: '1400px', margin: '16px auto', padding: `0 ${SIDE}` }}>
                 <div style={{ background: C.white, borderRadius: '14px', border: '1px solid ' + C.line, overflow: 'hidden' }}>
                   {displayList.length === 0 ? (
-                    <div style={{ padding: '48px 24px', textAlign: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: C.muted }}>No wines assigned to this buyer yet.</div>
+                    <div style={{ padding: '48px 24px', textAlign: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: C.muted }}>{rawList.length === 0 ? 'No wines assigned to this buyer yet.' : 'No wines match your filters.'}</div>
                   ) : (
                     isMobile
                       ? <div style={{ padding: '12px' }}>{displayList.map((w, i) => <WineRow key={w.id} w={w} i={i} totalCount={displayList.length} isAdmin={false} />)}</div>
