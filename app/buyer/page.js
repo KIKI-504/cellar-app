@@ -514,19 +514,19 @@ export default function BuyerPage() {
           </button>
           {termsOpen && (
             <div style={{ paddingBottom: '20px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? '18px' : '32px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? '12px' : '16px' }}>
                 {[
                   { title: 'Flexible quantities', body: 'Take as many or as few bottles as you like. The one exception: wines offered by the case carry a six-bottle minimum, since I release the full twelve from bond.' },
                   { title: 'Impeccable Provenance', body: 'Wines are purchased directly from wineries and distributors and held in bonded storage until delivery into my temperature-controlled studio. If a bottle is ever faulted, just tell me and I will remove or replace it at no cost to you.' },
                   { title: 'Up to date', body: 'Each month, send your latest stock count and I will refresh the consignment list. I invoice every 60 days for whatever has sold.' },
                 ].map(({ title, body }) => (
-                  <div key={title}>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '17px', fontWeight: 500, color: C.text, marginBottom: '5px' }}>{title}</div>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, lineHeight: 1.65 }}>{body}</div>
+                  <div key={title} style={{ background: C.white, border: '1.5px solid ' + C.line, borderRadius: '12px', padding: '16px 18px' }}>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '17px', fontWeight: 500, color: C.text, marginBottom: '7px' }}>{title}</div>
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, lineHeight: 1.7 }}>{body}</div>
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid ' + C.line, fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.wine }}>
+              <div style={{ marginTop: '14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.wine }}>
                 Belle Année and Studio Jessica Bride are not VAT registered. Prices shown reflect duty and VAT already paid.
               </div>
             </div>
@@ -656,10 +656,10 @@ export default function BuyerPage() {
             </div>
           </div>
           {noteTabs.length > 0 && (
-            <div style={{ borderTop: '1px solid ' + C.line, padding: '8px 16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ borderTop: '1px solid ' + C.line, padding: '10px 16px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {noteTabs.map(t => (
                 <button key={t.type} onClick={() => toggleNote(w.id, t.type)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: openType === t.type ? C.wine : C.muted, padding: 0, borderBottom: openType === t.type ? '1px solid ' + C.wine : '1px solid transparent' }}>
+                  style={{ background: openType === t.type ? (t.type === 'women' ? '#9b3a4a' : C.wine) : 'transparent', color: openType === t.type ? C.white : (t.type === 'women' ? '#9b3a4a' : C.muted), border: '1.5px solid ' + (openType === t.type ? (t.type === 'women' ? '#9b3a4a' : C.wine) : C.line), borderRadius: '999px', padding: '4px 11px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.07em', textTransform: 'uppercase', transition: 'all 0.15s' }}>
                   {t.label}
                 </button>
               ))}
@@ -704,10 +704,10 @@ export default function BuyerPage() {
               {[w.region, w.country].filter(Boolean).join(' · ')}
             </div>
             {noteTabs.length > 0 && (
-              <div style={{ display: 'flex', gap: '10px', paddingLeft: '16px', marginTop: '5px' }}>
+              <div style={{ display: 'flex', gap: '6px', paddingLeft: '16px', marginTop: '7px', flexWrap: 'wrap' }}>
                 {noteTabs.map(t => (
                   <button key={t.type} onClick={() => toggleNote(w.id, t.type)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: openType === t.type ? C.wine : C.muted, padding: 0, borderBottom: openType === t.type ? '1px solid ' + C.wine : '1px solid transparent' }}>
+                    style={{ background: openType === t.type ? (t.type === 'women' ? '#9b3a4a' : C.wine) : 'transparent', color: openType === t.type ? C.white : (t.type === 'women' ? '#9b3a4a' : C.muted), border: '1.5px solid ' + (openType === t.type ? (t.type === 'women' ? '#9b3a4a' : C.wine) : C.line), borderRadius: '999px', padding: '3px 10px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.07em', textTransform: 'uppercase', transition: 'all 0.15s' }}>
                     {t.label}
                   </button>
                 ))}
