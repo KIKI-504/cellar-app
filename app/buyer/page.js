@@ -21,7 +21,29 @@ function bottleSortKey(volume, format) {
   return 75
 }
 
-// ── Colour token ─────────────────────────────────────────────────────────────
+// Strip trailing region/country segments from wine description for display only.
+// e.g. "Alter Ego de Palmer, Margaux, Bordeaux" + region="Bordeaux" -> "Alter Ego de Palmer, Margaux"
+// Never modifies the database value.
+function cleanWineName(description, region, country) {
+  if (!description) return description
+  let name = description.trim()
+  const strip = [region, country].filter(Boolean).map(s => s.trim().toLowerCase())
+  let changed = true
+  while (changed) {
+    changed = false
+    const lastComma = name.lastIndexOf(',')
+    if (lastComma === -1) break
+    const tail = name.slice(lastComma + 1).trim().toLowerCase()
+    if (strip.some(s => s && tail === s)) {
+      name = name.slice(0, lastComma).trim()
+      changed = true
+    }
+  }
+  return name
+}
+
+
+// â”€â”€ Colour token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const C = {
   inkDeep: '#1b070d',
   ink: '#26090f',
@@ -36,7 +58,7 @@ const C = {
   white: '#fffdf9',
 }
 
-// ── Tiny SVG icons ────────────────────────────────────────────────────────────
+// â”€â”€ Tiny SVG icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function IconSearch() {
   return <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
 }
@@ -62,7 +84,7 @@ function IconBottles() {
   )
 }
 
-// ── Pill button style helper ──────────────────────────────────────────────────
+// â”€â”€ Pill button style helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function pillStyle(active, small) {
   return {
     background: active ? C.wine : C.white,
@@ -70,6 +92,7 @@ function pillStyle(active, small) {
     border: '1.5px solid ' + (active ? C.wine : C.line),
     borderRadius: '999px',
     padding: small ? '8px 14px' : '10px 18px',
+    paddingRight: small ? '32px' : '36px',
     fontFamily: 'DM Mono, monospace',
     fontSize: '13px',
     cursor: 'pointer',
@@ -79,13 +102,18 @@ function pillStyle(active, small) {
     alignItems: 'center',
     gap: '6px',
     letterSpacing: '0.01em',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a8c76' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 14px center',
   }
 }
 
 export default function BuyerPage() {
   const router = useRouter()
 
-  // ── Core state ──────────────────────────────────────────────────────────────
+  // â”€â”€ Core state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [wines, setWines] = useState([])
   const [filtered, setFiltered] = useState([])
   const [loading, setLoading] = useState(true)
@@ -104,14 +132,14 @@ export default function BuyerPage() {
   const [termsOpen, setTermsOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
-  // ── Identity state ──────────────────────────────────────────────────────────
+  // â”€â”€ Identity state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [buyerName, setBuyerName] = useState('')
   const [buyerDisplayName, setBuyerDisplayName] = useState('')
   const [buyerEditorial, setBuyerEditorial] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [buyerAccessId, setBuyerAccessId] = useState(null)
 
-  // ── Admin tab state ─────────────────────────────────────────────────────────
+  // â”€â”€ Admin tab state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [adminTab, setAdminTab] = useState('master') // 'master' | 'preview'
   const [previewPin, setPreviewPin] = useState('')
   const [previewError, setPreviewError] = useState('')
@@ -119,10 +147,20 @@ export default function BuyerPage() {
   const [previewWines, setPreviewWines] = useState([])
   const [buyerAccess, setBuyerAccess] = useState([])
 
-  // ── Master admin state ──────────────────────────────────────────────────────
+  // â”€â”€ Master admin state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [masterWines, setMasterWines] = useState([])
   const [assignments, setAssignments] = useState({}) // wineId -> [buyerName, ...]
   const [removingId, setRemovingId] = useState(null)
+  const [masterSearch, setMasterSearch] = useState('')
+  const [masterFilterColour, setMasterFilterColour] = useState('')
+  const [masterFilterRegion, setMasterFilterRegion] = useState('')
+  const [masterFilterBuyer, setMasterFilterBuyer] = useState('') // '' | buyerName | 'unassigned'
+  const [masterSortCol, setMasterSortCol] = useState('description')
+  const [masterSortDir, setMasterSortDir] = useState('asc')
+  const [masterExpandedNote, setMasterExpandedNote] = useState(null) // wineId:type
+  const [masterEditKey, setMasterEditKey] = useState(null)
+  const [masterDraft, setMasterDraft] = useState('')
+  const [masterSavingNote, setMasterSavingNote] = useState(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 720)
@@ -153,7 +191,7 @@ export default function BuyerPage() {
     }
   }, [])
 
-  // ── Admin: fetch master roster + all buyer assignments ──────────────────────
+  // â”€â”€ Admin: fetch master roster + all buyer assignments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function fetchMasterAdmin() {
     setLoading(true)
     // Fetch all buyers
@@ -183,7 +221,7 @@ export default function BuyerPage() {
     setLoading(false)
   }
 
-  // ── Admin: remove wine from master roster ───────────────────────────────────
+  // â”€â”€ Admin: remove wine from master roster â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function removeFromMaster(wineId) {
     setRemovingId(wineId)
     await supabase.from('wines').update({ include_in_buyer_view: false }).eq('id', wineId)
@@ -191,7 +229,7 @@ export default function BuyerPage() {
     setRemovingId(null)
   }
 
-  // ── Admin: remove wine from specific buyer ──────────────────────────────────
+  // â”€â”€ Admin: remove wine from specific buyer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function removeFromBuyer(wineId, buyerId) {
     await supabase.from('buyer_wine_assignments').delete()
       .eq('wine_id', wineId).eq('buyer_access_id', buyerId)
@@ -203,7 +241,7 @@ export default function BuyerPage() {
     })
   }
 
-  // ── Admin: preview as buyer ─────────────────────────────────────────────────
+  // â”€â”€ Admin: preview as buyer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handlePreviewPin(e) {
     e.preventDefault()
     setPreviewError('')
@@ -229,7 +267,7 @@ export default function BuyerPage() {
     setPreviewWines(wineData || [])
   }
 
-  // ── Buyer: fetch for real buyer login ───────────────────────────────────────
+  // â”€â”€ Buyer: fetch for real buyer login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function resolveBuyerAndFetch(pin) {
     setLoading(true)
     const { data: buyer } = await supabase
@@ -273,7 +311,7 @@ export default function BuyerPage() {
     setWines(wineData || []); setFiltered(wineData || []); setLoading(false)
   }
 
-  // ── Sort / filter ───────────────────────────────────────────────────────────
+  // â”€â”€ Sort / filter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function cycleSort(field) {
     if (sortCol === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(field); setSortDir('asc') }
@@ -304,7 +342,7 @@ export default function BuyerPage() {
     setFiltered(result)
   }, [wines, search, filterColour, filterRegion, filterWomen, sortCol, sortDir])
 
-  // ── Selection helpers ───────────────────────────────────────────────────────
+  // â”€â”€ Selection helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function toggleSelected(id, max) {
     setSelected(prev => {
       const next = { ...prev }
@@ -320,7 +358,7 @@ export default function BuyerPage() {
     setExpanded(prev => ({ ...prev, [id]: prev[id] === type ? null : type }))
   }
 
-  // ── Save note ───────────────────────────────────────────────────────────────
+  // â”€â”€ Save note â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function saveNote(id, type) {
     const field = type === 'wine' ? 'buyer_note' : type === 'producer' ? 'producer_note' : 'women_note'
     setSavingNote(true)
@@ -341,25 +379,25 @@ export default function BuyerPage() {
     finally { setSavingNote(false) }
   }
 
-  // ── Send wishlist email ─────────────────────────────────────────────────────
+  // â”€â”€ Send wishlist email â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function sendWishlist(wineList, displayName) {
     const list = wineList.filter(w => selected[w.id])
     const totalBottles = list.reduce((sum, w) => sum + (selected[w.id] || 0), 0)
     const totalValue = list.reduce((sum, w) => sum + parseFloat(w.sale_price) * (selected[w.id] || 1), 0)
     const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-    const divider = '─'.repeat(50)
+    const divider = 'â”€'.repeat(50)
     const wineLines = list.map(w => {
       const qty = selected[w.id] || 1
       const total = (parseFloat(w.sale_price) * qty).toFixed(2)
       const size = formatBottleSize(w.bottle_volume, w.bottle_format)
-      return [`${w.vintage}  ${w.description}`, `      ${w.region}${w.country ? ' · ' + w.country : ''} · ${w.colour} · ${size}`, `      £${parseFloat(w.sale_price).toFixed(2)} per bottle · Qty: ${qty} · Subtotal: £${total}`].join('\n')
+      return [`${w.vintage}  ${cleanWineName(w.description, w.region, w.country)}`, `      ${w.region}${w.country ? ' Â· ' + w.country : ''} Â· ${w.colour} Â· ${size}`, `      Â£${parseFloat(w.sale_price).toFixed(2)} per bottle Â· Qty: ${qty} Â· Subtotal: Â£${total}`].join('\n')
     })
-    const body = [`WISHLIST — ${(displayName || '').toUpperCase()}`, date, '', 'WINES SELECTED', divider, '', wineLines.join('\n\n'), '', divider, `TOTAL: ${list.length} wine${list.length !== 1 ? 's' : ''} · ${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} · £${totalValue.toFixed(2)}`, '', 'All prices per bottle, duty and VAT paid.', 'Please reply to confirm availability.'].join('\n')
-    const subject = encodeURIComponent(`Wishlist — ${displayName} — ${new Date().toLocaleDateString('en-GB')}`)
+    const body = [`WISHLIST â€” ${(displayName || '').toUpperCase()}`, date, '', 'WINES SELECTED', divider, '', wineLines.join('\n\n'), '', divider, `TOTAL: ${list.length} wine${list.length !== 1 ? 's' : ''} Â· ${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} Â· Â£${totalValue.toFixed(2)}`, '', 'All prices per bottle, duty and VAT paid.', 'Please reply to confirm availability.'].join('\n')
+    const subject = encodeURIComponent(`Wishlist â€” ${displayName} â€” ${new Date().toLocaleDateString('en-GB')}`)
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(body)}`
   }
 
-  // ── Print price list ────────────────────────────────────────────────────────
+  // â”€â”€ Print price list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function printPriceList(wineList, displayName, buyerNameStr) {
     const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     const rows = wineList.map(w => {
@@ -375,15 +413,15 @@ export default function BuyerPage() {
       return `<tr>
         <td style="padding:9px 10px 9px 0;border-bottom:1px solid #ede6d6;">
           <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotCol};margin-right:5px;vertical-align:middle;"></span>
-          <span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:${isMag ? '700' : '500'};vertical-align:middle;">${w.description}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">♀</span>' : ''}</span>
+          <span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:${isMag ? '700' : '500'};vertical-align:middle;">${cleanWineName(w.description, w.region, w.country)}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">â™€</span>' : ''}</span>
         </td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${w.vintage || '—'}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${w.region || '—'}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${w.colour || '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${w.vintage || 'â€”'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${w.region || 'â€”'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${w.colour || 'â€”'}</td>
         <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:${isMag ? '12px' : '11px'};font-weight:${fw};color:#7a6652;">${size}</td>
         <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${parseInt(w.quantity) || 0}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:${isMag ? '700' : '600'};color:#1a1008;">£${salePrice.toFixed(2)}</td>
-        <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${wsDp ? '£' + wsDp.toFixed(2) : '—'}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:${isMag ? '700' : '600'};color:#1a1008;">Â£${salePrice.toFixed(2)}</td>
+        <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-weight:${fw};color:#7a6652;">${wsDp ? 'Â£' + wsDp.toFixed(2) : 'â€”'}</td>
       </tr>`
     }).join('')
 
@@ -398,7 +436,7 @@ export default function BuyerPage() {
     <div style="margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #1a1008;">
       <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
         <div style="text-align:right;">
-          <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:300;letter-spacing:0.08em;color:#7a6652;">Belle Année</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:300;letter-spacing:0.08em;color:#7a6652;">Belle AnnÃ©e</div>
           <div style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#c8b89a;margin-top:1px;">Wines &amp; Studio</div>
         </div>
       </div>
@@ -419,7 +457,7 @@ export default function BuyerPage() {
       <tbody>${rows}</tbody>
     </table>
     <div style="margin-top:28px;padding-top:16px;border-top:1px solid #ede6d6;display:flex;justify-content:space-between;align-items:baseline;">
-      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;">${wineList.length} wine${wineList.length !== 1 ? 's' : ''} · All prices per bottle · Duty and VAT paid</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;">${wineList.length} wine${wineList.length !== 1 ? 's' : ''} Â· All prices per bottle Â· Duty and VAT paid</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:#c8b89a;">jessica.bride@gmail.com</div>
     </div>
     </body></html>`
@@ -437,7 +475,7 @@ export default function BuyerPage() {
     iframe.contentDocument.close()
   }
 
-  // ── Computed ────────────────────────────────────────────────────────────────
+  // â”€â”€ Computed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const regions = [...new Set(wines.map(w => w.region).filter(Boolean))].sort()
   const selectedCount = Object.keys(selected).length
   const totalBottles = Object.values(selected).reduce((sum, q) => sum + q, 0)
@@ -445,7 +483,7 @@ export default function BuyerPage() {
   const womenCount = wines.filter(w => w.women_note).length
   const SIDE = isMobile ? '16px' : '40px'
 
-  // ── Header component (shared) ───────────────────────────────────────────────
+  // â”€â”€ Header component (shared) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function Header({ displayName, wineCount, onPrint }) {
     const dashIdx = displayName.lastIndexOf(' - ')
     const titleMain = dashIdx > -1 ? displayName.slice(0, dashIdx) : displayName
@@ -457,7 +495,7 @@ export default function BuyerPage() {
           {/* Top bar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
             <div>
-              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '22px' : '24px', fontWeight: 400, color: C.white, lineHeight: 1 }}>Belle Année</div>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '22px' : '24px', fontWeight: 400, color: C.white, lineHeight: 1 }}>Belle AnnÃ©e</div>
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.26em', textTransform: 'uppercase', color: C.gold, marginTop: '3px' }}>Wines & Studio</div>
             </div>
             {/* Admin tabs */}
@@ -491,7 +529,7 @@ export default function BuyerPage() {
                 </span>
               )}
               {titleDate && <>
-                <span style={{ color: 'rgba(255,253,249,0.3)', fontSize: '12px' }}>·</span>
+                <span style={{ color: 'rgba(255,253,249,0.3)', fontSize: '12px' }}>Â·</span>
                 <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: 'rgba(255,253,249,0.55)', letterSpacing: '0.06em' }}>{titleDate}</span>
               </>}
             </div>
@@ -501,7 +539,7 @@ export default function BuyerPage() {
     )
   }
 
-  // ── Terms accordion ─────────────────────────────────────────────────────────
+  // â”€â”€ Terms accordion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function TermsAccordion() {
     return (
       <div style={{ background: C.cream, borderBottom: '1px solid ' + C.line }}>
@@ -527,7 +565,7 @@ export default function BuyerPage() {
                 ))}
               </div>
               <div style={{ marginTop: '14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.wine }}>
-                Belle Année and Studio Jessica Bride are not VAT registered. Prices shown reflect duty and VAT already paid.
+                Belle AnnÃ©e and Studio Jessica Bride are not VAT registered. Prices shown reflect duty and VAT already paid.
               </div>
             </div>
           )}
@@ -536,7 +574,7 @@ export default function BuyerPage() {
     )
   }
 
-  // ── Filters bar ─────────────────────────────────────────────────────────────
+  // â”€â”€ Filters bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function FiltersBar({ wineList }) {
     const regionList = [...new Set(wineList.map(w => w.region).filter(Boolean))].sort()
     const womenCt = wineList.filter(w => w.women_note).length
@@ -547,7 +585,7 @@ export default function BuyerPage() {
             {/* Search */}
             <div style={{ flex: isMobile ? '1 1 100%' : '1', minWidth: '200px', position: 'relative', order: isMobile ? -1 : 0 }}>
               <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: C.muted }}><IconSearch /></span>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, regions, vintages…"
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, regions, vintagesâ€¦"
                 style={{ width: '100%', background: C.white, border: '1.5px solid ' + C.line, borderRadius: '999px', padding: '10px 18px 10px 40px', fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.text, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             {/* Colour */}
@@ -555,7 +593,7 @@ export default function BuyerPage() {
               <option value="">All Colours</option>
               <option value="Red">Red</option>
               <option value="White">White</option>
-              <option value="Rosé">Rosé</option>
+              <option value="RosÃ©">RosÃ©</option>
             </select>
             {/* Region */}
             <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={pillStyle(!!filterRegion)}>
@@ -572,7 +610,7 @@ export default function BuyerPage() {
             </select>
             {/* Women filter */}
             {womenCt > 0 && (
-              <button onClick={() => setFilterWomen(v => !v)} style={{ ...pillStyle(filterWomen), color: filterWomen ? C.white : '#9b3a4a', background: filterWomen ? '#9b3a4a' : C.white, border: '1.5px solid ' + (filterWomen ? '#9b3a4a' : 'rgba(155,58,74,0.4)') }}>♀</button>
+              <button onClick={() => setFilterWomen(v => !v)} style={{ ...pillStyle(filterWomen), color: filterWomen ? C.white : '#9b3a4a', background: filterWomen ? '#9b3a4a' : C.white, border: '1.5px solid ' + (filterWomen ? '#9b3a4a' : 'rgba(155,58,74,0.4)') }}>â™€</button>
             )}
             {/* Count */}
             <div style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.muted, whiteSpace: 'nowrap' }}>
@@ -584,7 +622,7 @@ export default function BuyerPage() {
     )
   }
 
-  // ── Wine row (buyer-facing) ──────────────────────────────────────────────────
+  // â”€â”€ Wine row (buyer-facing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function WineRow({ w, i, totalCount, isAdmin: adminMode }) {
     const isSelected = !!selected[w.id]
     const qty = selected[w.id] || 1
@@ -612,7 +650,7 @@ export default function BuyerPage() {
     const isLast = i === totalCount - 1
     const rowBorder = isLast ? 'none' : '1px solid ' + C.line
 
-    const metaLine = [w.vintage, size, stock > 0 ? `${stock} available` : 'Sold out'].filter(Boolean).join('  ·  ')
+    const metaLine = [w.vintage, size, stock > 0 ? `${stock} available` : 'Sold out'].filter(Boolean).join('  Â·  ')
 
     if (isMobile) {
       return (
@@ -624,9 +662,9 @@ export default function BuyerPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                   <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '9px' }} />
                   <div>
-                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1.2 }}>{w.description}</div>
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1.2 }}>{cleanWineName(w.description, w.region, w.country)}</div>
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '3px' }}>
-                      {[w.region, w.country].filter(Boolean).join(' · ')}
+                      {[w.region, w.country].filter(Boolean).join(' Â· ')}
                     </div>
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '4px' }}>{metaLine}</div>
                   </div>
@@ -634,15 +672,15 @@ export default function BuyerPage() {
               </div>
               {/* Right */}
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: isMag ? 700 : 400, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
-                {wsDp && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '3px' }}>Market £{wsDp.toFixed(2)}</div>}
+                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: isMag ? 700 : 400, color: C.text, lineHeight: 1 }}>Â£{salePrice.toFixed(2)}</div>
+                {wsDp && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '3px' }}>Market Â£{wsDp.toFixed(2)}</div>}
               </div>
             </div>
             {/* Add button row */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px', gap: '8px', alignItems: 'center' }}>
               {isSelected && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <button onClick={() => setQuantity(w.id, qty - 1, stock)} disabled={qty <= 1} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1.5px solid ' + C.line, background: C.cream, cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '18px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>−</button>
+                  <button onClick={() => setQuantity(w.id, qty - 1, stock)} disabled={qty <= 1} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1.5px solid ' + C.line, background: C.cream, cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '18px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>âˆ’</button>
                   <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '15px', fontWeight: 500, minWidth: '20px', textAlign: 'center' }}>{qty}</span>
                   <button onClick={() => setQuantity(w.id, qty + 1, stock)} disabled={qty >= stock} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1.5px solid ' + C.line, background: C.cream, cursor: qty >= stock ? 'default' : 'pointer', fontSize: '18px', opacity: qty >= stock ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace' }}>+</button>
                 </div>
@@ -650,7 +688,7 @@ export default function BuyerPage() {
               {!soldOut && (
                 <button onClick={() => toggleSelected(w.id, stock)}
                   style={{ background: isSelected ? C.wine : C.gold, color: isSelected ? C.white : C.inkDeep, border: 'none', borderRadius: '8px', padding: '9px 20px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.06em', fontWeight: 500 }}>
-                  {isSelected ? '✓ Added' : '+ Add'}
+                  {isSelected ? 'âœ“ Added' : '+ Add'}
                 </button>
               )}
             </div>
@@ -676,7 +714,7 @@ export default function BuyerPage() {
                 <div>
                   <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={4} style={{ width: '100%', fontFamily: 'DM Mono, monospace', fontSize: '12px', padding: '8px', border: '1px solid ' + C.line, borderRadius: '6px', background: C.white, resize: 'vertical', boxSizing: 'border-box' }} />
                   <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                    <button onClick={() => saveNote(w.id, openType)} disabled={savingNote} style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px' }}>{savingNote ? 'Saving…' : 'Save'}</button>
+                    <button onClick={() => saveNote(w.id, openType)} disabled={savingNote} style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px' }}>{savingNote ? 'Savingâ€¦' : 'Save'}</button>
                     <button onClick={() => { setEditKey(null); setDraft('') }} style={{ background: 'none', border: '1px solid ' + C.line, borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: C.muted }}>Cancel</button>
                   </div>
                 </div>
@@ -689,19 +727,19 @@ export default function BuyerPage() {
       )
     }
 
-    // ── Desktop row ───────────────────────────────────────────────────────────
+    // â”€â”€ Desktop row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     return (
       <div style={{ borderBottom: rowBorder }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px 160px 120px', alignItems: 'center', padding: '16px 24px', background: C.white, opacity: soldOut ? 0.5 : 1, gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px 150px 110px', alignItems: 'center', padding: '16px 24px', background: C.white, opacity: soldOut ? 0.5 : 1, gap: '16px' }}>
           {/* Wine name + location */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
               <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
-              <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1.2 }}>{w.description}</span>
-              {w.women_note && <span style={{ fontSize: '12px', color: '#9b3a4a' }}>♀</span>}
+              <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: isMag ? 700 : 500, color: C.text, lineHeight: 1.2 }}>{cleanWineName(w.description, w.region, w.country)}</span>
+              {w.women_note && <span style={{ fontSize: '12px', color: '#9b3a4a' }}>â™€</span>}
             </div>
             <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.muted, paddingLeft: '16px' }}>
-              {[w.region, w.country].filter(Boolean).join(' · ')}
+              {[w.region, w.country].filter(Boolean).join(' Â· ')}
             </div>
             {noteTabs.length > 0 && (
               <div style={{ display: 'flex', gap: '6px', paddingLeft: '16px', marginTop: '7px', flexWrap: 'wrap' }}>
@@ -714,15 +752,15 @@ export default function BuyerPage() {
               </div>
             )}
           </div>
-          {/* Vintage · size · qty */}
+          {/* Vintage Â· size Â· qty */}
           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.muted }}>
             {metaLine}
           </div>
           {/* Price */}
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: isMag ? 700 : 400, color: C.text, lineHeight: 1 }}>£{salePrice.toFixed(2)}</div>
-            {wsDp && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '3px' }}>Market £{wsDp.toFixed(2)}</div>}
-            {isSelected && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: C.wine, marginTop: '2px' }}>×{qty} = £{(salePrice * qty).toFixed(2)}</div>}
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: isMag ? 700 : 400, color: C.text, lineHeight: 1 }}>Â£{salePrice.toFixed(2)}</div>
+            {wsDp && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '3px' }}>Market Â£{wsDp.toFixed(2)}</div>}
+            {isSelected && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: C.wine, marginTop: '2px' }}>Ã—{qty} = Â£{(salePrice * qty).toFixed(2)}</div>}
           </div>
           {/* Add button / qty controls */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
@@ -730,10 +768,10 @@ export default function BuyerPage() {
               <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, letterSpacing: '0.04em' }}>Sold out</span>
             ) : isSelected ? (
               <>
-                <button onClick={() => setQuantity(w.id, qty - 1, stock)} disabled={qty <= 1} style={{ width: '28px', height: '28px', borderRadius: '7px', border: '1.5px solid ' + C.line, background: C.cream, cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '16px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                <button onClick={() => setQuantity(w.id, qty - 1, stock)} disabled={qty <= 1} style={{ width: '28px', height: '28px', borderRadius: '7px', border: '1.5px solid ' + C.line, background: C.cream, cursor: qty <= 1 ? 'default' : 'pointer', fontSize: '16px', opacity: qty <= 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>âˆ’</button>
                 <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 500, minWidth: '18px', textAlign: 'center' }}>{qty}</span>
                 <button onClick={() => setQuantity(w.id, qty + 1, stock)} disabled={qty >= stock} style={{ width: '28px', height: '28px', borderRadius: '7px', border: '1.5px solid ' + C.line, background: C.cream, cursor: qty >= stock ? 'default' : 'pointer', fontSize: '16px', opacity: qty >= stock ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                <button onClick={() => toggleSelected(w.id, stock)} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '2px solid ' + C.wine, background: C.wine, color: C.white, cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
+                <button onClick={() => toggleSelected(w.id, stock)} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '2px solid ' + C.wine, background: C.wine, color: C.white, cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>âœ“</button>
               </>
             ) : (
               <button onClick={() => toggleSelected(w.id, stock)}
@@ -758,7 +796,7 @@ export default function BuyerPage() {
               <div>
                 <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={5} style={{ width: '100%', maxWidth: '680px', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', padding: '8px 10px', border: '1px solid ' + C.line, borderRadius: '6px', background: C.white, resize: 'vertical', boxSizing: 'border-box' }} />
                 <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                  <button onClick={() => saveNote(w.id, openType)} disabled={savingNote} style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px' }}>{savingNote ? 'Saving…' : 'Save'}</button>
+                  <button onClick={() => saveNote(w.id, openType)} disabled={savingNote} style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px' }}>{savingNote ? 'Savingâ€¦' : 'Save'}</button>
                   <button onClick={() => { setEditKey(null); setDraft('') }} style={{ background: 'none', border: '1px solid ' + C.line, borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: C.muted }}>Cancel</button>
                 </div>
               </div>
@@ -771,7 +809,7 @@ export default function BuyerPage() {
     )
   }
 
-  // ── Sticky order bar ─────────────────────────────────────────────────────────
+  // â”€â”€ Sticky order bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function OrderBar({ wineList, displayName }) {
     if (selectedCount === 0) return null
     if (isMobile) {
@@ -780,12 +818,12 @@ export default function BuyerPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.gold }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} selected</div>
-              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', color: C.white, lineHeight: 1.1 }}>£{totalValue.toFixed(2)}</div>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '24px', color: C.white, lineHeight: 1.1 }}>Â£{totalValue.toFixed(2)}</div>
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(255,253,249,0.45)', marginTop: '1px' }}>ex. VAT</div>
             </div>
             <button onClick={() => sendWishlist(wineList, displayName)}
               style={{ background: C.gold, color: C.inkDeep, border: 'none', borderRadius: '10px', padding: '13px 22px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.08em', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              View Order →
+              View Order â†’
             </button>
           </div>
         </div>
@@ -798,34 +836,34 @@ export default function BuyerPage() {
             <IconBottles />
             <div>
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', color: C.white }}>{selectedCount} wine{selectedCount !== 1 ? 's' : ''} selected</div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.gold, marginTop: '1px', cursor: 'pointer' }}>View selection →</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.gold, marginTop: '1px', cursor: 'pointer' }}>View selection â†’</div>
             </div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', color: C.white, lineHeight: 1 }}>£{totalValue.toFixed(2)}</div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', color: C.white, lineHeight: 1 }}>Â£{totalValue.toFixed(2)}</div>
             <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(255,253,249,0.45)', marginTop: '2px' }}>ex. VAT</div>
           </div>
           <button onClick={() => sendWishlist(wineList, displayName)}
             style={{ background: C.gold, color: C.inkDeep, border: 'none', borderRadius: '10px', padding: '13px 28px', fontFamily: 'DM Mono, monospace', fontSize: '13px', letterSpacing: '0.08em', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            View Order →
+            View Order â†’
           </button>
         </div>
       </div>
     )
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.cream }}>
-      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: C.wine }}>Loading…</div>
+      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: C.wine }}>Loadingâ€¦</div>
     </div>
   )
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // ── ADMIN VIEW ──────────────────────────────────────────────────────────────
-  // ════════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // â”€â”€ ADMIN VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   if (isAdmin) {
-    // ── ADMIN: Buyer View preview tab ─────────────────────────────────────────
+    // â”€â”€ ADMIN: Buyer View preview tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (adminTab === 'preview') {
       const displayList = previewBuyer ? previewWines : []
       const displayName = previewBuyer ? (previewBuyer.display_name || previewBuyer.name) : 'Buyer View Preview'
@@ -852,7 +890,7 @@ export default function BuyerPage() {
               <form onSubmit={handlePreviewPin} style={{ display: 'flex', gap: '8px' }}>
                 <input value={previewPin} onChange={e => setPreviewPin(e.target.value)} placeholder="Enter PIN (e.g. 2323)"
                   style={{ flex: 1, border: '1.5px solid ' + C.line, borderRadius: '999px', padding: '10px 18px', fontFamily: 'DM Mono, monospace', fontSize: '13px', outline: 'none', background: C.white }} />
-                <button type="submit" style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '999px', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '12px', cursor: 'pointer', letterSpacing: '0.06em' }}>Preview →</button>
+                <button type="submit" style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '999px', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '12px', cursor: 'pointer', letterSpacing: '0.06em' }}>Preview â†’</button>
               </form>
               {previewError && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: '#c0392b', marginTop: '10px' }}>{previewError}</div>}
             </div>
@@ -883,7 +921,7 @@ export default function BuyerPage() {
       )
     }
 
-    // ── ADMIN: Master Roster tab ──────────────────────────────────────────────
+    // â”€â”€ ADMIN: Master Roster tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     return (
       <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: '40px' }}>
         <Header displayName="Master Roster" wineCount={masterWines.length} onPrint={() => printPriceList(masterWines, 'Master Roster')} />
@@ -905,77 +943,212 @@ export default function BuyerPage() {
                 <div key={buyer.id} style={{ background: C.white, border: '1.5px solid ' + C.line, borderRadius: '12px', padding: '16px 18px' }}>
                   <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted, marginBottom: '4px' }}>{buyer.name}</div>
                   <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', color: C.text }}>{totalAssigned}</div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '2px' }}>wines assigned · PIN {buyer.pin}</div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '2px' }}>wines assigned Â· PIN {buyer.pin}</div>
                 </div>
               )
             })}
           </div>
 
           {/* Master roster table */}
+          {(() => {
+            // Compute filtered+sorted master list
+            let mFiltered = [...masterWines]
+            if (masterSearch) {
+              const q = masterSearch.toLowerCase()
+              mFiltered = mFiltered.filter(w => [w.description, w.region, w.country, w.vintage, w.colour].join(' ').toLowerCase().includes(q))
+            }
+            if (masterFilterColour) mFiltered = mFiltered.filter(w => w.colour?.toLowerCase().includes(masterFilterColour.toLowerCase()))
+            if (masterFilterRegion) mFiltered = mFiltered.filter(w => w.region === masterFilterRegion)
+            if (masterFilterBuyer === 'unassigned') mFiltered = mFiltered.filter(w => !(assignments[w.id]?.length))
+            else if (masterFilterBuyer) mFiltered = mFiltered.filter(w => (assignments[w.id] || []).includes(masterFilterBuyer))
+            mFiltered.sort((a, b) => {
+              const dir = masterSortDir === 'asc' ? 1 : -1
+              if (masterSortCol === 'vintage') return ((a.vintage || '') > (b.vintage || '') ? 1 : -1) * dir
+              if (masterSortCol === 'region') return ((a.region || '') > (b.region || '') ? 1 : -1) * dir
+              if (masterSortCol === 'country') return ((a.country || '') > (b.country || '') ? 1 : -1) * dir
+              if (masterSortCol === 'colour') return ((a.colour || '') > (b.colour || '') ? 1 : -1) * dir
+              if (masterSortCol === 'sale_price') return ((parseFloat(a.sale_price)||0) - (parseFloat(b.sale_price)||0)) * dir
+              if (masterSortCol === 'quantity') return ((parseInt(a.quantity)||0) - (parseInt(b.quantity)||0)) * dir
+              if (masterSortCol === 'format') return (bottleSortKey(a.bottle_volume, a.bottle_format) - bottleSortKey(b.bottle_volume, b.bottle_format)) * dir
+              return ((a.description||'').toLowerCase() > (b.description||'').toLowerCase() ? 1 : -1) * dir
+            })
+            const mRegions = [...new Set(masterWines.map(w => w.region).filter(Boolean))].sort()
+            function mSortBtn(col, label) {
+              const active = masterSortCol === col
+              return (
+                <button onClick={() => { if (active) setMasterSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setMasterSortCol(col); setMasterSortDir('asc') } }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: active ? C.gold : 'rgba(255,253,249,0.55)', padding: '0 4px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                  {label}{active ? (masterSortDir === 'asc' ? ' â†‘' : ' â†“') : ' â†•'}
+                </button>
+              )
+            }
+            async function saveMasterNote(wineId, type) {
+              const field = type === 'wine' ? 'buyer_note' : type === 'producer' ? 'producer_note' : 'women_note'
+              setMasterSavingNote(true)
+              try {
+                const res = await fetch('/api/buyer/update-note', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id: wineId, field, value: masterDraft, pin: '2025' }),
+                })
+                const result = await res.json().catch(() => ({}))
+                if (!res.ok) throw new Error(result.error || 'Save failed')
+                setMasterWines(prev => prev.map(w => w.id === wineId ? { ...w, [field]: result.value } : w))
+                setMasterEditKey(null); setMasterDraft('')
+              } catch(e) { alert('Could not save: ' + e.message) }
+              finally { setMasterSavingNote(false) }
+            }
+            return (
           <div style={{ background: C.white, borderRadius: '14px', border: '1px solid ' + C.line, overflow: 'hidden' }}>
-            <div style={{ background: C.ink, padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,253,249,0.6)' }}>Master Sales Roster — {masterWines.length} wines</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(255,253,249,0.4)' }}>Add wines via Bonded Storage → tick Buyer View</span>
+            {/* Header + filters */}
+            <div style={{ background: C.ink, padding: '12px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,253,249,0.6)' }}>Master Sales Roster â€” {mFiltered.length}/{masterWines.length} wines</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(255,253,249,0.4)' }}>Add via Bonded Storage â†’ tick Buyer View</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <input value={masterSearch} onChange={e => setMasterSearch(e.target.value)} placeholder="Searchâ€¦"
+                  style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', minWidth: '140px' }} />
+                <select value={masterFilterColour} onChange={e => setMasterFilterColour(e.target.value)}
+                  style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 12px 6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', cursor: 'pointer' }}>
+                  <option value="">All Colours</option>
+                  <option value="Red">Red</option>
+                  <option value="White">White</option>
+                  <option value="RosÃ©">RosÃ©</option>
+                </select>
+                <select value={masterFilterRegion} onChange={e => setMasterFilterRegion(e.target.value)}
+                  style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', cursor: 'pointer' }}>
+                  <option value="">All Regions</option>
+                  {mRegions.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <select value={masterFilterBuyer} onChange={e => setMasterFilterBuyer(e.target.value)}
+                  style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', cursor: 'pointer' }}>
+                  <option value="">All Buyers</option>
+                  {buyerAccess.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                  <option value="unassigned">Unassigned</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '4px', marginTop: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'rgba(255,253,249,0.35)', letterSpacing: '0.08em', marginRight: '4px', alignSelf: 'center' }}>SORT:</span>
+                {mSortBtn('description', 'Name')}
+                {mSortBtn('vintage', 'Vintage')}
+                {mSortBtn('region', 'Region')}
+                {mSortBtn('country', 'Country')}
+                {mSortBtn('colour', 'Colour')}
+                {mSortBtn('format', 'Size')}
+                {mSortBtn('sale_price', 'Price')}
+                {mSortBtn('quantity', 'Qty')}
+              </div>
             </div>
-            {masterWines.length === 0 ? (
-              <div style={{ padding: '48px 24px', textAlign: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: C.muted }}>No wines in master roster yet. Add them from Bonded Storage.</div>
-            ) : masterWines.map((w, i) => {
+            {mFiltered.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', color: C.muted }}>{masterWines.length === 0 ? 'No wines in master roster yet. Add them from Bonded Storage.' : 'No wines match your filters.'}</div>
+            ) : mFiltered.map((w, i) => {
               const assignedTo = assignments[w.id] || []
               const size = formatBottleSize(w.bottle_volume, w.bottle_format)
               const salePrice = parseFloat(w.sale_price)
               const dotColor = (w.colour || '').toLowerCase().includes('red') ? '#8b2535'
                 : (w.colour || '').toLowerCase().includes('white') ? '#c9b76a'
                 : (w.colour || '').toLowerCase().includes('ros') ? '#d4748a' : '#b0a090'
-              const isLast = i === masterWines.length - 1
+              const isLast = i === mFiltered.length - 1
+              const noteKey = w.id + ':wine'
+              const prodKey = w.id + ':producer'
+              const womenKey = w.id + ':women'
+              const openNote = masterExpandedNote
               return (
-                <div key={w.id} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 80px 100px auto 80px', gap: '12px', padding: '13px 20px', borderBottom: isLast ? 'none' : '1px solid ' + C.line, alignItems: 'center', background: removingId === w.id ? 'rgba(192,57,43,0.04)' : 'transparent' }}>
-                  {/* Wine name */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                      <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 500, color: C.text }}>{w.description}</span>
-                      {w.women_note && <span style={{ fontSize: '11px', color: '#9b3a4a' }}>♀</span>}
+                <div key={w.id} style={{ borderBottom: isLast ? 'none' : '1px solid ' + C.line, background: removingId === w.id ? 'rgba(192,57,43,0.04)' : 'transparent' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 80px 100px auto 80px', gap: '12px', padding: '13px 20px', alignItems: 'center' }}>
+                    {/* Wine name + notes */}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontWeight: 500, color: C.text }}>{cleanWineName(w.description, w.region, w.country)}</span>
+                        {w.women_note && <span style={{ fontSize: '11px', color: '#9b3a4a' }}>â™€</span>}
+                      </div>
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, paddingLeft: '14px', marginTop: '1px' }}>{w.vintage} Â· {[w.region, w.country].filter(Boolean).join(' Â· ')}</div>
+                      <div style={{ display: 'flex', gap: '5px', paddingLeft: '14px', marginTop: '6px', flexWrap: 'wrap' }}>
+                        {[
+                          { key: noteKey, type: 'wine', label: 'Wine info', color: C.wine },
+                          { key: prodKey, type: 'producer', label: 'Producer info', color: C.wine },
+                          { key: womenKey, type: 'women', label: 'Women in wine', color: '#9b3a4a' },
+                        ].map(t => (
+                          <button key={t.key} onClick={() => setMasterExpandedNote(openNote === t.key ? null : t.key)}
+                            style={{ background: openNote === t.key ? t.color : 'transparent', color: openNote === t.key ? C.white : (t.type === 'women' ? '#9b3a4a' : C.muted), border: '1.5px solid ' + (openNote === t.key ? t.color : C.line), borderRadius: '999px', padding: '2px 9px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, paddingLeft: '14px', marginTop: '1px' }}>{w.vintage} · {w.region}</div>
+                    {/* Size */}
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.muted }}>{size}</div>
+                    {/* Price */}
+                    <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>Â£{salePrice.toFixed(2)}</div>
+                    {/* Buyer tags */}
+                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                      {buyerAccess.map(buyer => {
+                        const isAssigned = assignedTo.includes(buyer.name)
+                        return (
+                          <div key={buyer.id} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <span style={{ background: isAssigned ? 'rgba(45,106,79,0.1)' : 'transparent', color: isAssigned ? '#2d6a4f' : C.line, border: '1px solid ' + (isAssigned ? 'rgba(45,106,79,0.3)' : C.line), borderRadius: '4px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.06em' }}>
+                              {isAssigned ? 'âœ“ ' : ''}{buyer.name}
+                            </span>
+                            {isAssigned && (
+                              <button onClick={() => removeFromBuyer(w.id, buyer.id)} title={`Remove from ${buyer.name}`}
+                                style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: '11px', padding: '1px 3px', lineHeight: 1 }}>âœ•</button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Remove from roster */}
+                    <button onClick={() => removeFromMaster(w.id)} disabled={removingId === w.id}
+                      style={{ background: 'none', border: '1px solid rgba(192,57,43,0.25)', borderRadius: '6px', padding: '4px 10px', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#c0392b', cursor: 'pointer', whiteSpace: 'nowrap', opacity: removingId === w.id ? 0.5 : 1 }}>
+                      {removingId === w.id ? 'â€¦' : 'âˆ’ Remove'}
+                    </button>
                   </div>
-                  {/* Size */}
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.muted }}>{size}</div>
-                  {/* Price */}
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>£{salePrice.toFixed(2)}</div>
-                  {/* Buyer tags */}
-                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                    {buyerAccess.map(buyer => {
-                      const isAssigned = assignedTo.includes(buyer.name)
-                      return (
-                        <div key={buyer.id} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <span style={{ background: isAssigned ? 'rgba(45,106,79,0.1)' : 'transparent', color: isAssigned ? '#2d6a4f' : C.line, border: '1px solid ' + (isAssigned ? 'rgba(45,106,79,0.3)' : C.line), borderRadius: '4px', padding: '2px 7px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.06em' }}>
-                            {isAssigned ? '✓ ' : ''}{buyer.name}
-                          </span>
-                          {isAssigned && (
-                            <button onClick={() => removeFromBuyer(w.id, buyer.id)} title={`Remove from ${buyer.name}`}
-                              style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: '11px', padding: '1px 3px', lineHeight: 1 }}>✕</button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  {/* Remove from roster */}
-                  <button onClick={() => removeFromMaster(w.id)} disabled={removingId === w.id}
-                    style={{ background: 'none', border: '1px solid rgba(192,57,43,0.25)', borderRadius: '6px', padding: '4px 10px', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#c0392b', cursor: 'pointer', whiteSpace: 'nowrap', opacity: removingId === w.id ? 0.5 : 1 }}>
-                    {removingId === w.id ? '…' : '− Remove'}
-                  </button>
+                  {/* Expanded note */}
+                  {[noteKey, prodKey, womenKey].includes(openNote) && openNote?.startsWith(w.id) && (() => {
+                    const type = openNote.split(':')[1]
+                    const field = type === 'wine' ? 'buyer_note' : type === 'producer' ? 'producer_note' : 'women_note'
+                    const noteText = w[field]
+                    const noteColor = type === 'women' ? '#9b3a4a' : C.wine
+                    const label = type === 'wine' ? 'Wine info' : type === 'producer' ? 'Producer info' : 'Women in wine'
+                    return (
+                      <div style={{ background: C.cream, padding: '10px 20px 14px 34px', borderTop: '1px solid ' + C.line }}>
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: noteColor, marginBottom: '6px' }}>{label}</div>
+                        {masterEditKey === openNote ? (
+                          <div>
+                            <textarea value={masterDraft} onChange={e => setMasterDraft(e.target.value)} rows={4}
+                              style={{ width: '100%', maxWidth: '680px', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', padding: '8px 10px', border: '1px solid ' + C.line, borderRadius: '6px', background: C.white, resize: 'vertical', boxSizing: 'border-box' }} />
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                              <button onClick={() => saveMasterNote(w.id, type)} disabled={masterSavingNote}
+                                style={{ background: C.wine, color: C.white, border: 'none', borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px' }}>{masterSavingNote ? 'Savingâ€¦' : 'Save'}</button>
+                              <button onClick={() => { setMasterEditKey(null); setMasterDraft('') }}
+                                style={{ background: 'none', border: '1px solid ' + C.line, borderRadius: '6px', padding: '5px 14px', cursor: 'pointer', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: C.muted }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: noteText ? C.text : C.muted, fontStyle: noteText ? 'normal' : 'italic', lineHeight: 1.6, maxWidth: '680px', marginBottom: '6px' }}>{noteText || 'No note yet.'}</div>
+                            <button onClick={() => { setMasterEditKey(openNote); setMasterDraft(noteText || '') }}
+                              style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Edit</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
           </div>
+            )
+          })()}
         </div>
       </div>
     )
   }
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // ── BUYER VIEW (real buyer login) ───────────────────────────────────────────
-  // ════════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // â”€â”€ BUYER VIEW (real buyer login) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   return (
     <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: selectedCount > 0 ? (isMobile ? '100px' : '88px') : '48px' }}>
       <Header
