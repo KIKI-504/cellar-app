@@ -423,7 +423,7 @@ export default function StudioPage() {
         name: s.wines?.description || '',
         vintage: s.wines?.vintage || '',
         qty: String(s.quantity || 0),
-        salePrice: s.wines?.sale_price ? String(parseFloat(s.wines.sale_price).toFixed(2)) : '',
+        salePrice: s.sale_price ? String(parseFloat(s.sale_price).toFixed(2)) : (s.wines?.sale_price ? String(parseFloat(s.wines.sale_price).toFixed(2)) : ''),
         alreadyOnRoster: !!s.wines?.include_in_buyer_view,
         colour: s.wines?.colour || s.colour || '',
         region: s.wines?.region || '',
@@ -641,10 +641,10 @@ export default function StudioPage() {
                               <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', color:'var(--ink)', lineHeight:1.3, fontWeight:isMagnum(s.bottle_size)?700:400 }}>
                                 {womenNote && <span title={womenNote} style={{ marginRight:'4px', fontSize:'12px', cursor:'help' }}>♀</span>}
                                 {name}
+                                {onRoster && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', color:'#2d6a4f', border:'1px solid rgba(45,106,79,0.3)', padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>on roster</span>}
                                 {alert && <span title={alert.tooltip} style={{ marginLeft:'4px', fontSize:'11px' }}>{alert.icon}</span>}
                                 {buyerNote && <span style={{ marginLeft:'4px', fontSize:'10px', color:'var(--muted)' }}>✎</span>}
                                 {sommelierNote && <span title={sommelierNote} style={{ marginLeft:'6px', fontSize:'10px', color:'#8b6914', cursor:'help' }}>★</span>}
-                                {onRoster && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', color:'#2d6a4f', border:'1px solid rgba(45,106,79,0.3)', padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>on roster</span>}
                                 {(s.status === 'Sold' || s.status === 'Consumed') && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase', color: s.status === 'Sold' ? '#c0392b' : '#7a5e10', border: `1px solid ${s.status === 'Sold' ? 'rgba(192,57,43,0.35)' : 'rgba(122,94,16,0.35)'}`, padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>{s.status}</span>}
                               </div>
                             )}
