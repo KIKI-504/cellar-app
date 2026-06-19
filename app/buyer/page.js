@@ -854,8 +854,8 @@ export default function BuyerPage() {
             {buyerAccess.map(buyer => {
               const totalAssigned = Object.values(assignments).filter(wineMap => wineMap[buyer.name]?.assigned).length
               return (
-                <div key={buyer.id} style={{ background: C.white, border: '1.5px solid ' + C.line, borderRadius: '12px', padding: '16px 18px' }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted, marginBottom: '4px' }}>{buyer.name}</div>
+                <div key={buyer.id} onClick={() => setMasterFilterBuyer(masterFilterBuyer === buyer.name ? '' : buyer.name)} style={{ background: C.white, border: '1.5px solid ' + (masterFilterBuyer === buyer.name ? C.wine : C.line), borderRadius: '12px', padding: '16px 18px', cursor: 'pointer' }}>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: masterFilterBuyer === buyer.name ? C.wine : C.muted, marginBottom: '4px' }}>{buyer.name}</div>
                   <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', color: C.text }}>{totalAssigned}</div>
                   <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, marginTop: '2px' }}>wines assigned · PIN {buyer.pin}</div>
                 </div>
@@ -906,7 +906,7 @@ export default function BuyerPage() {
 
               return (
                 <div key={w.id} style={{ borderBottom: isLast ? 'none' : '1px solid ' + C.line, background: removingId === w.id ? 'rgba(192,57,43,0.04)' : 'transparent' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 60px 80px 100px auto 80px', gap: '12px', padding: '13px 20px', alignItems: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 60px 80px 100px 90px auto 80px', gap: '12px', padding: '13px 20px', alignItems: 'center' }}>
                     {/* Wine name */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
@@ -930,6 +930,19 @@ export default function BuyerPage() {
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: C.muted }}>{size}</div>
                     {/* Price */}
                     <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: C.text }}>£{salePrice.toFixed(2)}</div>
+                    {/* Market price */}
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted }}>
+                      {(() => {
+                        const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
+                        const size = formatBottleSize(w.bottle_volume, w.bottle_format)
+                        const duty = (size === '150cl' || size === '300cl') ? 6 : 3
+                        const wsDp = ws ? (ws + duty) * 1.2 : null
+                        if (!wsDp) return <span style={{ color: C.line }}>—</span>
+                        const diff = ((salePrice - wsDp) / wsDp * 100)
+                        const color = diff < 0 ? '#2d6a4f' : diff > 0 ? '#c0392b' : C.muted
+                        return <div><div style={{ color: C.muted }}>£{wsDp.toFixed(2)}</div><div style={{ fontSize: '10px', color }}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}%</div></div>
+                      })()}
+                    </div>
                     {/* Buyer tags */}
                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
                       {buyerAccess.map(buyer => {
