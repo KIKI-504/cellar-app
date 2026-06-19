@@ -107,17 +107,19 @@ function printPriceList(wineList, displayName) {
     const col = (w.colour || '').toLowerCase()
     const dotCol = col.includes('red') ? '#8b2535' : col.includes('white') ? '#b5a430' : col.includes('ros') ? '#d4748a' : col.includes('spark') ? '#5a8fa8' : '#aaa'
     const displayQty = w._buyerQty != null ? w._buyerQty : (parseInt(w.quantity) || 0)
+    // Magnum rows: all data cells bold except market price
+    const magBold = isMag ? 'font-weight:700;color:#1a1008;' : 'color:#7a6652;'
     return `<tr>
-      <td style="padding:9px 10px 9px 0;border-bottom:1px solid #ede6d6;">
-        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotCol};margin-right:5px;vertical-align:middle;"></span>
-        <span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:${isMag?'700':'500'};vertical-align:middle;">${cleanWineName(w.description, w.region, w.country)}${w.women_note ? ' <span style="color:#9b3a4a;font-size:12px;">&#9792;</span>' : ''}</span>
+      <td style="padding:9px 10px 9px 0;border-bottom:1px solid #ede6d6;text-align:left;">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotCol};margin-right:5px;vertical-align:middle;flex-shrink:0;"></span>
+        <span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:${isMag?'700':'500'};vertical-align:middle;">${cleanWineName(w.description, w.region, w.country)}</span>
       </td>
-      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.vintage || '-'}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.region || '-'}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${w.colour || '-'}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${size}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${displayQty}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:${isMag?'700':'600'};color:#1a1008;">£${salePrice.toFixed(2)}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;${magBold}">${w.vintage || '-'}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;${magBold}">${w.region || '-'}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;${magBold}">${w.colour || '-'}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:11px;${magBold}">${size}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:11px;${magBold}">${displayQty}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:${isMag?'700':'400'};color:#1a1008;">£${salePrice.toFixed(2)}</td>
       <td style="padding:9px 0 9px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${wsDp ? '£' + wsDp.toFixed(2) : '-'}</td>
     </tr>`
   }).join('')
