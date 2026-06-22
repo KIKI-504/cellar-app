@@ -1,9 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-
-const LOCAL_PIN = '2222'
 
 function isMagnum(size) {
   const s = String(size || '').toLowerCase().replace(/\s/g, '')
@@ -28,7 +26,7 @@ function SommelierHook({ note }) {
       fontFamily: 'DM Mono, monospace', fontSize: '11px', fontWeight: 700,
       letterSpacing: '0.05em', textTransform: 'uppercase',
       clipPath: 'polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 0 100%)',
-      whiteSpace: 'nowrap', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis',
     }}>
       ▶ {note}
     </div>
@@ -39,8 +37,9 @@ export default function LocalPage() {
   const [stage, setStage] = useState('pin')
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState(false)
-  const [buyerName, setBuyerName] = useState('')
+  const [buyer, setBuyer] = useState(null) // { name, display_name, editorial }
   const [wines, setWines] = useState([])
+  const [availableCount, setAvailableCount] = useState(null)
   const [loading, setLoading] = useState(false)
   const [wishlist, setWishlist] = useState({})
   const [search, setSearch] = useState('')
@@ -52,41 +51,39 @@ export default function LocalPage() {
   const [showAllNotes, setShowAllNotes] = useState(false)
   const [expandedNotes, setExpandedNotes] = useState(new Set())
 
-  if (typeof window !== 'undefined' && !isMobile && window.innerWidth < 768) {
-    setIsMobile(true)
-  }
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check)
+  }, [])
+
+  // Fetch count for login screen
+  useEffect(() => {
+    supabase.from('studio').select('id', { count: 'exact', head: true }).eq('include_in_local', true).eq('status', 'Available')
+      .then(({ count }) => setAvailableCount(count || 0))
+  }, [])
 
   function toggleNoteExpanded(id) {
-    setExpandedNotes(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    setExpandedNotes(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
+  }
+  function toggleShowAllNotes() { setShowAllNotes(prev => !prev); setExpandedNotes(new Set()) }
+
+  async function handlePin() {
+    if (!pinInput.trim()) return
+    const { data } = await supabase.from('local_access').select('name, display_name, editorial').eq('pin', pinInput.trim()).maybeSingle()
+    if (!data) { setPinError(true); setPinInput('') }
+    else { setPinError(false); setBuyer(data); loadWines() }
   }
 
-  function toggleShowAllNotes() {
-    setShowAllNotes(prev => !prev)
-    setExpandedNotes(new Set())
-  }
-
-  function handlePin() {
-    if (pinInput === LOCAL_PIN) { setPinError(false); setStage('name') }
-    else { setPinError(true); setPinInput('') }
-  }
-
-  async function handleName() {
-    if (!buyerName.trim()) return
-    setLoading(true)
-    const { data } = await supabase.from('studio').select('*, wines(id, description, vintage, colour, region, country, buyer_note, women_note, sommelier_note, ws_lowest_per_bottle, ws_price_date, bottle_volume)').eq('include_in_local', true).eq('status', 'Available').order('created_at', { ascending: false })
-    setWines(data || []); setLoading(false); setStage('browse')
+  async function loadWines() {
+    setLoading(true); setStage('browse')
+    const { data } = await supabase.from('studio')
+      .select('*, wines(id, description, vintage, colour, region, country, buyer_note, producer_note, women_note, sommelier_note, ws_lowest_per_bottle, ws_price_date, bottle_volume)')
+      .eq('include_in_local', true).eq('status', 'Available').order('created_at', { ascending: false })
+    setWines(data || []); setLoading(false)
   }
 
   function toggleWishlist(id, qty) {
-    setWishlist(prev => {
-      if (prev[id]) { const next = { ...prev }; delete next[id]; return next }
-      return { ...prev, [id]: qty }
-    })
+    setWishlist(prev => { if (prev[id]) { const next = { ...prev }; delete next[id]; return next }; return { ...prev, [id]: qty } })
   }
   function setWishlistQty(id, qty) { setWishlist(prev => ({ ...prev, [id]: qty })) }
 
@@ -97,6 +94,8 @@ export default function LocalPage() {
   function getWineColour(s) { return s.wines?.colour || s.colour || '' }
   function getWomenNote(s) { return s.wines?.women_note || '' }
   function getSommelierNote(s) { return s.wines?.sommelier_note || '' }
+  function getBuyerNote(s) { return s.wines?.buyer_note || '' }
+  function getProducerNote(s) { return s.wines?.producer_note || '' }
   function getPrice(s) { const p = s.sale_price ?? s.dp_price; return p ? parseFloat(p) : null }
 
   function cycleSort(field) {
@@ -113,21 +112,32 @@ export default function LocalPage() {
     const items = Object.entries(wishlist).map(([id, qty]) => {
       const s = wines.find(w => w.id === id); if (!s) return null
       const price = getPrice(s)
-      return `${qty} x ${getWineName(s)} ${getWineVintage(s)} — ${price ? `£${price.toFixed(2)}/bottle` : 'POA'}`
+      return `${qty} × ${getWineName(s)} ${getWineVintage(s)} — ${price ? `£${price.toFixed(2)}/btl` : 'POA'}`
     }).filter(Boolean)
     if (!items.length) return
-    const text = [`Bottles on Hand Wishlist — ${buyerName}`, new Date().toLocaleDateString('en-GB'), '', ...items, '', `Total bottles: ${Object.values(wishlist).reduce((a, b) => a + b, 0)}`].join('\n')
-    const subject = encodeURIComponent(`Wishlist — ${buyerName} — ${new Date().toLocaleDateString('en-GB')}`)
+    const totalBottles = Object.values(wishlist).reduce((a, b) => a + b, 0)
+    const totalValue = Object.entries(wishlist).reduce((sum, [id, qty]) => {
+      const s = wines.find(w => w.id === id); const price = s ? getPrice(s) : null; return sum + (price ? price * qty : 0)
+    }, 0)
+    const displayName = buyer?.display_name || buyer?.name || 'Guest'
+    const text = [
+      `Bottles on Hand Wishlist — ${displayName}`,
+      new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+      '',
+      ...items,
+      '',
+      `${items.length} wine${items.length !== 1 ? 's' : ''} · ${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} · £${totalValue.toFixed(2)}`,
+      '',
+      'Please reply to confirm availability.',
+    ].join('\n')
+    const subject = encodeURIComponent(`Wishlist — ${displayName} — ${new Date().toLocaleDateString('en-GB')}`)
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(text)}`
   }
 
   const filtered = wines
     .filter(s => {
       if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
-      if (search) {
-        const q = search.toLowerCase()
-        return [getWineName(s), getWineVintage(s), getWineRegion(s), getWineCountry(s)].join(' ').toLowerCase().includes(q)
-      }
+      if (search) { const q = search.toLowerCase(); return [getWineName(s), getWineVintage(s), getWineRegion(s), getWineCountry(s)].join(' ').toLowerCase().includes(q) }
       return true
     })
     .sort((a, b) => {
@@ -139,9 +149,8 @@ export default function LocalPage() {
       else if (sortCol === 'country')  { av = getWineCountry(a).toLowerCase(); bv = getWineCountry(b).toLowerCase() }
       else if (sortCol === 'format')   { av = bottleSortKey(a.bottle_size || a.wines?.bottle_volume); bv = bottleSortKey(b.bottle_size || b.wines?.bottle_volume) }
       else if (sortCol === 'quantity') { av = a.quantity || 0;                 bv = b.quantity || 0 }
-      else if (sortCol === 'price')    { av = getPrice(a) || 0;               bv = getPrice(b) || 0 }
+      else if (sortCol === 'price')    { av = getPrice(a) || 0;                bv = getPrice(b) || 0 }
       else if (sortCol === 'ws')       { av = parseFloat(a.wines?.ws_lowest_per_bottle) || 0; bv = parseFloat(b.wines?.ws_lowest_per_bottle) || 0 }
-      else if (sortCol === 'hook')     { av = getSommelierNote(a) ? 1 : 0;    bv = getSommelierNote(b) ? 1 : 0 }
       else { av = getWineName(a).toLowerCase(); bv = getWineName(b).toLowerCase() }
       if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
@@ -170,97 +179,122 @@ export default function LocalPage() {
   const SORT_OPTIONS = [
     ['name', 'Wine'], ['region', 'Region'], ['country', 'Country'],
     ['vintage', 'Vintage'], ['colour', 'Colour'], ['format', 'Size'],
-    ['price', 'Price'], ['ws', 'WS Avg'], ['quantity', 'Qty'], ['hook', '★ Hook'],
+    ['price', 'Price'], ['ws', 'WS Avg'], ['quantity', 'Qty'],
   ]
 
+  const currentMonth = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+
+  // ── PIN screen ────────────────────────────────────────────────────────────
   if (stage === 'pin') return (
-    <div style={{ minHeight: '100dvh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div style={{ textAlign: 'center', width: '100%', maxWidth: '320px' }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em', marginBottom: '8px' }}>Bottles on Hand</div>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: '40px' }}>Ready to collect</div>
-        <input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(false) }} onKeyDown={e => e.key === 'Enter' && handlePin()} placeholder="Enter PIN" style={{ width: '100%', background: 'rgba(253,250,245,0.07)', border: pinError ? '1px solid #c0392b' : '1px solid rgba(253,250,245,0.15)', color: 'var(--white)', padding: '16px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', textAlign: 'center', letterSpacing: '0.3em', boxSizing: 'border-box', marginBottom: '12px', borderRadius: '2px' }} />
-        {pinError && <div style={{ fontSize: '12px', color: '#c0392b', fontFamily: 'DM Mono, monospace', marginBottom: '12px' }}>Incorrect PIN</div>}
-        <button onClick={handlePin} style={{ width: '100%', background: '#d4ad45', color: 'var(--ink)', border: 'none', padding: '16px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer', minHeight: '52px' }}>Enter</button>
+    <div style={{ minHeight: '100dvh', background: '#1a1008', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ textAlign: 'center', width: '100%', maxWidth: '340px' }}>
+
+        {/* Wordmark */}
+        <div style={{ marginBottom: '40px' }}>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '42px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.08em', lineHeight: 1 }}>Bottles on Hand</div>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.5)', marginTop: '8px' }}>Private Buyer Access</div>
+          <div style={{ width: '40px', height: '1px', background: 'rgba(212,173,69,0.3)', margin: '16px auto 0' }}></div>
+        </div>
+
+        {/* PIN input */}
+        <input
+          type="password" value={pinInput}
+          onChange={e => { setPinInput(e.target.value); setPinError(false) }}
+          onKeyDown={e => e.key === 'Enter' && handlePin()}
+          placeholder="Enter PIN"
+          style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: pinError ? '1px solid #c0392b' : '1px solid rgba(255,255,255,0.12)', color: 'rgba(253,250,245,0.9)', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '18px', outline: 'none', textAlign: 'center', letterSpacing: '0.3em', boxSizing: 'border-box', marginBottom: '10px', borderRadius: '2px' }}
+        />
+        {pinError && <div style={{ fontSize: '12px', color: '#c0392b', fontFamily: 'DM Mono, monospace', marginBottom: '10px', letterSpacing: '0.04em' }}>Incorrect PIN — please try again</div>}
+        <button onClick={handlePin} style={{ width: '100%', background: '#d4ad45', color: '#1a1008', border: 'none', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>Enter Cellar →</button>
+
+        {/* Footer count */}
+        {availableCount !== null && (
+          <div style={{ marginTop: '48px' }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: '#d4ad45', letterSpacing: '0.04em' }}>
+              <span style={{ fontWeight: 600 }}>{availableCount}</span>
+              <span style={{ fontWeight: 300 }}> wines currently available</span>
+            </div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.4)', marginTop: '6px' }}>Updated {currentMonth}</div>
+          </div>
+        )}
       </div>
     </div>
   )
 
-  if (stage === 'name') return (
-    <div style={{ minHeight: '100dvh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div style={{ textAlign: 'center', width: '100%', maxWidth: '320px' }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '36px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em', marginBottom: '8px' }}>Welcome</div>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(253,250,245,0.4)', marginBottom: '40px' }}>What's your name?</div>
-        <input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleName()} placeholder="Your name" style={{ width: '100%', background: 'rgba(253,250,245,0.07)', border: '1px solid rgba(253,250,245,0.15)', color: 'var(--white)', padding: '16px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', textAlign: 'center', boxSizing: 'border-box', marginBottom: '12px', borderRadius: '2px' }} />
-        <button onClick={handleName} style={{ width: '100%', background: '#d4ad45', color: 'var(--ink)', border: 'none', padding: '16px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer', minHeight: '52px' }}>Browse Wines</button>
-      </div>
-    </div>
-  )
+  // ── Browse screen ────────────────────────────────────────────────────────
+  const displayName = buyer?.display_name || buyer?.name || 'there'
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--cream)', paddingBottom: wishlistCount > 0 ? 'calc(80px + env(safe-area-inset-bottom))' : 'calc(40px + env(safe-area-inset-bottom))' }} onClick={() => setTooltip(null)}>
 
+      {/* Women note tooltip */}
       {tooltip && (
-        <div style={{ position: 'fixed', zIndex: 9999, left: Math.min(tooltip.x, (typeof window !== 'undefined' ? window.innerWidth : 400) - 240), top: tooltip.y + 16, background: 'var(--ink)', color: 'var(--white)', padding: '12px 16px', maxWidth: '240px', fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.55, boxShadow: '0 4px 20px rgba(0,0,0,0.4)', pointerEvents: 'none', borderLeft: '3px solid #9b3a4a' }}>
+        <div style={{ position: 'fixed', zIndex: 9999, left: Math.min(tooltip.x, (typeof window !== 'undefined' ? window.innerWidth : 400) - 260), top: tooltip.y + 16, background: 'var(--ink)', color: 'var(--white)', padding: '14px 16px', maxWidth: '260px', fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.6, boxShadow: '0 4px 24px rgba(0,0,0,0.45)', pointerEvents: 'none', borderLeft: '3px solid #9b3a4a' }}>
           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#9b3a4a', marginBottom: '6px' }}>Women in Wine</div>
           {tooltip.text}
         </div>
       )}
 
-      {/* Top nav */}
-      <div style={{ background: 'var(--ink)', padding: '0 20px', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100, paddingTop: 'env(safe-area-inset-top)' }}>
+      {/* Nav */}
+      <div style={{ background: 'var(--ink)', padding: '0 20px', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em' }}>Bottles on Hand</div>
-        <button onClick={() => setStage('pin')} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '8px 12px', minHeight: '36px' }}>Sign Out</button>
+        <button onClick={() => { setStage('pin'); setPinInput(''); setBuyer(null); setWines([]); setWishlist({}) }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '8px 12px' }}>Sign Out</button>
       </div>
 
       {/* Hero */}
       <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '28px 20px 24px' }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '34px' : '42px', fontWeight: 300, letterSpacing: '0.04em', color: '#d4ad45', marginBottom: '12px' }}>Cheers, {buyerName}!</div>
-        <div style={{ fontSize: '13px', color: 'rgba(253,250,245,0.7)', lineHeight: 1.8, maxWidth: '580px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.02em' }}>
-          Bottles on Hand are available for same day collection or delivery.{' '}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', margin: '0 5px', verticalAlign: 'middle' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', border: '1.5px solid rgba(253,250,245,0.6)', borderRadius: '3px', fontSize: '18px', fontWeight: 300, lineHeight: 1, color: 'rgba(253,250,245,0.9)' }}>+</span>
-          </span>
-          to add a wine to your wishlist.{' '}
-          <span style={{ color: '#c9607a', fontSize: '16px', margin: '0 4px', verticalAlign: 'middle' }}>♀</span>
-          {' '}to read about women in leadership positions at the winery.
+        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '34px' : '44px', fontWeight: 300, letterSpacing: '0.02em', color: '#d4ad45', marginBottom: '14px', lineHeight: 1.1 }}>
+          Cheers, {displayName}!
         </div>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'rgba(212,173,69,0.85)', marginTop: '12px', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>Prices include duty, VAT and delivery</div>
+        {buyer?.editorial && (
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'rgba(253,250,245,0.75)', lineHeight: 1.7, maxWidth: '620px', marginBottom: '12px' }}>{buyer.editorial}</div>
+        )}
+        <div style={{ fontSize: '13px', color: 'rgba(253,250,245,0.65)', lineHeight: 1.8, maxWidth: '580px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.02em' }}>
+          Bottles on Hand are available for same day collection or delivery.{' '}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', margin: '0 3px', verticalAlign: 'middle' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', border: '1.5px solid rgba(253,250,245,0.5)', borderRadius: '3px', fontSize: '16px', fontWeight: 300, lineHeight: 1, color: 'rgba(253,250,245,0.85)' }}>+</span>
+          </span>
+          {' '}to add a wine to your wishlist.{' '}
+          <span style={{ color: '#c9607a', fontSize: '15px', margin: '0 3px', verticalAlign: 'middle' }}>♀</span>
+          {' '}to read about women in leadership at the winery.
+        </div>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'rgba(212,173,69,0.8)', marginTop: '14px', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>Prices include duty, VAT and delivery</div>
       </div>
 
       <div style={{ padding: isMobile ? '16px' : '24px' }}>
 
         {/* Search + colour filter */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, region, country…" style={{ flex: 1, minWidth: '0', border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', boxSizing: 'border-box', width: isMobile ? '100%' : 'auto' }} />
-          <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', minHeight: '48px', width: isMobile ? '100%' : 'auto' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, region, country…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: isMobile ? '16px' : '13px', outline: 'none', boxSizing: 'border-box', width: isMobile ? '100%' : 'auto' }} />
+          <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: isMobile ? '16px' : '13px', outline: 'none', width: isMobile ? '100%' : 'auto' }}>
             <option value="">All Colours</option>
             <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
           </select>
         </div>
 
-        {/* MOBILE sort pills */}
+        {/* Mobile sort pills */}
         {isMobile && (
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '14px', marginLeft: '-16px', marginRight: '-16px', paddingLeft: '16px', paddingRight: '16px' }}>
             <div style={{ display: 'flex', gap: '6px', width: 'max-content', paddingBottom: '4px' }}>
               {SORT_OPTIONS.map(([col, label]) => {
                 const active = sortCol === col
-                const isHook = col === 'hook'
                 return (
-                  <button key={col} onClick={() => cycleSort(col)} style={{ background: active ? 'var(--ink)' : isHook ? 'rgba(212,173,69,0.15)' : 'var(--white)', color: active ? '#d4ad45' : isHook ? '#8b6914' : 'var(--muted)', border: isHook ? '1px solid rgba(212,173,69,0.4)' : '1px solid var(--border)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', letterSpacing: '0.06em', whiteSpace: 'nowrap', minHeight: '36px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <button key={col} onClick={() => cycleSort(col)} style={{ background: active ? 'var(--ink)' : 'var(--white)', color: active ? '#d4ad45' : 'var(--muted)', border: '1px solid var(--border)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', letterSpacing: '0.06em', whiteSpace: 'nowrap', minHeight: '36px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                     {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </button>
                 )
               })}
               <div style={{ width: '1px', background: 'var(--border)', margin: '4px 2px', flexShrink: 0 }} />
               <button onClick={toggleShowAllNotes} style={{ background: showAllNotes ? 'var(--wine)' : 'var(--white)', color: showAllNotes ? 'var(--white)' : 'var(--muted)', border: showAllNotes ? '1px solid var(--wine)' : '1px solid var(--border)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', letterSpacing: '0.06em', whiteSpace: 'nowrap', minHeight: '36px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ fontSize: '13px' }}>✦</span> Notes {showAllNotes ? 'on' : 'off'}
+                ✦ Notes {showAllNotes ? 'on' : 'off'}
               </button>
             </div>
           </div>
         )}
 
         <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '14px', fontFamily: 'DM Mono, monospace' }}>
-          {filtered.length} different wine{filtered.length !== 1 ? 's' : ''} available{!isMobile && ' — click any column heading to sort · click '}{!isMobile && <span style={{ color: '#9b3a4a', fontSize: '13px' }}>♀</span>}{!isMobile && ' for stories of women in wine'}
+          {filtered.length} different wine{filtered.length !== 1 ? 's' : ''} available
+          {!isMobile && <span> — click any column heading to sort · click <span style={{ color: '#9b3a4a', fontSize: '13px' }}>♀</span> for stories of women in wine</span>}
         </div>
 
         {loading ? (
@@ -269,7 +303,7 @@ export default function LocalPage() {
           <div style={{ textAlign: 'center', padding: '60px', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: 'var(--muted)' }}>No wines available right now.</div>
         ) : isMobile ? (
 
-          // MOBILE
+          // ── MOBILE ────────────────────────────────────────────────────────
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {filtered.map(s => {
               const inWishlist = !!wishlist[s.id]
@@ -283,13 +317,14 @@ export default function LocalPage() {
               const wsDp = ws ? (ws + duty) * 1.2 : null
               const wsDate = s.wines?.ws_price_date || null
               const isBelowWs = wsDp && price && price < wsDp
-              const buyerNote = s.wines?.buyer_note || ''
+              const buyerNote = getBuyerNote(s)
+              const producerNote = getProducerNote(s)
               const womenNote = getWomenNote(s)
               const sommelierNote = getSommelierNote(s)
               const region = getWineRegion(s)
               const country = getWineCountry(s)
               const locationParts = [region, country].filter(Boolean)
-              const hasNote = !!buyerNote
+              const hasNote = !!(buyerNote || producerNote)
               const noteVisible = hasNote && (showAllNotes || expandedNotes.has(s.id))
               const noteHinted = hasNote && !showAllNotes && !expandedNotes.has(s.id)
 
@@ -297,49 +332,59 @@ export default function LocalPage() {
                 <div key={s.id} style={{ background: 'var(--white)', borderLeft: inWishlist ? '4px solid var(--wine)' : '4px solid transparent', padding: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '6px' }}></span>
-                      {womenNote && (<span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }} style={{ fontSize: '16px', cursor: 'pointer', flexShrink: 0, color: '#9b3a4a', lineHeight: 1, marginTop: '3px' }}>♀</span>)}
-                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', lineHeight: 1.3, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
+                      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '7px' }}></span>
+                      {womenNote && (<span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }} style={{ fontSize: '16px', cursor: 'pointer', flexShrink: 0, color: '#9b3a4a', lineHeight: 1, marginTop: '4px' }}>♀</span>)}
+                      <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '19px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
                     </div>
-                    <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: inWishlist ? 'var(--wine)' : 'var(--white)', border: inWishlist ? '2px solid var(--wine)' : '2px solid var(--border)', color: inWishlist ? 'var(--white)' : 'var(--ink)', borderRadius: '4px', fontSize: '28px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', padding: '0', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{inWishlist ? '−' : '+'}</button>
+                    <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: inWishlist ? 'var(--wine)' : 'var(--white)', border: inWishlist ? '2px solid var(--wine)' : '2px solid var(--border)', color: inWishlist ? 'var(--white)' : 'var(--ink)', borderRadius: '4px', fontSize: '26px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '46px', height: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{inWishlist ? '−' : '+'}</button>
                   </div>
+
                   {sommelierNote && <div style={{ paddingLeft: '16px', marginBottom: '8px' }}><SommelierHook note={sommelierNote} /></div>}
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: '10px', paddingLeft: '16px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', paddingLeft: '16px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
                     {getWineVintage(s) && <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: 500 }}>{getWineVintage(s)}</span>}
-                    {getWineVintage(s) && locationParts.length > 0 && <span style={{ opacity: 0.4 }}>·</span>}
+                    {getWineVintage(s) && locationParts.length > 0 && <span style={{ opacity: 0.35 }}>·</span>}
                     {locationParts.length > 0 && <span>{locationParts.join(' · ')}</span>}
-                    {(getWineVintage(s) || locationParts.length > 0) && <span style={{ opacity: 0.4 }}>·</span>}
+                    {(getWineVintage(s) || locationParts.length > 0) && <span style={{ opacity: 0.35 }}>·</span>}
                     <span style={{ fontWeight: isMag ? 600 : 400, color: isMag ? 'var(--ink)' : 'var(--muted)' }}>{sizeLabel}</span>
                   </div>
+
                   {noteVisible && (
                     <div style={{ paddingLeft: '16px', marginBottom: '10px' }}>
-                      {buyerNote && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.6, opacity: 0.85 }}>{buyerNote}</div>}
-                      {!showAllNotes && expandedNotes.has(s.id) && (<button onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }} style={{ marginTop: '6px', background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em' }}>▲ hide note</button>)}
+                      {buyerNote && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: 'var(--ink)', lineHeight: 1.65, marginBottom: producerNote ? '8px' : 0 }}>{buyerNote}</div>}
+                      {producerNote && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', lineHeight: 1.6 }}>{producerNote}</div>}
+                      {!showAllNotes && (<button onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }} style={{ marginTop: '6px', background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em' }}>▲ hide</button>)}
                     </div>
                   )}
-                  {noteHinted && (<div style={{ paddingLeft: '16px', marginBottom: '10px' }}><button onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }} style={{ background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em', opacity: 0.7 }}>▼ note</button></div>)}
+                  {noteHinted && (
+                    <div style={{ paddingLeft: '16px', marginBottom: '10px' }}>
+                      <button onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }} style={{ background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em', opacity: 0.7 }}>▼ notes</button>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px', paddingLeft: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div>
                         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '18px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
                         {inWishlist && price && <div style={{ fontSize: '10px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>}
                       </div>
-                      {inWishlist && (
+                      {inWishlist ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <button onClick={() => setWishlistQty(s.id, Math.max(1, (wishlist[s.id] || 1) - 1))} style={{ width: '36px', height: '36px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
                           <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '15px', fontWeight: 500, minWidth: '20px', textAlign: 'center' }}>{wishlist[s.id]}</span>
                           <button onClick={() => setWishlistQty(s.id, Math.min(s.quantity, (wishlist[s.id] || 1) + 1))} style={{ width: '36px', height: '36px', border: '1px solid var(--border)', background: 'var(--cream)', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                         </div>
+                      ) : (
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity} avail</div>
                       )}
-                      {!inWishlist && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity} avail</div>}
                     </div>
-                    {wsDp ? (
+                    {wsDp && (
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
                         <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: 500 }}>WS £{wsDp.toFixed(2)}</div>
                         {wsDate && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'rgba(0,0,0,0.3)' }}>{wsDate}</div>}
-                        {isBelowWs ? <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#2a7a4b', fontWeight: 600 }}>below WS UK avg</div> : <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#b94040', fontWeight: 600 }}>above WS UK avg</div>}
+                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: isBelowWs ? '#2a7a4b' : '#b94040', fontWeight: 600 }}>{isBelowWs ? 'below' : 'above'} WS UK avg</div>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               )
@@ -348,7 +393,7 @@ export default function LocalPage() {
 
         ) : (
 
-          // DESKTOP
+          // ── DESKTOP ───────────────────────────────────────────────────────
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--ink)', padding: '12px 16px', position: 'sticky', top: '52px', zIndex: 50, borderBottom: '2px solid rgba(212,173,69,0.3)' }}>
               {colHeader('name', 'Wine')}
@@ -373,7 +418,8 @@ export default function LocalPage() {
               const wsDp = ws ? (ws + duty) * 1.2 : null
               const wsDate = s.wines?.ws_price_date || null
               const isBelowWs = wsDp && price && price < wsDp
-              const buyerNote = s.wines?.buyer_note || ''
+              const buyerNote = getBuyerNote(s)
+              const producerNote = getProducerNote(s)
               const womenNote = getWomenNote(s)
               const sommelierNote = getSommelierNote(s)
               const region = getWineRegion(s)
@@ -381,18 +427,27 @@ export default function LocalPage() {
               return (
                 <div key={s.id} style={{ background: 'var(--white)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '14px 16px', alignItems: 'start', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                    {/* Wine name + notes */}
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '2px' }}></span>
-                        {womenNote && (<span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }} style={{ fontSize: '14px', cursor: 'pointer', flexShrink: 0, color: '#9b3a4a', lineHeight: 1 }}>♀</span>)}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '3px' }}>
+                        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '5px' }}></span>
+                        {womenNote && (
+                          <span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }}
+                            style={{ fontSize: '14px', cursor: 'pointer', flexShrink: 0, color: '#9b3a4a', lineHeight: 1, marginTop: '2px' }}>♀</span>
+                        )}
                         <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', lineHeight: 1.3, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
                       </div>
-                      {sommelierNote && <div style={{ paddingLeft: '13px', marginTop: '5px', marginBottom: '4px' }}><SommelierHook note={sommelierNote} /></div>}
-                      {buyerNote && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.55, paddingLeft: '13px', opacity: 0.85, marginTop: '4px' }}>{buyerNote}</div>}
+                      {sommelierNote && <div style={{ paddingLeft: '13px', marginTop: '5px', marginBottom: '6px' }}><SommelierHook note={sommelierNote} /></div>}
+                      {buyerNote && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.6, paddingLeft: '13px', opacity: 0.9, marginTop: '5px' }}>{buyerNote}</div>}
+                      {producerNote && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', lineHeight: 1.55, paddingLeft: '13px', marginTop: '6px' }}>{producerNote}</div>}
                     </div>
+                    {/* Region */}
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', paddingTop: '3px', paddingRight: '8px' }}>{region || '—'}</div>
+                    {/* Country */}
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', paddingTop: '3px', paddingRight: '8px' }}>{country || '—'}</div>
+                    {/* Size */}
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: isMag ? 'var(--ink)' : 'var(--muted)', fontWeight: isMag ? 600 : 400, paddingTop: '2px' }}>{sizeLabel}</div>
+                    {/* Qty / stepper */}
                     <div style={{ textAlign: 'center', paddingTop: '2px' }}>
                       {inWishlist ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
@@ -404,24 +459,28 @@ export default function LocalPage() {
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>{s.quantity}</span>
                       )}
                     </div>
+                    {/* Price */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
                       <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '15px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
                       {inWishlist && price && <div style={{ fontSize: '9px', color: 'var(--wine)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>}
                     </div>
+                    {/* Vintage */}
                     <div style={{ textAlign: 'right', paddingTop: '4px' }}>
                       <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: 'var(--muted)', fontWeight: 500 }}>{getWineVintage(s)}</span>
                     </div>
+                    {/* WS avg */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
                       {wsDp ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--ink)', fontWeight: 500 }}>£{wsDp.toFixed(2)}</div>
                           {wsDate && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'rgba(0,0,0,0.3)' }}>{wsDate}</div>}
-                          {isBelowWs ? <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#2a7a4b', fontWeight: 600 }}>below WS UK avg</div> : <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: '#b94040', fontWeight: 600 }}>above WS UK avg</div>}
+                          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: isBelowWs ? '#2a7a4b' : '#b94040', fontWeight: 600 }}>{isBelowWs ? 'below' : 'above'} WS UK avg</div>
                         </div>
                       ) : <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--border)' }}>—</div>}
                     </div>
+                    {/* + button */}
                     <div style={{ textAlign: 'right', paddingTop: '2px' }}>
-                      <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: inWishlist ? 'var(--wine)' : 'var(--white)', border: inWishlist ? '2px solid var(--wine)' : '2px solid var(--border)', color: inWishlist ? 'var(--white)' : 'var(--ink)', borderRadius: '4px', fontSize: '22px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', padding: '0', width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{inWishlist ? '−' : '+'}</button>
+                      <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: inWishlist ? 'var(--wine)' : 'var(--white)', border: inWishlist ? '2px solid var(--wine)' : '2px solid var(--border)', color: inWishlist ? 'var(--white)' : 'var(--ink)', borderRadius: '4px', fontSize: '22px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{inWishlist ? '−' : '+'}</button>
                     </div>
                   </div>
                 </div>
@@ -431,12 +490,18 @@ export default function LocalPage() {
         )}
       </div>
 
+      {/* Wishlist bar */}
       {wishlistCount > 0 && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', padding: '14px 24px', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100 }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'var(--white)' }}>
-            {wishlistCount} wine{wishlistCount > 1 ? 's' : ''} · {Object.values(wishlist).reduce((a, b) => a + b, 0)} bottles
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', padding: '14px 24px', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100, boxShadow: '0 -4px 20px rgba(0,0,0,0.3)' }}>
+          <div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', color: 'var(--white)', lineHeight: 1 }}>
+              {wishlistCount} wine{wishlistCount > 1 ? 's' : ''} · {Object.values(wishlist).reduce((a, b) => a + b, 0)} bottle{Object.values(wishlist).reduce((a, b) => a + b, 0) !== 1 ? 's' : ''}
+            </div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(212,173,69,0.7)', marginTop: '3px', letterSpacing: '0.06em' }}>
+              £{Object.entries(wishlist).reduce((sum, [id, qty]) => { const s = wines.find(w => w.id === id); const p = s ? getPrice(s) : null; return sum + (p ? p * qty : 0) }, 0).toFixed(2)} total
+            </div>
           </div>
-          <button onClick={sendWishlist} style={{ background: '#d4ad45', color: 'var(--ink)', border: 'none', padding: '12px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', minHeight: '44px' }}>Send Wishlist</button>
+          <button onClick={sendWishlist} style={{ background: '#d4ad45', color: '#1a1008', border: 'none', padding: '13px 22px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700, minHeight: '48px' }}>Send Wishlist →</button>
         </div>
       )}
     </div>
