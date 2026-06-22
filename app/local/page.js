@@ -71,10 +71,11 @@ export default function LocalPage() {
     if (!pinInput.trim()) return
     const { data } = await supabase.from('local_access').select('name, display_name, editorial').eq('pin', pinInput.trim()).maybeSingle()
     if (!data) { setPinError(true); setPinInput('') }
-    else { setPinError(false); setBuyer(data); loadWines() }
+    else { setPinError(false); setBuyer(data); setStage('name') }
   }
 
-  async function loadWines() {
+  async function loadWines(nameOverride) {
+    if (nameOverride) setTypedName(nameOverride)
     setLoading(true); setStage('browse')
     const { data } = await supabase.from('studio')
       .select('*, wines(id, description, vintage, colour, region, country, buyer_note, producer_note, women_note, sommelier_note, ws_lowest_per_bottle, ws_price_date, bottle_volume)')
@@ -119,7 +120,7 @@ export default function LocalPage() {
     const totalValue = Object.entries(wishlist).reduce((sum, [id, qty]) => {
       const s = wines.find(w => w.id === id); const price = s ? getPrice(s) : null; return sum + (price ? price * qty : 0)
     }, 0)
-    const displayName = buyer?.display_name || buyer?.name || 'Guest'
+    const displayName = typedName || buyer?.display_name || buyer?.name || 'Guest'
     const text = [
       `Bottles on Hand Wishlist — ${displayName}`,
       new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -182,47 +183,80 @@ export default function LocalPage() {
     ['price', 'Price'], ['ws', 'WS Avg'], ['quantity', 'Qty'],
   ]
 
+  const [typedName, setTypedName] = useState('')
+
+  async function handleName() {
+    if (!typedName.trim()) return
+    // Use typed name for the greeting/wishlist, keep buyer record for editorial
+    await loadWines(typedName.trim())
+  }
+
   const currentMonth = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
   // ── PIN screen ────────────────────────────────────────────────────────────
   if (stage === 'pin') return (
-    <div style={{ minHeight: '100dvh', background: '#1a1008', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-      <div style={{ textAlign: 'center', width: '100%', maxWidth: '340px' }}>
+    <div style={{ minHeight: '100dvh', background: 'radial-gradient(ellipse at 50% 45%, #3a2a0a 0%, #1a1008 55%, #0e0a04 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ textAlign: 'center', width: '100%', maxWidth: '380px' }}>
 
         {/* Wordmark */}
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '42px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.08em', lineHeight: 1 }}>Bottles on Hand</div>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.5)', marginTop: '8px' }}>Private Buyer Access</div>
-          <div style={{ width: '40px', height: '1px', background: 'rgba(212,173,69,0.3)', margin: '16px auto 0' }}></div>
-        </div>
+        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '52px', fontWeight: 300, color: '#c9a84c', letterSpacing: '0.04em', lineHeight: 1, marginBottom: '10px' }}>Bottles on Hand</div>
+        <div style={{ width: '48px', height: '1px', background: 'rgba(201,168,76,0.35)', margin: '0 auto 12px' }}></div>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(201,168,76,0.55)', marginBottom: '36px' }}>Private Buyer Access</div>
+
+        {/* Count */}
+        {availableCount !== null && (
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', color: '#c9a84c', letterSpacing: '0.02em', lineHeight: 1.2 }}>
+              <span style={{ fontWeight: 600 }}>{availableCount}</span>
+              <span style={{ fontWeight: 300 }}> wines currently available</span>
+            </div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(201,168,76,0.4)', marginTop: '6px' }}>Updated {currentMonth}</div>
+          </div>
+        )}
+
+        {/* Second divider */}
+        <div style={{ width: '48px', height: '1px', background: 'rgba(201,168,76,0.25)', margin: '28px auto 28px' }}></div>
 
         {/* PIN input */}
         <input
           type="password" value={pinInput}
           onChange={e => { setPinInput(e.target.value); setPinError(false) }}
           onKeyDown={e => e.key === 'Enter' && handlePin()}
-          placeholder="Enter PIN"
-          style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: pinError ? '1px solid #c0392b' : '1px solid rgba(255,255,255,0.12)', color: 'rgba(253,250,245,0.9)', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '18px', outline: 'none', textAlign: 'center', letterSpacing: '0.3em', boxSizing: 'border-box', marginBottom: '10px', borderRadius: '2px' }}
+          placeholder="ENTER PIN"
+          style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: pinError ? '1px solid #c0392b' : '1px solid rgba(201,168,76,0.18)', color: 'rgba(201,168,76,0.7)', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '14px', outline: 'none', textAlign: 'center', letterSpacing: '0.3em', boxSizing: 'border-box', marginBottom: '10px', borderRadius: '3px' }}
         />
-        {pinError && <div style={{ fontSize: '12px', color: '#c0392b', fontFamily: 'DM Mono, monospace', marginBottom: '10px', letterSpacing: '0.04em' }}>Incorrect PIN — please try again</div>}
-        <button onClick={handlePin} style={{ width: '100%', background: '#d4ad45', color: '#1a1008', border: 'none', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '12px', letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>Enter Cellar →</button>
+        {pinError && <div style={{ fontSize: '11px', color: '#c0392b', fontFamily: 'DM Mono, monospace', marginBottom: '10px', letterSpacing: '0.06em' }}>Incorrect PIN — please try again</div>}
+        <button onClick={handlePin} style={{ width: '100%', background: '#c9a84c', color: '#1a1008', border: 'none', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.22em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700, borderRadius: '3px' }}>Enter Cellar →</button>
 
-        {/* Footer count */}
-        {availableCount !== null && (
-          <div style={{ marginTop: '48px' }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: '#d4ad45', letterSpacing: '0.04em' }}>
-              <span style={{ fontWeight: 600 }}>{availableCount}</span>
-              <span style={{ fontWeight: 300 }}> wines currently available</span>
-            </div>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(212,173,69,0.4)', marginTop: '6px' }}>Updated {currentMonth}</div>
-          </div>
-        )}
+        {/* Footer */}
+        <div style={{ marginTop: '48px', fontFamily: 'DM Mono, monospace', fontSize: '8px', letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(201,168,76,0.25)' }}>Private Buyer Access</div>
+      </div>
+    </div>
+  )
+
+  // ── Name screen ─────────────────────────────────────────────────────────
+  if (stage === 'name') return (
+    <div style={{ minHeight: '100dvh', background: 'radial-gradient(ellipse at 50% 45%, #3a2a0a 0%, #1a1008 55%, #0e0a04 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ textAlign: 'center', width: '100%', maxWidth: '380px' }}>
+        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '52px', fontWeight: 300, color: '#c9a84c', letterSpacing: '0.04em', lineHeight: 1, marginBottom: '10px' }}>Welcome</div>
+        <div style={{ width: '48px', height: '1px', background: 'rgba(201,168,76,0.35)', margin: '0 auto 12px' }}></div>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(201,168,76,0.55)', marginBottom: '40px' }}>What's your name?</div>
+        <input
+          type="text" value={typedName}
+          onChange={e => setTypedName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleName()}
+          placeholder="YOUR NAME"
+          autoFocus
+          style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(201,168,76,0.18)', color: 'rgba(201,168,76,0.85)', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '14px', outline: 'none', textAlign: 'center', letterSpacing: '0.15em', boxSizing: 'border-box', marginBottom: '10px', borderRadius: '3px' }}
+        />
+        <button onClick={handleName} style={{ width: '100%', background: '#c9a84c', color: '#1a1008', border: 'none', padding: '18px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.22em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700, borderRadius: '3px' }}>Browse Wines →</button>
+        <div style={{ marginTop: '48px', fontFamily: 'DM Mono, monospace', fontSize: '8px', letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(201,168,76,0.25)' }}>Private Buyer Access</div>
       </div>
     </div>
   )
 
   // ── Browse screen ────────────────────────────────────────────────────────
-  const displayName = buyer?.display_name || buyer?.name || 'there'
+  const displayName = typedName || buyer?.display_name || buyer?.name || 'there'
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--cream)', paddingBottom: wishlistCount > 0 ? 'calc(80px + env(safe-area-inset-bottom))' : 'calc(40px + env(safe-area-inset-bottom))' }} onClick={() => setTooltip(null)}>
@@ -238,7 +272,7 @@ export default function LocalPage() {
       {/* Nav */}
       <div style={{ background: 'var(--ink)', padding: '0 20px', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em' }}>Bottles on Hand</div>
-        <button onClick={() => { setStage('pin'); setPinInput(''); setBuyer(null); setWines([]); setWishlist({}) }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '8px 12px' }}>Sign Out</button>
+        <button onClick={() => { setStage('pin'); setPinInput(''); setBuyer(null); setTypedName(''); setWines([]); setWishlist({}) }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '8px 12px' }}>Sign Out</button>
       </div>
 
       {/* Hero */}
