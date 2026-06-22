@@ -537,6 +537,7 @@ export default function BoxPage() {
   const [newNotes, setNewNotes] = useState('')
   const [unpaidInvoiceCount, setUnpaidInvoiceCount] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
+  const [showPaid, setShowPaid] = useState(false)
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 700)
@@ -711,9 +712,16 @@ export default function BoxPage() {
 
   async function markInvoicePaid(invoiceId) {
     await supabase.from('invoices').update({ status:'paid', paid_date: new Date().toISOString().slice(0,10) }).eq('id', invoiceId)
+    // Also mark linked boxes as Paid so they drop off the main list
+    const { data: junctions } = await supabase.from('invoice_boxes').select('box_id').eq('invoice_id', invoiceId)
+    if (junctions?.length) {
+      await Promise.all(junctions.map(({ box_id }) => supabase.from('boxes').update({ status: 'Paid' }).eq('id', box_id)))
+    }
     setActiveInvoice(prev => prev ? { ...prev, status:'paid' } : prev)
+    setActiveBox(prev => prev ? { ...prev, status: 'Paid' } : prev)
+    setBoxes(prev => prev.map(b => b.invoice_id === invoiceId ? { ...b, status: 'Paid' } : b))
     setUnpaidInvoiceCount(prev => Math.max(0, prev - 1))
-    showStatus('success', 'Invoice marked as paid.')
+    showStatus('success', 'Invoice marked as paid. Box archived.')
   }
 
   async function saveBoxEdit() {
@@ -734,7 +742,7 @@ export default function BoxPage() {
     await Promise.all(reordered.map((b, i) => supabase.from('boxes').update({ sort_order: i }).eq('id', b.id)))
   }
 
-  const statusColour = s => s==='Confirmed'?'#2d6a4f':s==='Sent'?'#1a5a8a':'#8a6f1e'
+  const statusColour = s => s==='Confirmed'?'#2d6a4f':s==='Invoiced'?'#1a5a8a':s==='Paid'?'#888':'#8a6f1e'
   const totalBottles = activeItems.reduce((s, i) => s+(i.quantity||1), 0)
   const totalSale = activeItems.reduce((s, i) => s+(parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
   const totalDP = activeItems.reduce((s, i) => s+(parseFloat(i.dp_price)||0)*(i.quantity||1), 0)
@@ -786,26 +794,39 @@ export default function BoxPage() {
               <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', color:'rgba(253,250,245,0.85)' }}>Build a pull list</div>
             </button>
           </div>
-          {boxes.length > 0 && (
-            <div>
-              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'8px' }}>All Boxes</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:'4px', maxWidth:'440px' }}>
-                {boxes.map(box => (
-                  <div key={box.id} onClick={() => openBox(box)} style={{ padding:'10px 12px', background:'var(--white)', border:'1px solid var(--border)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px' }} onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'} onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{box.name}</div>
-                      <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{box.buyer_name}</div>
-                    </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
-                      {box.total_sale > 0 && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--wine)' }}>£{parseFloat(box.total_sale).toFixed(2)}</div>}
-                      <div style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:statusColour(box.status), fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{box.status}</div>
-                      <div style={{ fontSize:'14px', color:'var(--muted)' }}>›</div>
-                    </div>
+          {boxes.length > 0 && (() => {
+            const visibleBoxes = boxes.filter(b => showPaid ? true : b.status !== 'Paid')
+            const paidCount = boxes.filter(b => b.status === 'Paid').length
+            return (
+              <div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px', maxWidth:'440px' }}>
+                  <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)' }}>
+                    {showPaid ? 'All Boxes' : 'Active Boxes'}
                   </div>
-                ))}
+                  {paidCount > 0 && (
+                    <button onClick={() => setShowPaid(p => !p)} style={{ background:'none', border:'none', fontFamily:'DM Mono,monospace', fontSize:'9px', color:'var(--muted)', cursor:'pointer', letterSpacing:'0.08em', textTransform:'uppercase', padding:0 }}>
+                      {showPaid ? 'hide paid' : `+ ${paidCount} paid`}
+                    </button>
+                  )}
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:'4px', maxWidth:'440px' }}>
+                  {visibleBoxes.map(box => (
+                    <div key={box.id} onClick={() => openBox(box)} style={{ padding:'10px 12px', background:'var(--white)', border:'1px solid var(--border)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', opacity: box.status === 'Paid' ? 0.55 : 1 }} onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'} onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{box.name}</div>
+                        <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{box.buyer_name}</div>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
+                        {box.total_sale > 0 && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--wine)' }}>£{parseFloat(box.total_sale).toFixed(2)}</div>}
+                        <div style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:statusColour(box.status), fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{box.status}</div>
+                        <div style={{ fontSize:'14px', color:'var(--muted)' }}>›</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
 
       ) : (
@@ -829,7 +850,7 @@ export default function BoxPage() {
                 </div>
               ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
-                  {boxes.map(box => (
+                  {boxes.filter(b => b.status !== 'Paid').map(box => (
                     <div key={box.id} onClick={() => openBox(box)} draggable
                       onDragStart={e => { e.dataTransfer.setData('boxId', box.id); e.dataTransfer.effectAllowed = 'move' }}
                       onDragOver={e => { e.preventDefault(); setDragOverId(box.id) }}
