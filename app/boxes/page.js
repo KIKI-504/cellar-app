@@ -511,6 +511,8 @@ function PriceCheckModal({ diffs, boxName, onConfirm, onCancel }) {
 }
 
 
+const statusColour = s => s==='Confirmed'?'#2d6a4f':s==='Invoiced'?'#1a5a8a':s==='Paid'?'#888':'#8a6f1e'
+
 function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
   // allItems: array of { box, items[] } already loaded
   const [selectedBoxIds, setSelectedBoxIds] = React.useState(() => new Set(boxes.map(b => b.id)))
@@ -869,7 +871,6 @@ export default function BoxPage() {
     await Promise.all(reordered.map((b, i) => supabase.from('boxes').update({ sort_order: i }).eq('id', b.id)))
   }
 
-  const statusColour = s => s==='Confirmed'?'#2d6a4f':s==='Invoiced'?'#1a5a8a':s==='Paid'?'#888':'#8a6f1e'
   const totalBottles = activeItems.reduce((s, i) => s+(i.quantity||1), 0)
   const totalSale = activeItems.reduce((s, i) => s+(parseFloat(i.sale_price)||0)*(i.quantity||1), 0)
   const totalDP = activeItems.reduce((s, i) => s+(parseFloat(i.dp_price)||0)*(i.quantity||1), 0)
