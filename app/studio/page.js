@@ -222,6 +222,12 @@ export default function StudioPage() {
     if (!error) { setStudioWines(prev => prev.map(s => s.wine_id === wineId ? { ...s, wines: { ...s.wines, buyer_note: value } } : s)); flashSave() }
   }
 
+  async function updateProducerNote(wineId, value) {
+    if (!wineId) return
+    const { error } = await supabase.from('wines').update({ producer_note: value }).eq('id', wineId)
+    if (!error) { setStudioWines(prev => prev.map(s => s.wine_id === wineId ? { ...s, wines: { ...s.wines, producer_note: value } } : s)); flashSave() }
+  }
+
   async function updateWsPrice(wineId, studioId, wsValue) {
     if (!wineId) return
     const today = new Date().toISOString().split('T')[0]
@@ -681,28 +687,28 @@ export default function StudioPage() {
                         <td colSpan={15} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                             <div>
-                              <label style={labelStyle}>Wine Notes <span style={{ color: '#2d6a4f', fontWeight: 400 }}>shown to buyers & on pull list</span></label>
-                              <textarea defaultValue={buyerNote} placeholder="Tasting notes, producer story..." onBlur={e => { if (e.target.value !== buyerNote) updateWineNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
+                              <label style={labelStyle}>Wine Note <span style={{ color: '#2d6a4f', fontWeight: 400 }}>vintage-specific · shown on Buyer View, Bottles on Hand, Pull List</span></label>
+                              <textarea defaultValue={buyerNote} placeholder="Tasting notes, vintage character..." onBlur={e => { if (e.target.value !== buyerNote) updateWineNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
                             </div>
                             <div>
-                              <label style={{ ...labelStyle, color: '#9b3a4a' }}>♀ Women in Wine <span style={{ color: 'var(--muted)', fontWeight: 400 }}>shown on Buyer View</span></label>
+                              <label style={labelStyle}>Producer Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>carries across vintages · shown on Buyer View, Bottles on Hand, Pull List</span></label>
+                              {hasWineId ? (<textarea defaultValue={s.wines?.producer_note || ''} placeholder="Estate background, farming approach..." onBlur={e => { if (e.target.value !== (s.wines?.producer_note || '')) updateProducerNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'DM Mono, monospace', fontSize: '11px', lineHeight: 1.55 }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
+                            </div>
+                            <div>
+                              <label style={{ ...labelStyle, color: '#9b3a4a' }}>♀ Women in Wine <span style={{ color: 'var(--muted)', fontWeight: 400 }}>shown on Buyer View, Bottles on Hand, Pull List</span></label>
                               {hasWineId ? (<textarea defaultValue={womenNote} placeholder="Women winemaker or producer story..." onBlur={e => { if (e.target.value !== womenNote) updateWine(s.id, s.wine_id, 'women_note', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
                             </div>
                             <div>
-                              <label style={{ ...labelStyle, color: '#8b6914' }}>★ Sommelier Hook <span style={{ color: 'var(--muted)', fontWeight: 400 }}>gold badge on Bottles on Hand · max 10 words</span></label>
+                              <label style={{ ...labelStyle, color: '#8b6914' }}>★ Sommelier Hook <span style={{ color: 'var(--muted)', fontWeight: 400 }}>gold badge on Bottles on Hand · consignment delivery note · max 10 words</span></label>
                               {hasWineId ? (
                                 <input
                                   defaultValue={sommelierNote}
-                                  placeholder="e.g. Summer drinking! · Below WS avg"
+                                  placeholder="e.g. Saw this at Core for £400/btl!"
                                   maxLength={60}
                                   onBlur={e => { if (e.target.value !== sommelierNote) updateWine(s.id, s.wine_id, 'sommelier_note', e.target.value) }}
                                   style={{ ...inputStyle, border: '2px solid rgba(212,173,69,0.4)', background: 'rgba(212,173,69,0.05)', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, color: '#8b6914' }}
                                 />
                               ) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
-                            </div>
-                            <div>
-                              <label style={labelStyle}>Delivery Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>studio only</span></label>
-                              <textarea defaultValue={studioNote} placeholder="Condition, delivery ref..." onBlur={e => { if (e.target.value !== studioNote) updateStudio(s.id, 'notes', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
                             </div>
                             <div>
                               <label style={labelStyle}>IB Price / btl (ex-duty)</label>
