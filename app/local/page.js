@@ -275,36 +275,43 @@ export default function LocalPage() {
         <button onClick={() => { setStage('pin'); setPinInput(''); setBuyer(null); setTypedName(''); setWines([]); setWishlist({}) }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '8px 12px' }}>Sign Out</button>
       </div>
 
-      {/* Hero */}
-      <div style={{ background: 'var(--ink)', backgroundImage: 'radial-gradient(ellipse at 30% 50%, rgba(107,30,46,0.4) 0%, transparent 60%)', color: 'var(--white)', padding: '28px 20px 24px' }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '34px' : '44px', fontWeight: 300, letterSpacing: '0.02em', color: '#d4ad45', marginBottom: '14px', lineHeight: 1.1 }}>
-          Cheers, {displayName}!
+      {/* Hero — compact */}
+      <div style={{ background: 'var(--ink)', color: 'var(--white)', padding: isMobile ? '16px 20px 20px' : '20px 28px 22px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ maxWidth: '900px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '24px' : '28px', fontWeight: 400, color: '#d4ad45', letterSpacing: '0.01em', lineHeight: 1 }}>Cheers, {displayName}.</span>
+              {buyer?.editorial && <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: 'rgba(253,250,245,0.6)', fontStyle: 'italic' }}>{buyer.editorial}</span>}
+            </div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(253,250,245,0.35)', marginTop: '6px', letterSpacing: '0.08em' }}>
+              Same day collection or delivery · + to wishlist · <span style={{ color: 'rgba(201,96,122,0.7)' }}>♀</span> women in wine · Prices include duty, VAT & delivery
+            </div>
+          </div>
+          {/* Search inline in header on desktop */}
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: '200px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', borderRadius: '2px' }} />
+              <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(253,250,245,0.7)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', cursor: 'pointer', borderRadius: '2px' }}>
+                <option value="">All colours</option>
+                <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
+              </select>
+            </div>
+          )}
         </div>
-        {buyer?.editorial && (
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', color: 'rgba(253,250,245,0.75)', lineHeight: 1.7, maxWidth: '620px', marginBottom: '12px' }}>{buyer.editorial}</div>
-        )}
-        <div style={{ fontSize: '13px', color: 'rgba(253,250,245,0.65)', lineHeight: 1.8, maxWidth: '580px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.02em' }}>
-          Bottles on Hand are available for same day collection or delivery.{' '}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', margin: '0 3px', verticalAlign: 'middle' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', border: '1.5px solid rgba(253,250,245,0.5)', borderRadius: '3px', fontSize: '16px', fontWeight: 300, lineHeight: 1, color: 'rgba(253,250,245,0.85)' }}>+</span>
-          </span>
-          {' '}to add a wine to your wishlist.{' '}
-          <span style={{ color: '#c9607a', fontSize: '15px', margin: '0 3px', verticalAlign: 'middle' }}>♀</span>
-          {' '}to read about women in leadership at the winery.
-        </div>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'rgba(212,173,69,0.8)', marginTop: '14px', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>Prices include duty, VAT and delivery</div>
       </div>
 
-      <div style={{ padding: isMobile ? '16px' : '24px' }}>
+      <div style={{ padding: isMobile ? '14px' : '0' }}>
 
-        {/* Search + colour filter */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, region, country…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: isMobile ? '16px' : '13px', outline: 'none', boxSizing: 'border-box', width: isMobile ? '100%' : 'auto' }} />
-          <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '12px 14px', fontFamily: 'DM Mono, monospace', fontSize: isMobile ? '16px' : '13px', outline: 'none', width: isMobile ? '100%' : 'auto' }}>
-            <option value="">All Colours</option>
-            <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
-          </select>
-        </div>
+        {/* Mobile search */}
+        {isMobile && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, region, country…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', boxSizing: 'border-box' }} />
+            <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', width: '100%' }}>
+              <option value="">All Colours</option>
+              <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
+            </select>
+          </div>
+        )}
 
         {/* Mobile sort pills */}
         {isMobile && (
@@ -326,9 +333,8 @@ export default function LocalPage() {
           </div>
         )}
 
-        <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '14px', fontFamily: 'DM Mono, monospace' }}>
-          {filtered.length} different wine{filtered.length !== 1 ? 's' : ''} available
-          {!isMobile && <span> — click any column heading to sort · click <span style={{ color: '#9b3a4a', fontSize: '13px' }}>♀</span> for stories of women in wine</span>}
+        <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.04em', padding: isMobile ? '0' : '12px 16px 0' }}>
+          {filtered.length} wine{filtered.length !== 1 ? 's' : ''}{!isMobile && <span style={{ opacity: 0.6 }}> · click column headings to sort</span>}
         </div>
 
         {loading ? (
@@ -429,7 +435,7 @@ export default function LocalPage() {
 
           // ── DESKTOP ───────────────────────────────────────────────────────
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--ink)', padding: '12px 16px', position: 'sticky', top: '52px', zIndex: 50, borderBottom: '2px solid rgba(212,173,69,0.3)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--ink)', padding: '9px 16px', position: 'sticky', top: '52px', zIndex: 50, borderBottom: '1px solid rgba(212,173,69,0.2)' }}>
               {colHeader('name', 'Wine')}
               {colHeader('region', 'Region')}
               {colHeader('country', 'Country')}
@@ -460,7 +466,7 @@ export default function LocalPage() {
               const country = getWineCountry(s)
               return (
                 <div key={s.id} style={{ background: 'var(--white)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '14px 16px', alignItems: 'start', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '11px 16px', alignItems: 'start', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
                     {/* Wine name + notes */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '3px' }}>
@@ -469,11 +475,11 @@ export default function LocalPage() {
                           <span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }}
                             style={{ fontSize: '14px', cursor: 'pointer', flexShrink: 0, color: '#9b3a4a', lineHeight: 1, marginTop: '2px' }}>♀</span>
                         )}
-                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', lineHeight: 1.3, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
+                        <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: isMag ? 700 : 400 }}>{getWineName(s)}</span>
                       </div>
                       {sommelierNote && <div style={{ paddingLeft: '13px', marginTop: '5px', marginBottom: '6px' }}><SommelierHook note={sommelierNote} /></div>}
-                      {buyerNote && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.6, paddingLeft: '13px', opacity: 0.9, marginTop: '5px' }}>{buyerNote}</div>}
-                      {producerNote && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', lineHeight: 1.55, paddingLeft: '13px', marginTop: '6px' }}>{producerNote}</div>}
+                      {buyerNote && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '12px', color: 'rgba(26,16,8,0.8)', lineHeight: 1.55, paddingLeft: '13px', marginTop: '4px' }}>{buyerNote}</div>}
+                      {producerNote && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', lineHeight: 1.5, paddingLeft: '13px', marginTop: '4px' }}>{producerNote}</div>}
                     </div>
                     {/* Region */}
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', paddingTop: '3px', paddingRight: '8px' }}>{region || '—'}</div>
