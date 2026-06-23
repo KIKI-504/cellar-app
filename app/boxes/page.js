@@ -510,6 +510,130 @@ function PriceCheckModal({ diffs, boxName, onConfirm, onCancel }) {
   )
 }
 
+
+function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
+  // allItems: array of { box, items[] } already loaded
+  const [selectedBoxIds, setSelectedBoxIds] = React.useState(() => new Set(boxes.map(b => b.id)))
+  const [printing, setPrinting] = React.useState(false)
+
+  function toggleBox(id) {
+    setSelectedBoxIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) { if (next.size > 1) next.delete(id) } else next.add(id)
+      return next
+    })
+  }
+
+  const selectedPairs = allItems.filter(({ box }) => selectedBoxIds.has(box.id))
+  const totalBottles = selectedPairs.reduce((s, { items }) => s + items.reduce((ss, i) => ss + (i.quantity || 1), 0), 0)
+  const totalWines = selectedPairs.reduce((s, { items }) => s + items.length, 0)
+
+  function buildHtml() {
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const rows = selectedPairs.map(({ box, items }) => {
+      const boxRows = items.map(item => {
+        const fd = item.wine_description || ''; const ci = fd.indexOf(',')
+        const wp = ci > -1 ? fd.slice(0, ci).trim() : fd; const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
+        const badge = sizeBadge(item.wine_bottle_size)
+        return `<div style="padding:14px 0;border-bottom:1px solid #ede6d6;">
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colourDot(item.wine_colour)};flex-shrink:0;"></span>
+            <span style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:500;">${wp}</span>
+            ${item.wine_vintage ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:#7a6652;">${item.wine_vintage}</span>` : ''}
+            ${badge ? `<span style="font-family:'DM Mono',monospace;font-size:10px;color:#6b1e2e;font-weight:600;">${badge}</span>` : ''}
+            ${item.quantity > 1 ? `<span style="font-family:'DM Mono',monospace;font-size:10px;color:#1a1008;font-weight:700;">× ${item.quantity}</span>` : ''}
+          </div>
+          ${pp ? `<div style="font-family:'Cormorant Garamond',serif;font-size:13px;color:#3a2a1a;margin-top:2px;margin-left:16px;">${pp}</div>` : ''}
+          ${item.buyer_note ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#3a2a1a;margin-top:6px;margin-left:16px;line-height:1.6;">${item.buyer_note}</div>` : ''}
+          ${item.women_note ? `<div style="display:flex;align-items:flex-start;gap:4px;margin-top:4px;margin-left:16px;"><span style="font-size:12px;color:#9b3a4a;">♀</span><span style="font-family:'DM Mono',monospace;font-size:11px;font-style:italic;color:#9b3a4a;">${item.women_note}</span></div>` : ''}
+        </div>`
+      }).join('')
+      return `<div style="margin-bottom:4px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#c8b89a;padding-top:18px;padding-bottom:4px;">${box.name}</div>
+        ${boxRows}
+      </div>`
+    }).join('')
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Combined Pull List — ${buyerName}</title>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Mono',monospace;color:#1a1008;background:#fff;padding:44px;font-size:12px}
+    div:last-child{border-bottom:none}@media print{body{padding:24px}}</style></head><body>
+    <div style="border-bottom:2px solid #1a1008;padding-bottom:18px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:300;letter-spacing:0.05em;">Belle Année Wines</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:3px;">Combined Pull List</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:500;">${buyerName}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:#7a6652;margin-top:2px;">${today}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:#7a6652;margin-top:1px;">${totalBottles} bottle${totalBottles !== 1 ? 's' : ''} · ${selectedBoxIds.size} box${selectedBoxIds.size !== 1 ? 'es' : ''}</div>
+      </div>
+    </div>
+    ${rows}
+    <div style="margin-top:28px;padding-top:14px;border-top:1px solid #ede6d6;font-family:'DM Mono',monospace;font-size:9px;color:#c8b89a;letter-spacing:0.1em;text-align:center;">BELLE ANNÉE WINES · FOR WAREHOUSE USE · ${new Date().getFullYear()}</div>
+    </body></html>`
+  }
+
+  function handlePrint() {
+    setPrinting(true)
+    const html = buildHtml()
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none;'
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      iframe.contentWindow.focus(); iframe.contentWindow.print()
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); setPrinting(false) }, 3000)
+    }
+    iframe.contentDocument.open(); iframe.contentDocument.write(html); iframe.contentDocument.close()
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.85)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'600px', border:'1px solid var(--border)', marginTop:'8px' }}>
+        <div style={{ background:'var(--ink)', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 20px' }}>
+          <div>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.15em', color:'rgba(253,250,245,0.5)', textTransform:'uppercase' }}>Combined Pull List — </span>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'#d4ad45' }}>{buyerName}</span>
+          </div>
+          <div style={{ display:'flex', gap:'8px' }}>
+            <button onClick={handlePrint} disabled={printing || selectedBoxIds.size === 0} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'7px 16px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>🖨 Print</button>
+            <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>✕ Close</button>
+          </div>
+        </div>
+        <div style={{ padding:'20px 24px' }}>
+          <div style={{ marginBottom:'16px', padding:'10px 14px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.3)', fontSize:'11px', fontFamily:'DM Mono,monospace', color:'#7a5e10', lineHeight:1.6 }}>
+            Single warehouse pick sheet — tick boxes to include. Print individual box pull lists separately for packing.
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginBottom:'20px' }}>
+            {boxes.map(box => {
+              const isSelected = selectedBoxIds.has(box.id)
+              const boxItems = allItems.find(p => p.box.id === box.id)?.items || []
+              const bottles = boxItems.reduce((s, i) => s + (i.quantity || 1), 0)
+              return (
+                <div key={box.id} onClick={() => toggleBox(box.id)}
+                  style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 14px', background:isSelected?'rgba(107,30,46,0.05)':'var(--white)', border:isSelected?'2px solid rgba(107,30,46,0.3)':'1px solid var(--border)', cursor:'pointer' }}>
+                  <div style={{ width:'16px', height:'16px', border:isSelected?'2px solid var(--wine)':'1px solid var(--border)', background:isSelected?'var(--wine)':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, borderRadius:'2px' }}>
+                    {isSelected && <span style={{ color:'var(--white)', fontSize:'11px', lineHeight:1 }}>✓</span>}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{box.name}</div>
+                    <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{boxItems.length} wine{boxItems.length !== 1 ? 's' : ''} · {bottles} bottle{bottles !== 1 ? 's' : ''}{box.total_sale > 0 ? ` · £${parseFloat(box.total_sale).toFixed(2)}` : ''}</div>
+                  </div>
+                  <div style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:statusColour(box.status), fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{box.status}</div>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ padding:'10px 14px', background:'rgba(26,16,8,0.04)', border:'1px solid var(--border)', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', display:'flex', justifyContent:'space-between' }}>
+            <span>{selectedBoxIds.size} box{selectedBoxIds.size !== 1 ? 'es' : ''} selected</span>
+            <span style={{ fontWeight:600, color:'var(--ink)' }}>{totalBottles} bottle{totalBottles !== 1 ? 's' : ''} to pick</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function BoxPage() {
   const router = useRouter()
   const [boxes, setBoxes] = useState([])
@@ -540,6 +664,7 @@ export default function BoxPage() {
   const [unpaidInvoiceCount, setUnpaidInvoiceCount] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
   const [showPaid, setShowPaid] = useState(false)
+  const [showCombinedPullList, setShowCombinedPullList] = useState(null) // { buyerName, boxes, allItems }
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 700)
@@ -811,21 +936,53 @@ export default function BoxPage() {
                     </button>
                   )}
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:'4px', maxWidth:'440px' }}>
-                  {visibleBoxes.map(box => (
-                    <div key={box.id} onClick={() => openBox(box)} style={{ padding:'10px 12px', background:'var(--white)', border:'1px solid var(--border)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', opacity: box.status === 'Paid' ? 0.55 : 1 }} onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'} onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{box.name}</div>
-                        <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{box.buyer_name}</div>
-                      </div>
-                      <div style={{ display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
-                        {box.total_sale > 0 && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--wine)' }}>£{parseFloat(box.total_sale).toFixed(2)}</div>}
-                        <div style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:statusColour(box.status), fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{box.status}</div>
-                        <div style={{ fontSize:'14px', color:'var(--muted)' }}>›</div>
-                      </div>
+                {(() => {
+                  // Group active boxes by buyer for combine button
+                  const activeVisible = visibleBoxes.filter(b => b.status !== 'Paid')
+                  const buyerGroups = activeVisible.reduce((acc, b) => {
+                    if (!acc[b.buyer_name]) acc[b.buyer_name] = []
+                    acc[b.buyer_name].push(b)
+                    return acc
+                  }, {})
+                  return (
+                    <div style={{ display:'flex', flexDirection:'column', gap:'4px', maxWidth:'440px' }}>
+                      {visibleBoxes.map(box => (
+                        <div key={box.id}>
+                          <div onClick={() => openBox(box)} style={{ padding:'10px 12px', background:'var(--white)', border:'1px solid var(--border)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', opacity: box.status === 'Paid' ? 0.55 : 1 }} onMouseEnter={e => e.currentTarget.style.borderColor='var(--wine)'} onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px', fontWeight:500 }}>{box.name}</div>
+                              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{box.buyer_name}</div>
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
+                              {box.total_sale > 0 && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--wine)' }}>£{parseFloat(box.total_sale).toFixed(2)}</div>}
+                              <div style={{ fontSize:'9px', fontFamily:'DM Mono,monospace', color:statusColour(box.status), fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{box.status}</div>
+                              <div style={{ fontSize:'14px', color:'var(--muted)' }}>›</div>
+                            </div>
+                          </div>
+                          {/* Combine button — appears after last box for a buyer if they have 2+ active */}
+                          {buyerGroups[box.buyer_name]?.length > 1 && buyerGroups[box.buyer_name][buyerGroups[box.buyer_name].length - 1]?.id === box.id && box.status !== 'Paid' && (
+                            <button
+                              onClick={async () => {
+                                const buyerBoxes = buyerGroups[box.buyer_name]
+                                const allItems = await Promise.all(buyerBoxes.map(async b => {
+                                  const { data } = await supabase.rpc('get_box_items_with_notes', { p_box_id: b.id })
+                                  return { box: b, items: data || [] }
+                                }))
+                                setShowCombinedPullList({ buyerName: box.buyer_name, boxes: buyerBoxes, allItems })
+                              }}
+                              style={{ width:'100%', background:'none', border:'1px solid rgba(107,30,46,0.2)', borderTop:'none', padding:'6px 12px', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--wine)', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'6px' }}
+                              onMouseEnter={e => e.currentTarget.style.background='rgba(107,30,46,0.04)'}
+                              onMouseLeave={e => e.currentTarget.style.background='none'}
+                            >
+                              <span style={{ fontSize:'11px' }}>🖨</span>
+                              Combined pull list · {buyerGroups[box.buyer_name].length} boxes
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )
+                })()}
               </div>
             )
           })()}
@@ -1026,6 +1183,7 @@ export default function BoxPage() {
       {showAddBottle    && <AddBottleModal onAdd={addItemToBox} onClose={() => setShowAddBottle(false)} />}
       {showMultiBottle  && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
       {showPullList     && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
+      {showCombinedPullList && <CombinedPullListModal buyerName={showCombinedPullList.buyerName} boxes={showCombinedPullList.boxes} allItems={showCombinedPullList.allItems} onClose={() => setShowCombinedPullList(null)} />}
       {showClients      && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} onViewInvoice={async (invId) => { await fetchInvoice(invId); setShowInvoice(true) }} />}
       {showCreateInvoice && activeBox && <CreateInvoiceModal box={activeBox} allBoxes={boxes} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
       {showInvoice      && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} />}
