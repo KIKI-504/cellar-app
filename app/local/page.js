@@ -44,7 +44,7 @@ export default function LocalPage() {
   const [wishlist, setWishlist] = useState({})
   const [search, setSearch] = useState('')
   const [filterColour, setFilterColour] = useState('')
-  const [sortCol, setSortCol] = useState('name')
+  const [sortCol, setSortCol] = useState('colour')
   const [sortDir, setSortDir] = useState('asc')
   const [tooltip, setTooltip] = useState(null)
   const [isMobile, setIsMobile] = useState(false)
@@ -153,7 +153,19 @@ export default function LocalPage() {
       else if (sortCol === 'price')    { av = getPrice(a) || 0;                bv = getPrice(b) || 0 }
       else if (sortCol === 'ws')       { av = parseFloat(a.wines?.ws_lowest_per_bottle) || 0; bv = parseFloat(b.wines?.ws_lowest_per_bottle) || 0 }
       else { av = getWineName(a).toLowerCase(); bv = getWineName(b).toLowerCase() }
-      if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
+      if (typeof av === 'number') {
+        if (av === bv && sortCol === 'colour') {
+          // secondary sort by vintage when colour is equal
+          const avv = getWineVintage(a); const bvv = getWineVintage(b)
+          return sortDir === 'asc' ? String(avv).localeCompare(String(bvv)) : String(bvv).localeCompare(String(avv))
+        }
+        return sortDir === 'asc' ? av - bv : bv - av
+      }
+      if (av === bv && sortCol === 'colour') {
+        // secondary sort by vintage when colour is equal
+        const avv = getWineVintage(a); const bvv = getWineVintage(b)
+        return sortDir === 'asc' ? String(avv).localeCompare(String(bvv)) : String(bvv).localeCompare(String(avv))
+      }
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
 
