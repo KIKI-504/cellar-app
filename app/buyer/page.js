@@ -301,8 +301,8 @@ function WineRow({ w, i, totalCount, isAdmin: adminMode, selected, setSelected, 
     : (w.colour || '').toLowerCase().includes('white') ? '#c9b76a'
     : (w.colour || '').toLowerCase().includes('ros') ? '#d4748a' : '#b0a090'
   const noteTabs = [
-    { type: 'wine', label: 'Wine info', show: adminMode || !!w.buyer_note },
-    { type: 'producer', label: 'Producer info', show: adminMode || !!w.producer_note },
+    { type: 'wine', label: 'Wine note', show: adminMode || !!w.buyer_note },
+    { type: 'producer', label: 'Producer note', show: adminMode || !!w.producer_note },
     { type: 'women', label: 'Women in wine', show: adminMode || !!w.women_note },
   ].filter(t => t.show)
   const noteText = openType === 'wine' ? w.buyer_note : openType === 'producer' ? w.producer_note : openType === 'women' ? w.women_note : null
@@ -369,7 +369,16 @@ function WineRow({ w, i, totalCount, isAdmin: adminMode, selected, setSelected, 
         )}
         {openType && (
           <div style={{ borderTop: '1px solid ' + C.line, padding: '10px 16px', background: C.cream }}>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: noteText ? C.text : C.muted, fontStyle: noteText ? 'normal' : 'italic', lineHeight: 1.6 }}>{noteText || ''}</div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine, marginBottom: '5px' }}>
+              {openType === 'wine' ? 'Wine Note' : openType === 'producer' ? 'Producer Note' : 'Women in Wine'}
+            </div>
+            {openType === 'producer' ? (
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: noteText ? '#6b5c47' : C.muted, lineHeight: 1.65 }}>{noteText || 'No producer note yet.'}</div>
+            ) : openType === 'women' ? (
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: noteText ? '#9b3a4a' : C.muted, fontStyle: 'italic', lineHeight: 1.6 }}>{noteText || 'No note yet.'}</div>
+            ) : (
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', color: noteText ? C.text : C.muted, fontStyle: noteText ? 'normal' : 'italic', lineHeight: 1.6 }}>{noteText || 'No wine note yet.'}</div>
+            )}
           </div>
         )}
       </div>
@@ -424,9 +433,15 @@ function WineRow({ w, i, totalCount, isAdmin: adminMode, selected, setSelected, 
       {openType && (
         <div style={{ background: C.cream, padding: '8px 24px 14px 48px', borderBottom: rowBorder }}>
           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: openType === 'women' ? '#9b3a4a' : C.wine, marginBottom: '5px' }}>
-            {openType === 'wine' ? 'Wine info' : openType === 'producer' ? 'Producer info' : 'Women in wine'}
+            {openType === 'wine' ? 'Wine Note' : openType === 'producer' ? 'Producer Note' : 'Women in Wine'}
           </div>
-          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: noteText ? C.text : C.muted, fontStyle: noteText ? 'normal' : 'italic', lineHeight: 1.6, maxWidth: '680px' }}>{noteText || ''}</div>
+          {openType === 'producer' ? (
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px', color: noteText ? '#6b5c47' : C.muted, fontStyle: noteText ? 'normal' : 'italic', lineHeight: 1.65, maxWidth: '680px' }}>{noteText || 'No producer note yet.'}</div>
+          ) : openType === 'women' ? (
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: noteText ? '#9b3a4a' : C.muted, fontStyle: noteText ? 'italic' : 'italic', lineHeight: 1.6, maxWidth: '680px' }}>{noteText || 'No note yet.'}</div>
+          ) : (
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: noteText ? C.text : C.muted, fontStyle: noteText ? 'normal' : 'italic', lineHeight: 1.6, maxWidth: '680px' }}>{noteText || 'No wine note yet.'}</div>
+          )}
         </div>
       )}
     </div>
