@@ -331,9 +331,15 @@ function PullListView({ box, items, onClose }) {
         <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:4px;">Wine${tickedItems.length !== 1 ? 's' : ''}</div>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:14px;padding:16px 0 12px;border-bottom:1px solid #e8e0d4;margin-bottom:0;">
-      <div style="background:#1a1008;color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:5px 12px;white-space:nowrap;">BOX 1</div>
-      <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#7a6652;">${box.name.toUpperCase()}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 0 12px;border-bottom:1px solid #e8e0d4;margin-bottom:0;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:5px 12px;white-space:nowrap;">BOX 1</div>
+        <div style="font-family:'Cormorant Garamond',monospace;font-size:18px;font-weight:500;color:#1a1008;">${box.name}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:#6b1e2e;line-height:1;">${totalQty}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;">bottles</div>
+      </div>
     </div>
     ${rows}
     <div style="margin-top:36px;padding-top:16px;border-top:1px solid #e8e0d4;font-family:'DM Mono',monospace;font-size:9px;color:#c8b89a;text-align:center;letter-spacing:0.12em;text-transform:uppercase;">Belle Année Wines · For Warehouse Use · ${new Date().getFullYear()}</div>
@@ -1260,9 +1266,15 @@ export default function BoxPage() {
         </div>`
       }).join('')
       return `<div style="margin-bottom:8px;">
-        <div style="display:flex;align-items:center;gap:14px;padding:18px 0 12px;border-bottom:1px solid #e8e0d4;">
-          <div style="background:#1a1008;color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:5px 12px;white-space:nowrap;">BOX ${boxIdx + 1}</div>
-          <div style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#7a6652;">${b.name.toUpperCase()}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 0 12px;border-bottom:1px solid #e8e0d4;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:5px 12px;white-space:nowrap;">BOX ${boxIdx + 1}</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;color:#1a1008;">${b.name}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:#6b1e2e;line-height:1;">${bItems.reduce((s,i)=>s+(i.quantity||1),0)}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;">bottles</div>
+          </div>
         </div>
         ${rows}
       </div>`
