@@ -284,7 +284,7 @@ function PullListView({ box, items, onClose }) {
   const noneTicked = ticked.size === 0
   const allTicked = ticked.size === items.length
   function buildPrintHtml() {
-    const CSS = `@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Mono:wght@300;400;500&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cormorant Garamond',serif;color:#1a1008;background:#fff;padding:48px}@media print{body{padding:28px}}.wine-row{display:grid;grid-template-columns:1fr 100px 120px;gap:20px;align-items:start;padding:22px 0;border-bottom:1px solid #e8e0d4}.wine-row:last-child{border-bottom:none}.wine-name{font-size:22px;font-weight:500;line-height:1.15;color:#1a1008}.wine-producer{font-size:14px;color:#6b4a2a;margin-top:3px}.wine-qty{font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;color:#6b1e2e;line-height:1;text-align:center}.wine-qty-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#6b1e2e;text-align:center;margin-top:2px}.wine-meta{text-align:right;padding-top:6px}.wine-vintage{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:#1a1008}.wine-size{font-family:'DM Mono',monospace;font-size:12px;color:#7a6652;margin-top:3px}.note-text{font-style:italic;color:#3a2a1a;font-size:13px;line-height:1.6;margin-top:10px}.note-women{display:flex;align-items:flex-start;gap:5px;margin-top:8px}.note-sym{font-size:13px;color:#9b3a4a;flex-shrink:0;line-height:1.5}.note-women-text{font-style:italic;font-size:13px;color:#9b3a4a;line-height:1.6}`
+    const CSS = `@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Mono:wght@300;400;500&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cormorant Garamond',serif;color:#1a1008;background:#fff;padding:48px;font-variant-ligatures:none}@media print{body{padding:28px;font-variant-ligatures:none}}.wine-row{display:grid;grid-template-columns:1fr 100px 120px;gap:20px;align-items:start;padding:22px 0;border-bottom:1px solid #e8e0d4}.wine-row:last-child{border-bottom:none}.wine-name{font-size:22px;font-weight:500;line-height:1.15;color:#1a1008}.wine-producer{font-size:14px;color:#6b4a2a;margin-top:3px}.wine-qty{font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;color:#6b1e2e;line-height:1;text-align:center}.wine-qty-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#6b1e2e;text-align:center;margin-top:2px}.wine-meta{text-align:right;padding-top:6px}.wine-vintage{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:#1a1008}.wine-size{font-family:'DM Mono',monospace;font-size:12px;color:#7a6652;margin-top:3px}.note-text{font-style:italic;color:#3a2a1a;font-size:13px;line-height:1.6;margin-top:10px}.note-women{display:flex;align-items:flex-start;gap:5px;margin-top:8px}.note-sym{font-size:13px;color:#9b3a4a;flex-shrink:0;line-height:1.5}.note-women-text{font-style:italic;font-size:13px;color:#9b3a4a;line-height:1.6}`
     const tickedItems = items.filter(item => ticked.has(item.id))
     const totalQty = tickedItems.reduce((s, i) => s + (i.quantity || 1), 0)
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -332,14 +332,14 @@ function PullListView({ box, items, onClose }) {
         <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:4px;">Wine${tickedItems.length !== 1 ? 's' : ''}</div>
       </div>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 0 12px;border-bottom:1px solid #e8e0d4;margin-bottom:0;">
-      <div style="display:flex;align-items:center;gap:12px;">
+    <div style="background:#1a1008;margin:24px -48px 0;padding:14px 48px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:14px;">
         <div style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:5px 12px;white-space:nowrap;">BOX 1</div>
-        <div style="font-family:'Cormorant Garamond',monospace;font-size:18px;font-weight:500;color:#1a1008;">${box.name}</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:400;color:#fff;letter-spacing:0.02em;">${box.name}</div>
       </div>
       <div style="text-align:right;">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:#6b1e2e;line-height:1;">${totalQty}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;">bottles</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:#d4ad45;line-height:1;">${totalQty}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-top:2px;">bottles</div>
       </div>
     </div>
     ${rows}
@@ -1243,7 +1243,7 @@ export default function BoxPage() {
     </div>
   )
 }  function buildHtml() {
-    const CSS = `@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Mono:wght@300;400;500&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cormorant Garamond',serif;color:#1a1008;background:#fff;padding:48px}@media print{body{padding:28px}}.wine-row{display:grid;grid-template-columns:1fr 100px 120px;gap:20px;align-items:start;padding:22px 0;border-bottom:1px solid #e8e0d4}.wine-row:last-child{border-bottom:none}.wine-name{font-size:22px;font-weight:500;line-height:1.15;color:#1a1008}.wine-producer{font-size:14px;color:#6b4a2a;margin-top:3px}.wine-qty{font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;color:#6b1e2e;line-height:1;text-align:center}.wine-qty-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#6b1e2e;text-align:center;margin-top:2px}.wine-meta{text-align:right;padding-top:6px}.wine-vintage{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:#1a1008}.wine-size{font-family:'DM Mono',monospace;font-size:12px;color:#7a6652;margin-top:3px}.note-text{font-style:italic;color:#3a2a1a;font-size:13px;line-height:1.6;margin-top:10px}.note-women{display:flex;align-items:flex-start;gap:5px;margin-top:8px}.note-sym{font-size:13px;color:#9b3a4a;flex-shrink:0;line-height:1.5}.note-women-text{font-style:italic;font-size:13px;color:#9b3a4a;line-height:1.6}`
+    const CSS = `@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Mono:wght@300;400;500&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cormorant Garamond',serif;color:#1a1008;background:#fff;padding:48px;font-variant-ligatures:none}@media print{body{padding:28px;font-variant-ligatures:none}}.wine-row{display:grid;grid-template-columns:1fr 100px 120px;gap:20px;align-items:start;padding:22px 0;border-bottom:1px solid #e8e0d4}.wine-row:last-child{border-bottom:none}.wine-name{font-size:22px;font-weight:500;line-height:1.15;color:#1a1008;font-variant-ligatures:none}.wine-producer{font-size:14px;color:#6b4a2a;margin-top:3px}.wine-qty{font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;color:#6b1e2e;line-height:1;text-align:center}.wine-qty-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#6b1e2e;text-align:center;margin-top:2px}.wine-meta{text-align:right;padding-top:6px}.wine-vintage{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:#1a1008}.wine-size{font-family:'DM Mono',monospace;font-size:12px;color:#7a6652;margin-top:3px}.note-text{font-style:italic;color:#3a2a1a;font-size:13px;line-height:1.6;margin-top:10px}.note-women{display:flex;align-items:flex-start;gap:5px;margin-top:8px}.note-sym{font-size:13px;color:#9b3a4a;flex-shrink:0;line-height:1.5}.note-women-text{font-style:italic;font-size:13px;color:#9b3a4a;line-height:1.6}`
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     const selectedPairs = allItems.filter(({ box }) => selectedBoxIds.has(box.id))
     const totalBottles = selectedPairs.reduce((s, { items }) => s + items.reduce((ss, i) => ss + (i.quantity || 1), 0), 0)
@@ -1268,14 +1268,14 @@ export default function BoxPage() {
         </div>`
       }).join('')
       return `<div style="margin-bottom:8px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 0 12px;border-bottom:1px solid #e8e0d4;">
-          <div style="display:flex;align-items:center;gap:12px;">
+        <div style="background:#1a1008;margin:${boxIdx === 0 ? '0' : '24px'} -48px 0;padding:14px 48px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:14px;">
             <div style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:5px 12px;white-space:nowrap;">BOX ${boxIdx + 1}</div>
-            <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;color:#1a1008;">${b.name}</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:400;color:#fff;letter-spacing:0.02em;">${b.name}</div>
           </div>
           <div style="text-align:right;">
-            <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:#6b1e2e;line-height:1;">${bItems.reduce((s,i)=>s+(i.quantity||1),0)}</div>
-            <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;">bottles</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:#d4ad45;line-height:1;">${bItems.reduce((s,i)=>s+(i.quantity||1),0)}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-top:2px;">bottles</div>
           </div>
         </div>
         ${rows}
