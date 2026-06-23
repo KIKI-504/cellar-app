@@ -297,6 +297,7 @@ function PullListView({ box, items, onClose }) {
       const notes = [
         item.tasting_note ? `<div class="note-text">"${item.tasting_note}"</div>` : '',
         item.buyer_note ? `<div class="note-text">${item.buyer_note}</div>` : '',
+        item.wine_producer_note ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#8a7a65;margin-top:6px;line-height:1.55;">${item.wine_producer_note}</div>` : '',
         item.women_note ? `<div class="note-women"><span class="note-sym">♀</span><span class="note-women-text">${item.women_note}</span></div>` : '',
       ].join('')
       return `<div class="wine-row">
@@ -1258,6 +1259,7 @@ export default function BoxPage() {
         const notes = [
           item.buyer_note ? `<div class="note-text">${item.buyer_note}</div>` : '',
           item.women_note ? `<div class="note-women"><span class="note-sym">♀</span><span class="note-women-text">${item.women_note}</span></div>` : '',
+          item.wine_producer_note ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#8a7a65;margin-top:6px;line-height:1.55;">${item.wine_producer_note}</div>` : '',
         ].join('')
         return `<div class="wine-row">
           <div><div class="wine-name">${dot}${wp}</div>${pp ? `<div class="wine-producer">${pp}</div>` : ''}${notes}</div>
