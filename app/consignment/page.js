@@ -110,7 +110,7 @@ export default function ConsignmentPage() {
     const [{ data: c }, { data: i }, { data: s }] = await Promise.all([
       supabase.from('consignees').select('*').order('name'),
       supabase.from('consignment_items')
-        .select('*, wines(buyer_note, women_note)')
+        .select('*, wines(buyer_note, women_note, sommelier_note)')
         .order('date_delivered', { ascending: false }),
       supabase.from('consignment_sales').select('*').order('date_reported', { ascending: false }),
     ])
@@ -196,6 +196,7 @@ export default function ConsignmentPage() {
           </div>
           ${buyerNote ? `<div style="font-family:'Cormorant Garamond',serif;font-size:14px;line-height:1.7;color:#3a2a1a;margin-left:19px;">${buyerNote}</div>` : ''}
           ${womenNote ? `<div style="display:flex;align-items:flex-start;gap:5px;margin-top:8px;margin-left:19px;"><span style="font-size:14px;color:#9b3a4a;flex-shrink:0;line-height:1.5;">♀</span><span style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#9b3a4a;line-height:1.6;">${womenNote}</span></div>` : ''}
+        ${item.wines?.sommelier_note ? `<div style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;margin-left:19px;background:#d4ad45;color:#1a1008;padding:3px 10px 3px 7px;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;clip-path:polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 0 100%);">▶ ${item.wines.sommelier_note}</div>` : ''}
         </div>`
     }).join('')
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pull List — ${consignee.name}</title>
