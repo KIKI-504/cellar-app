@@ -582,14 +582,13 @@ function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
   const totalWines = selectedPairs.reduce((s, { items }) => s + items.length, 0)
 
   function buildHtml() {
-    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
     const selectedPairs = allItems.filter(({ box }) => selectedBoxIds.has(box.id))
     const totalBottles = selectedPairs.reduce((s, { items }) => s + items.reduce((ss, i) => ss + (i.quantity || 1), 0), 0)
     const totalWines = selectedPairs.reduce((s, { items }) => s + items.length, 0)
 
     const sections = selectedPairs.map(({ box: b }, boxIdx) => {
       const bItems = allItems.find(p => p.box.id === b.id)?.items || []
-      const boxBottles = bItems.reduce((s, i) => s + (i.quantity || 1), 0)
 
       const rows = bItems.map(item => {
         const fd = item.wine_description || ''
@@ -598,36 +597,36 @@ function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
         const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
         const qty = item.quantity || 1
         const badge = sizeBadge(item.wine_bottle_size)
-        const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colourDot(item.wine_colour)};margin-right:10px;flex-shrink:0;vertical-align:middle;"></span>`
+        const dot = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${colourDot(item.wine_colour)};margin-right:8px;flex-shrink:0;vertical-align:middle;position:relative;top:-1px;"></span>`
 
         const noteParts = []
-        if (item.buyer_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#1a1008;line-height:1.65;margin-top:8px;">${item.buyer_note}</div>`)
-        if (item.women_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#9b3a4a;line-height:1.65;margin-top:6px;">&#9792; ${item.women_note}</div>`)
+        if (item.buyer_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:12px;font-style:italic;color:#1a1008;line-height:1.6;margin-top:5px;">${item.buyer_note}</div>`)
+        if (item.women_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:12px;font-style:italic;color:#9b3a4a;line-height:1.6;margin-top:4px;">&#9792; ${item.women_note}</div>`)
 
         return `<tr>
-          <td style="padding:20px 16px 20px 0;border-bottom:1px solid #ddd;vertical-align:top;">
-            <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:500;color:#1a1008;line-height:1.2;">${dot}${wp}</div>
-            ${pp ? `<div style="font-family:'Cormorant Garamond',serif;font-size:15px;color:#1a1008;margin-top:3px;padding-left:18px;">${pp}</div>` : ''}
-            ${noteParts.join('')}
+          <td style="padding:14px 12px 14px 0;border-bottom:1px solid #ddd;vertical-align:top;">
+            <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:500;color:#1a1008;line-height:1.2;">${dot}${wp}</div>
+            ${pp ? `<div style="font-family:'Cormorant Garamond',serif;font-size:13px;color:#1a1008;margin-top:2px;padding-left:15px;">${pp}</div>` : ''}
+            ${noteParts.length ? `<div style="padding-left:15px;">${noteParts.join('')}</div>` : ''}
           </td>
-          <td style="padding:20px 16px;border-bottom:1px solid #ddd;vertical-align:top;text-align:center;width:80px;">
-            <div style="font-family:'Cormorant Garamond',serif;font-size:40px;font-weight:600;color:#6b1e2e;line-height:1;">${qty}</div>
-            <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#6b1e2e;margin-top:2px;">bottles</div>
+          <td style="padding:14px 12px;border-bottom:1px solid #ddd;vertical-align:top;text-align:center;width:70px;">
+            <div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:#6b1e2e;line-height:1;">${qty}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#6b1e2e;margin-top:1px;">bottles</div>
           </td>
-          <td style="padding:20px 0 20px 16px;border-bottom:1px solid #ddd;vertical-align:top;text-align:right;width:80px;">
-            ${item.wine_vintage ? `<div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:500;color:#1a1008;">${item.wine_vintage}</div>` : ''}
-            ${badge ? `<div style="font-family:'DM Mono',monospace;font-size:11px;color:#1a1008;margin-top:2px;">${badge}</div>` : ''}
+          <td style="padding:14px 0 14px 12px;border-bottom:1px solid #ddd;vertical-align:top;text-align:right;width:55px;">
+            ${item.wine_vintage ? `<div style="font-family:'Cormorant Garamond',serif;font-size:13px;font-weight:500;color:#1a1008;">${item.wine_vintage}</div>` : ''}
+            ${badge ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:#1a1008;margin-top:2px;">${badge}</div>` : ''}
           </td>
         </tr>`
       }).join('')
 
       const boxHeader = `<tr>
-        <td colspan="3" style="padding:${boxIdx === 0 ? '0' : '32px'} 0 12px;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <span style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;padding:4px 10px;">BOX ${boxIdx + 1}</span>
-            <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:#1a1008;">${b.name.toUpperCase()}</span>
+        <td colspan="3" style="padding:${boxIdx === 0 ? '0' : '24px'} 0 10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:3px 8px;">BOX ${boxIdx + 1}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#1a1008;">${b.name.toUpperCase()}</span>
           </div>
-          <div style="border-top:1px solid #1a1008;margin-top:10px;"></div>
+          <div style="border-top:1px solid #1a1008;margin-top:8px;"></div>
         </td>
       </tr>`
 
@@ -639,42 +638,42 @@ function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Mono:wght@400;500&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Cormorant Garamond', serif; color: #1a1008; background: #fff; padding: 48px; font-variant-ligatures: none; }
-@media print { body { padding: 28px; } @page { margin: 1.2cm; } }
+body { font-family: 'Cormorant Garamond', serif; color: #1a1008; background: #fff; padding: 36px; font-variant-ligatures: none; font-size: 13px; }
+@media print { body { padding: 20px; } @page { margin: 1cm; } }
 table { width: 100%; border-collapse: collapse; }
 </style>
 </head><body>
 
-<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid #1a1008;margin-bottom:28px;">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1.5px solid #1a1008;margin-bottom:20px;">
   <div>
-    <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;">BELLE ANNÉE WINES</div>
-    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#6b1e2e;margin-top:4px;">Combined Pull List</div>
+    <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:#1a1008;">Belle Année Wines</div>
+    <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:#6b1e2e;margin-top:3px;">Combined Pull List</div>
   </div>
   <div style="text-align:right;">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:500;color:#1a1008;">${buyerName}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;color:#1a1008;margin-top:3px;text-transform:uppercase;">${today}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:#6b1e2e;margin-top:2px;">For Warehouse Use</div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;color:#1a1008;">${buyerName}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.08em;color:#1a1008;margin-top:2px;text-transform:uppercase;">${today}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.1em;text-transform:uppercase;color:#6b1e2e;margin-top:1px;">For Warehouse Use</div>
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #1a1008;margin-bottom:36px;">
-  <div style="text-align:center;padding:16px 0;border-right:1px solid #1a1008;">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;color:#6b1e2e;line-height:1;">${totalBottles}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;margin-top:4px;">Bottles</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #1a1008;margin-bottom:24px;">
+  <div style="text-align:center;padding:12px 0;border-right:1px solid #1a1008;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:36px;font-weight:600;color:#6b1e2e;line-height:1;">${totalBottles}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#1a1008;margin-top:3px;">Bottles</div>
   </div>
-  <div style="text-align:center;padding:16px 0;border-right:1px solid #1a1008;">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;color:#6b1e2e;line-height:1;">${selectedBoxIds.size}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;margin-top:4px;">Boxes</div>
+  <div style="text-align:center;padding:12px 0;border-right:1px solid #1a1008;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:36px;font-weight:600;color:#6b1e2e;line-height:1;">${selectedBoxIds.size}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#1a1008;margin-top:3px;">Boxes</div>
   </div>
-  <div style="text-align:center;padding:16px 0;">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;color:#6b1e2e;line-height:1;">${totalWines}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;margin-top:4px;">Wines</div>
+  <div style="text-align:center;padding:12px 0;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:36px;font-weight:600;color:#6b1e2e;line-height:1;">${totalWines}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#1a1008;margin-top:3px;">Wines</div>
   </div>
 </div>
 
 <table>${sections}</table>
 
-<div style="margin-top:40px;padding-top:16px;border-top:1px solid #1a1008;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#1a1008;text-align:center;">Belle Année Wines · For Warehouse Use · ${new Date().getFullYear()}</div>
+<div style="margin-top:28px;padding-top:12px;border-top:1px solid #1a1008;font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#1a1008;text-align:center;">Belle Année Wines · For Warehouse Use · ${new Date().getFullYear()}</div>
 
 </body></html>`
   }
