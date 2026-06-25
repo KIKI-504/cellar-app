@@ -587,12 +587,21 @@ function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
     const totalBottles = selectedPairs.reduce((s, { items }) => s + items.reduce((ss, i) => ss + (i.quantity || 1), 0), 0)
     const totalWines = selectedPairs.reduce((s, { items }) => s + items.length, 0)
 
-    const BOTTLE_ICON = `<svg width="28" height="52" viewBox="0 0 28 52" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2h8M9 2v6c0 1-5 4-5 10v28a4 4 0 0 0 4 4h12a4 4 0 0 0 4-4V18c0-6-5-9-5-10V2" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-    const BOX_ICON = `<svg width="48" height="44" viewBox="0 0 48 44" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12l20-10 20 10v22L24 44 4 34V12z" stroke="#6b1e2e" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 12l20 10 20-10M24 22v22" stroke="#6b1e2e" stroke-width="1.5"/><path d="M14 7l20 10" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round"/></svg>`
-    const WINES_ICON = `<svg width="64" height="44" viewBox="0 0 64 44" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v10c0 6 5 10 5 10H7s5-4 5-10M12 22v20M8 42h8" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 2v10c0 6 5 10 5 10H27s5-4 5-10M32 22v20M28 42h8" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M52 2v10c0 6 5 10 5 10H47s5-4 5-10M52 22v20M48 42h8" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+    const BOTTLE_ICON = `<svg width="24" height="48" viewBox="0 0 24 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="1" width="6" height="8" rx="1" stroke="#6b1e2e" stroke-width="1.5"/><path d="M9 9C6 11 4 14 4 18v24a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V18c0-4-2-7-5-9" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round"/><line x1="4" y1="23" x2="20" y2="23" stroke="#6b1e2e" stroke-width="1"/></svg>`
+    const BOX_ICON = `<svg width="44" height="40" viewBox="0 0 44 40" fill="none" xmlns="http://www.w3.org/2000/svg"><polygon points="22,2 42,12 42,30 22,40 2,30 2,12" stroke="#6b1e2e" stroke-width="1.5" stroke-linejoin="round" fill="none"/><polyline points="2,12 22,22 42,12" stroke="#6b1e2e" stroke-width="1.5" stroke-linejoin="round"/><line x1="22" y1="22" x2="22" y2="40" stroke="#6b1e2e" stroke-width="1.5"/><line x1="12" y1="7" x2="32" y2="17" stroke="#6b1e2e" stroke-width="1"/></svg>`
+    const WINES_ICON = `<svg width="60" height="44" viewBox="0 0 60 44" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 2 C8 2 4 10 4 16 C4 21 7 24 10 25 L10 40 M6 40 L14 40" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 2 C30 2 26 10 26 16 C26 21 29 24 32 25 L32 40 M28 40 L36 40" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M52 2 C52 2 48 10 48 16 C48 21 51 24 54 25 L54 40 M50 40 L58 40" stroke="#6b1e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 
     const sections = selectedPairs.map(({ box: b }, boxIdx) => {
       const bItems = allItems.find(p => p.box.id === b.id)?.items || []
+
+      // Strip buyer name prefix: "Marina Summer Party Reds" -> "Summer Party Reds"
+      // Buyer name is the first word(s) before the first space-separated section
+      const buyerWords = buyerName.trim().split(/\s+/)
+      let shortName = b.name
+      // Remove buyer first name from start if present
+      if (buyerWords.length > 0 && shortName.toLowerCase().startsWith(buyerWords[0].toLowerCase())) {
+        shortName = shortName.slice(buyerWords[0].length).replace(/^[\s\-–—]+/, '').trim()
+      }
 
       const rows = bItems.map(item => {
         const fd = item.wine_description || ''
@@ -624,12 +633,12 @@ function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
       }).join('')
 
       const boxHeader = `<tr>
-        <td colspan="3" style="padding:${boxIdx === 0 ? '0' : '28px'} 0 12px;">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-            <span style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;padding:4px 10px;">BOX ${boxIdx + 1}</span>
-            <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;">${b.name.replace(/^[^\-]+-\s*/,'').toUpperCase()}</span>
+        <td colspan="3" style="padding:${boxIdx === 0 ? '0' : '28px'} 0 0;">
+          <div style="background:#f5f0ea;padding:10px 14px;display:flex;align-items:center;gap:12px;margin-bottom:0;">
+            <span style="background:#6b1e2e;color:#fff;font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;padding:4px 10px;flex-shrink:0;">BOX ${boxIdx + 1}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;">${shortName.toUpperCase()}</span>
           </div>
-          <div style="border-top:1px solid #1a1008;"></div>
+          <div style="border-top:2px solid #1a1008;margin-bottom:0;"></div>
         </td>
       </tr>`
 
@@ -660,17 +669,17 @@ table { width: 100%; border-collapse: collapse; }
 
 <div style="display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #e0d8cc;margin-bottom:28px;">
   <div style="text-align:center;padding:16px 0;border-right:1px solid #e0d8cc;">
-    <div style="margin-bottom:8px;">${BOTTLE_ICON}</div>
+    <div style="margin-bottom:8px;display:flex;justify-content:center;align-items:flex-end;height:52px;">${BOTTLE_ICON}</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:40px;font-weight:600;color:#6b1e2e;line-height:1;">${totalBottles}</div>
     <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;margin-top:4px;">Bottles</div>
   </div>
   <div style="text-align:center;padding:16px 0;border-right:1px solid #e0d8cc;">
-    <div style="margin-bottom:8px;">${BOX_ICON}</div>
+    <div style="margin-bottom:8px;display:flex;justify-content:center;align-items:flex-end;height:52px;">${BOX_ICON}</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:40px;font-weight:600;color:#6b1e2e;line-height:1;">${selectedBoxIds.size}</div>
     <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;margin-top:4px;">Boxes</div>
   </div>
   <div style="text-align:center;padding:16px 0;">
-    <div style="margin-bottom:8px;">${WINES_ICON}</div>
+    <div style="margin-bottom:8px;display:flex;justify-content:center;align-items:flex-end;height:52px;">${WINES_ICON}</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:40px;font-weight:600;color:#6b1e2e;line-height:1;">${totalWines}</div>
     <div style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.2em;text-transform:uppercase;color:#1a1008;margin-top:4px;">Wines</div>
   </div>
