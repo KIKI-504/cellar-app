@@ -588,7 +588,7 @@ function AddBottleModal({ onAdd, onClose }) {
   function applyEntry(rawEntry) {
     const entry = normaliseRow(rawEntry); const w = entry.wines
     const built = { ...entry, _desc: w?.description || entry.unlinked_description || '', _vintage: w?.vintage || entry.unlinked_vintage || '', _colour: w?.colour || entry.colour || '', _region: w?.region || '', _dp: entry.dp_price ? parseFloat(entry.dp_price) : null }
-    setSelected(built); setSalePrice(entry.sale_price ? String(parseFloat(entry.sale_price)) : ''); setTastingNote(''); setProducerNote(w?.producer_note || ''); setSearch(''); setResults([]); setScanMatch(null)
+    setSelected(built); setSalePrice(entry.sale_price ? String(parseFloat(entry.sale_price)) : ''); setTastingNote(w?.buyer_note || ''); setProducerNote(w?.producer_note || ''); setSearch(''); setResults([]); setScanMatch(null)
   }
   function handleImageSelect(e) { const file = e.target.files[0]; if (!file) return; setImageFile(file); const reader = new FileReader(); reader.onload = ev => setImagePreview(ev.target.result); reader.readAsDataURL(file) }
   async function analyseImage() {
