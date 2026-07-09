@@ -613,6 +613,10 @@ function AddBottleModal({ onAdd, onClose }) {
     const parentId = selected.id ? await ensureSourceId(selected.id, selected) : generateSourceId(selected._desc, selected._vintage, selected._colour, selected.bottle_size || '75')
     const { error } = await onAdd({ studio_id: selected.id||null, wine_description: selected._desc, wine_vintage: selected._vintage, wine_colour: selected._colour, wine_region: selected._region, dp_price: selected._dp, wine_bottle_size: selected.bottle_size || selected.wines?.bottle_volume || '75', sale_price: salePrice ? parseFloat(salePrice) : null, quantity: qty, tasting_note: tastingNote||null, producer_note: producerNote||null, source_id: parentId })
     if (error) { alert('Failed to add bottle: ' + error.message); setSaving(false); return }
+    // Write notes back to wines table so edits persist for future boxes
+    if (selected.wines?.id) {
+      await supabase.from('wines').update({ buyer_note: tastingNote||null, producer_note: producerNote||null }).eq('id', selected.wines.id)
+    }
     setJustAdded(selected._desc); setSelected(null); setSearch(''); setResults([]); setQty(1); setSalePrice(''); setTastingNote(''); setProducerNote(''); setImageFile(null); setImagePreview(null); setScanLabel(null); setScanMatch(null); setSaving(false)
   }
   const scanMatchDesc = scanMatch ? (scanMatch.wines?.description || scanMatch.unlinked_description || '') : ''; const MARGINS = [10, 15]
