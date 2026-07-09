@@ -87,20 +87,116 @@ function printMunbynLabel(contact) {
   iframe.contentDocument.open(); iframe.contentDocument.write(html); iframe.contentDocument.close()
 }
 
-function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
+function InvoiceModal({ box, items: initialItems, invoice: initialInvoice, onClose, onMarkPaid, onRefresh }) {
   const [saving, setSaving] = React.useState(false)
-  const lineItems = items.map(item => {
+  const [editMode, setEditMode] = React.useState(false)
+  const [editItems, setEditItems] = React.useState(null) // null = not in edit mode
+  const [invoice, setInvoice] = React.useState(initialInvoice)
+  const [customLines, setCustomLines] = React.useState(() => {
+    try { return Array.isArray(initialInvoice.custom_lines) ? initialInvoice.custom_lines : (JSON.parse(initialInvoice.custom_lines || '[]') || []) }
+    catch { return [] }
+  })
+  const [newLine, setNewLine] = React.useState({ description: '', quantity: 1, unit_price: '' })
+  const [editSaving, setEditSaving] = React.useState(false)
+
+  function enterEditMode() {
+    setEditItems(initialItems.map(i => ({ ...i, _removed: false })))
+    setEditMode(true)
+  }
+  function cancelEdit() { setEditItems(null); setEditMode(false) }
+
+  async function removeLineItem(itemId) {
+    if (!confirm('Remove this wine from the invoice and restore stock to studio?')) return
+    setEditItems(prev => prev.map(i => i.id === itemId ? { ...i, _removed: true } : i))
+  }
+
+  function updateEditQty(itemId, newQty) {
+    if (newQty < 1) return
+    setEditItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: newQty } : i))
+  }
+
+  async function saveEdits() {
+    setEditSaving(true)
+    const active = editItems.filter(i => !i._removed)
+    const removed = editItems.filter(i => i._removed)
+
+    // Restore studio quantities for removed items
+    for (const item of removed) {
+      if (item.studio_id) {
+        const { data: se } = await supabase.from('studio').select('id, quantity').eq('id', item.studio_id).maybeSingle()
+        if (se) {
+          await supabase.from('studio').update({ quantity: (se.quantity || 0) + (item.quantity || 1) }).eq('id', se.id)
+        }
+      }
+      await supabase.from('box_items').delete().eq('id', item.id)
+    }
+
+    // Update quantities for changed items
+    for (const item of active) {
+      const original = initialItems.find(i => i.id === item.id)
+      if (original && original.quantity !== item.quantity) {
+        const delta = item.quantity - original.quantity
+        await supabase.from('box_items').update({ quantity: item.quantity }).eq('id', item.id)
+        // Adjust studio quantity by delta (negative delta = more taken, positive = returned)
+        if (item.studio_id) {
+          const { data: se } = await supabase.from('studio').select('id, quantity').eq('id', item.studio_id).maybeSingle()
+          if (se) {
+            await supabase.from('studio').update({ quantity: Math.max(0, (se.quantity || 0) - delta) }).eq('id', se.id)
+          }
+        }
+      }
+    }
+
+    // Save custom lines + recalculate total
+    const wineTotal = active.reduce((s, i) => s + (parseFloat(i.sale_price) || 0) * (i.quantity || 1), 0)
+    const customTotal = customLines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (l.quantity || 1), 0)
+    const newTotal = wineTotal + customTotal
+
+    await supabase.from('invoices').update({
+      custom_lines: customLines,
+      total_amount: newTotal
+    }).eq('id', invoice.id)
+
+    setInvoice(prev => ({ ...prev, total_amount: newTotal, custom_lines: customLines }))
+    setEditMode(false)
+    setEditSaving(false)
+    if (onRefresh) await onRefresh()
+  }
+
+  function addCustomLine() {
+    if (!newLine.description.trim() || !newLine.unit_price) return
+    setCustomLines(prev => [...prev, { description: newLine.description.trim(), quantity: parseInt(newLine.quantity) || 1, unit_price: parseFloat(newLine.unit_price) }])
+    setNewLine({ description: '', quantity: 1, unit_price: '' })
+  }
+
+  function removeCustomLine(idx) {
+    setCustomLines(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // Use editItems when in edit mode, otherwise initialItems
+  const displayItems = editMode ? editItems.filter(i => !i._removed) : initialItems
+
+  const lineItems = displayItems.map(item => {
     const fd = item.wine_description || ''; const ci = fd.indexOf(',')
     const wp = ci > -1 ? fd.slice(0, ci).trim() : fd; const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''
     const badge = sizeBadgeLabel(item.wine_bottle_size)
     const unitPrice = parseFloat(item.sale_price) || 0; const qty = item.quantity || 1
-    return { wp, pp, vintage: item.wine_vintage || '', badge, unitPrice, qty, lineTotal: unitPrice * qty }
+    return { id: item.id, studio_id: item.studio_id, wp, pp, vintage: item.wine_vintage || '', badge, unitPrice, qty, lineTotal: unitPrice * qty }
   })
-  const grandTotal = lineItems.reduce((s, i) => s + i.lineTotal, 0)
+
+  const wineTotal = lineItems.reduce((s, i) => s + i.lineTotal, 0)
+  const customTotal = customLines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (l.quantity || 1), 0)
+  const grandTotal = wineTotal + customTotal
+
   function buildHtml() {
-    const rows = lineItems.map(i => `<tr><td style="padding:10px 0;border-bottom:1px solid #ede6d6;font-family:'Cormorant Garamond',serif;font-size:15px;">${i.wp}${i.pp?`<span style="color:#7a6652;font-size:13px;"> · ${i.pp}</span>`:''}<div style="font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:2px;">${[i.vintage,i.badge].filter(Boolean).join(' · ')}</div></td><td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:13px;">${i.qty}</td><td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;">£${i.unitPrice.toFixed(2)}</td><td style="padding:10px 0;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">£${i.lineTotal.toFixed(2)}</td></tr>`).join('')
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice ${invoice.invoice_number}</title><style>@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Mono',monospace;color:#1a1008;background:#fff;padding:48px;font-size:12px}@media print{body{padding:24px}}</style></head><body><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:24px;border-bottom:2px solid #1a1008;"><div><div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:300;letter-spacing:0.08em;">Belle Annee</div><div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:2px;">Wines &amp; Studio</div></div><div style="text-align:right;"><div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:500;color:#6b1e2e;">${invoice.invoice_number}</div><div style="font-size:11px;color:#7a6652;margin-top:4px;">${new Date(invoice.invoice_date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:36px;"><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Bill To</div><div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;">${invoice.buyer_name}</div>${invoice.buyer_email?`<div style="font-size:11px;color:#7a6652;margin-top:3px;">${invoice.buyer_email}</div>`:''}</div><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Reference</div><div style="font-size:12px;">${box.name}</div></div></div><table style="width:100%;border-collapse:collapse;margin-bottom:32px;"><thead><tr style="border-bottom:2px solid #1a1008;"><th style="padding:8px 0;text-align:left;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Wine</th><th style="padding:8px;text-align:center;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Qty</th><th style="padding:8px;text-align:right;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Unit</th><th style="padding:8px 0;text-align:right;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Total</th></tr></thead><tbody>${rows}</tbody></table><div style="display:flex;justify-content:flex-end;margin-bottom:36px;"><div style="min-width:200px;border-top:2px solid #1a1008;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;"><span style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;">Total Due</span><span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">£${grandTotal.toFixed(2)}</span></div></div><div style="border-top:1px solid #ede6d6;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:32px;"><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Payment</div><div style="font-size:11px;line-height:1.7;color:#3a2a1a;">Pay by bank transfer to<br><strong>MS J BRIDE</strong><br>Sort code: 20-31-52<br>Account: 63453472</div></div><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">VAT Status</div><div style="font-size:11px;line-height:1.7;color:#7a6652;font-style:italic;">Belle Annee Wines is not VAT registered. Prices include duty and VAT already paid at source.</div></div></div></body></html>`
+    const wineRows = lineItems.map(i => `<tr><td style="padding:10px 0;border-bottom:1px solid #ede6d6;font-family:'Cormorant Garamond',serif;font-size:15px;">${i.wp}${i.pp?`<span style="color:#7a6652;font-size:13px;"> · ${i.pp}</span>`:''}<div style="font-size:11px;font-family:'DM Mono',monospace;color:#7a6652;margin-top:2px;">${[i.vintage,i.badge].filter(Boolean).join(' · ')}</div></td><td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:13px;">${i.qty}</td><td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;">£${i.unitPrice.toFixed(2)}</td><td style="padding:10px 0;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">£${i.lineTotal.toFixed(2)}</td></tr>`).join('')
+    const customRows = customLines.map(l => {
+      const lt = (parseFloat(l.unit_price) || 0) * (l.quantity || 1)
+      return `<tr><td style="padding:10px 0;border-bottom:1px solid #ede6d6;font-family:'Cormorant Garamond',serif;font-size:13px;color:#3a2a1a;">${l.description}</td><td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:center;font-family:'DM Mono',monospace;font-size:13px;">${l.quantity}</td><td style="padding:10px 8px;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;">£${parseFloat(l.unit_price).toFixed(2)}</td><td style="padding:10px 0;border-bottom:1px solid #ede6d6;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;">£${lt.toFixed(2)}</td></tr>`
+    }).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice ${invoice.invoice_number}</title><style>@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Mono',monospace;color:#1a1008;background:#fff;padding:48px;font-size:12px}@media print{body{padding:24px}}</style></head><body><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:24px;border-bottom:2px solid #1a1008;"><div><div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:300;letter-spacing:0.08em;">Belle Annee</div><div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#7a6652;margin-top:2px;">Wines &amp; Studio</div></div><div style="text-align:right;"><div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:500;color:#6b1e2e;">${invoice.invoice_number}</div><div style="font-size:11px;color:#7a6652;margin-top:4px;">${new Date(invoice.invoice_date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:36px;"><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Bill To</div><div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;">${invoice.buyer_name}</div>${invoice.buyer_email?`<div style="font-size:11px;color:#7a6652;margin-top:3px;">${invoice.buyer_email}</div>`:''}</div><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Reference</div><div style="font-size:12px;">${box.name}</div></div></div><table style="width:100%;border-collapse:collapse;margin-bottom:32px;"><thead><tr style="border-bottom:2px solid #1a1008;"><th style="padding:8px 0;text-align:left;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Item</th><th style="padding:8px;text-align:center;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Qty</th><th style="padding:8px;text-align:right;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Unit</th><th style="padding:8px 0;text-align:right;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;font-weight:500;">Total</th></tr></thead><tbody>${wineRows}${customRows}</tbody></table><div style="display:flex;justify-content:flex-end;margin-bottom:36px;"><div style="min-width:200px;border-top:2px solid #1a1008;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;"><span style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7a6652;">Total Due</span><span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">£${grandTotal.toFixed(2)}</span></div></div><div style="border-top:1px solid #ede6d6;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:32px;"><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">Payment</div><div style="font-size:11px;line-height:1.7;color:#3a2a1a;">Pay by bank transfer to<br><strong>MS J BRIDE</strong><br>Sort code: 20-31-52<br>Account: 63453472</div></div><div><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#7a6652;margin-bottom:8px;">VAT Status</div><div style="font-size:11px;line-height:1.7;color:#7a6652;font-style:italic;">Belle Annee Wines is not VAT registered. Prices include duty and VAT already paid at source.</div></div></div></body></html>`
   }
+
   function handlePrint() {
     const win = document.createElement('iframe'); win.style.display = 'none'; document.body.appendChild(win)
     win.contentDocument.write(buildHtml()); win.contentDocument.close()
@@ -112,6 +208,7 @@ function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
     win.document.write(buildHtml()); win.document.close(); setTimeout(() => { win.focus(); win.print() }, 600)
   }
   async function handleMarkPaid() { setSaving(true); await onMarkPaid(invoice.id); setSaving(false) }
+
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.85)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
       <div style={{ background:'var(--cream)', width:'100%', maxWidth:'720px', border:'1px solid var(--border)' }}>
@@ -123,8 +220,11 @@ function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
           </div>
           <div style={{ display:'flex', gap:'8px' }}>
             {invoice.status === 'unpaid' && <button onClick={handleMarkPaid} disabled={saving} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>{saving?'...':'Mark Paid'}</button>}
-            <button onClick={handlePdf} style={{ background:'rgba(107,30,46,0.7)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>PDF</button>
-            <button onClick={handlePrint} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>Print</button>
+            {!editMode && <button onClick={enterEditMode} style={{ background:'rgba(212,173,69,0.15)', color:'#d4ad45', border:'1px solid rgba(212,173,69,0.4)', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>✏ Edit</button>}
+            {editMode && <button onClick={cancelEdit} disabled={editSaving} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>Cancel</button>}
+            {editMode && <button onClick={saveEdits} disabled={editSaving} style={{ background:'#2d6a4f', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>{editSaving?'Saving...':'Save Changes'}</button>}
+            {!editMode && <button onClick={handlePdf} style={{ background:'rgba(107,30,46,0.7)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>PDF</button>}
+            {!editMode && <button onClick={handlePrint} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>Print</button>}
             <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>x</button>
           </div>
         </div>
@@ -137,11 +237,82 @@ function InvoiceModal({ box, items, invoice, onClose, onMarkPaid }) {
             <div><div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'8px' }}>Bill To</div><div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'18px', fontWeight:500 }}>{invoice.buyer_name}</div>{invoice.buyer_email && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--muted)', marginTop:'3px' }}>{invoice.buyer_email}</div>}</div>
             <div><div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'8px' }}>Reference</div><div style={{ fontFamily:'DM Mono,monospace', fontSize:'12px' }}>{box.name}</div></div>
           </div>
-          <table style={{ width:'100%', borderCollapse:'collapse', marginBottom:'28px' }}>
-            <thead><tr style={{ borderBottom:'2px solid var(--ink)' }}>{[['Wine','left'],['Qty','center'],['Unit','right'],['Total','right']].map(([label,align]) => (<th key={label} style={{ padding:'8px 0', textAlign:align, fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', fontWeight:500, paddingLeft:label==='Qty'?'8px':undefined, paddingRight:label==='Unit'?'8px':undefined }}>{label}</th>))}</tr></thead>
-            <tbody>{lineItems.map((item, idx) => (<tr key={idx}><td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6' }}><div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px' }}>{item.wp}{item.pp && <span style={{ color:'var(--muted)', fontSize:'13px' }}> · {item.pp}</span>}</div>{(item.vintage || item.badge) && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'2px' }}>{[item.vintage,item.badge].filter(Boolean).join(' · ')}</div>}</td><td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'center', fontFamily:'DM Mono,monospace', fontSize:'13px' }}>{item.qty}</td><td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px' }}>£{item.unitPrice.toFixed(2)}</td><td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600 }}>£{item.lineTotal.toFixed(2)}</td></tr>))}</tbody>
+
+          {editMode && (
+            <div style={{ marginBottom:'16px', padding:'10px 14px', background:'rgba(212,173,69,0.08)', border:'1px solid rgba(212,173,69,0.3)', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'#7a5e10', lineHeight:1.6 }}>
+              Edit mode — adjust quantities, remove wines, or add custom charges below. Removed wines will be returned to studio stock.
+            </div>
+          )}
+
+          <table style={{ width:'100%', borderCollapse:'collapse', marginBottom:'12px' }}>
+            <thead><tr style={{ borderBottom:'2px solid var(--ink)' }}>{[['Item','left'],['Qty','center'],['Unit','right'],['Total','right']].map(([label,align]) => (<th key={label} style={{ padding:'8px 0', textAlign:align, fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', fontWeight:500, paddingLeft:label==='Qty'?'8px':undefined, paddingRight:label==='Unit'?'8px':undefined }}>{label}</th>))}{editMode && <th></th>}</tr></thead>
+            <tbody>
+              {lineItems.map((item, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6' }}>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'15px' }}>{item.wp}{item.pp && <span style={{ color:'var(--muted)', fontSize:'13px' }}> · {item.pp}</span>}</div>
+                    {(item.vintage || item.badge) && <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', marginTop:'2px' }}>{[item.vintage,item.badge].filter(Boolean).join(' · ')}</div>}
+                  </td>
+                  <td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'center' }}>
+                    {editMode ? (
+                      <div style={{ display:'flex', alignItems:'center', gap:'4px', justifyContent:'center' }}>
+                        <button onClick={() => updateEditQty(item.id, item.qty - 1)} disabled={item.qty <= 1} style={{ width:'20px', height:'20px', border:'1px solid var(--border)', background:'var(--cream)', cursor:'pointer', fontSize:'12px', display:'flex', alignItems:'center', justifyContent:'center', opacity:item.qty<=1?0.4:1 }}>−</button>
+                        <span style={{ fontFamily:'DM Mono,monospace', fontSize:'13px', minWidth:'20px', textAlign:'center' }}>{item.qty}</span>
+                        <button onClick={() => updateEditQty(item.id, item.qty + 1)} style={{ width:'20px', height:'20px', border:'1px solid var(--border)', background:'var(--cream)', cursor:'pointer', fontSize:'12px', display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                      </div>
+                    ) : (
+                      <span style={{ fontFamily:'DM Mono,monospace', fontSize:'13px' }}>{item.qty}</span>
+                    )}
+                  </td>
+                  <td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px' }}>£{item.unitPrice.toFixed(2)}</td>
+                  <td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600 }}>£{item.lineTotal.toFixed(2)}</td>
+                  {editMode && <td style={{ padding:'11px 0 11px 12px', borderBottom:'1px solid #ede6d6', textAlign:'right' }}><button onClick={() => removeLineItem(item.id)} style={{ background:'none', border:'none', color:'#c0392b', cursor:'pointer', fontFamily:'DM Mono,monospace', fontSize:'11px', padding:'2px 6px' }}>✕</button></td>}
+                </tr>
+              ))}
+              {customLines.map((line, idx) => {
+                const lt = (parseFloat(line.unit_price) || 0) * (line.quantity || 1)
+                return (
+                  <tr key={`custom-${idx}`}>
+                    <td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6' }}>
+                      <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'#3a2a1a' }}>{line.description}</div>
+                    </td>
+                    <td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'center', fontFamily:'DM Mono,monospace', fontSize:'13px' }}>{line.quantity}</td>
+                    <td style={{ padding:'11px 8px', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px' }}>£{parseFloat(line.unit_price).toFixed(2)}</td>
+                    <td style={{ padding:'11px 0', borderBottom:'1px solid #ede6d6', textAlign:'right', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600 }}>£{lt.toFixed(2)}</td>
+                    {editMode && <td style={{ padding:'11px 0 11px 12px', borderBottom:'1px solid #ede6d6', textAlign:'right' }}><button onClick={() => removeCustomLine(idx)} style={{ background:'none', border:'none', color:'#c0392b', cursor:'pointer', fontFamily:'DM Mono,monospace', fontSize:'11px', padding:'2px 6px' }}>✕</button></td>}
+                  </tr>
+                )
+              })}
+            </tbody>
           </table>
-          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'32px' }}><div style={{ minWidth:'200px', borderTop:'2px solid var(--ink)', paddingTop:'12px', display:'flex', justifyContent:'space-between', alignItems:'baseline' }}><span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)' }}>Total Due</span><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'28px', fontWeight:500, color:'var(--wine)' }}>£{grandTotal.toFixed(2)}</span></div></div>
+
+          {editMode && (
+            <div style={{ marginBottom:'24px', padding:'12px 14px', border:'1px dashed var(--border)', background:'rgba(26,16,8,0.02)' }}>
+              <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'10px' }}>Add custom charge</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 60px 100px auto', gap:'8px', alignItems:'flex-end' }}>
+                <div>
+                  <label style={{ display:'block', fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'4px' }}>Description</label>
+                  <input value={newLine.description} onChange={e => setNewLine(l => ({...l, description: e.target.value}))} onKeyDown={e => e.key === 'Enter' && addCustomLine()} placeholder="e.g. Courier to Farnborough Airport" style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'7px 10px', fontFamily:'Cormorant Garamond,serif', fontSize:'14px', outline:'none', boxSizing:'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display:'block', fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'4px' }}>Qty</label>
+                  <input type="number" min="1" value={newLine.quantity} onChange={e => setNewLine(l => ({...l, quantity: parseInt(e.target.value)||1}))} onFocus={e => e.target.select()} style={{ width:'100%', border:'1px solid var(--border)', background:'var(--white)', padding:'7px 8px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center', boxSizing:'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display:'block', fontSize:'9px', fontFamily:'DM Mono,monospace', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'4px' }}>Unit price £</label>
+                  <input type="number" step="0.01" value={newLine.unit_price} onChange={e => setNewLine(l => ({...l, unit_price: e.target.value}))} onKeyDown={e => e.key === 'Enter' && addCustomLine()} onFocus={e => e.target.select()} placeholder="0.00" style={{ width:'100%', border:'2px solid rgba(107,30,46,0.25)', background:'rgba(107,30,46,0.03)', padding:'7px 8px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', color:'var(--wine)', boxSizing:'border-box' }} />
+                </div>
+                <button onClick={addCustomLine} disabled={!newLine.description.trim() || !newLine.unit_price} style={{ background:newLine.description.trim()&&newLine.unit_price?'var(--ink)':'#ccc', color:'var(--white)', border:'none', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:newLine.description.trim()&&newLine.unit_price?'pointer':'not-allowed', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>+ Add</button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'32px' }}>
+            <div style={{ minWidth:'200px', borderTop:'2px solid var(--ink)', paddingTop:'12px', display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)' }}>Total Due</span>
+              <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'28px', fontWeight:500, color:'var(--wine)' }}>£{grandTotal.toFixed(2)}</span>
+            </div>
+          </div>
           <div style={{ borderTop:'1px solid var(--border)', paddingTop:'20px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'32px' }}>
             <div><div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'10px' }}>Payment</div><div style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', lineHeight:1.8, color:'var(--ink)' }}>Pay by bank transfer to<br/><strong>MS J BRIDE</strong><br/>Sort code: 20-31-52<br/>Account: 63453472</div></div>
             <div><div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:'10px' }}>VAT Status</div><div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', lineHeight:1.7, color:'var(--muted)' }}>Belle Annee Wines is not VAT registered. Prices include duty and VAT already paid at source.</div></div>
@@ -1302,7 +1473,7 @@ export default function BoxPage() {
       {showCombinedPullList && <CombinedPullListModal buyerName={showCombinedPullList.buyerName} boxes={showCombinedPullList.boxes} allItems={showCombinedPullList.allItems} onClose={() => setShowCombinedPullList(null)} />}
       {showClients      && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} onViewInvoice={async (invId) => { await fetchInvoice(invId); setShowInvoice(true) }} />}
       {showCreateInvoice && activeBox && <CreateInvoiceModal box={activeBox} allBoxes={boxes} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
-      {showInvoice      && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} />}
+      {showInvoice      && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} onRefresh={async () => { await fetchBoxesAndInvoices(); await fetchInvoice(activeInvoice.id) }} />}
       {priceCheckDiffs && activeBox && <PriceCheckModal diffs={priceCheckDiffs} boxName={activeBox.name} onConfirm={pricesToUpdate => doConfirmBox(pricesToUpdate)} onCancel={() => setPriceCheckDiffs(null)} />}
     </div>
   )
