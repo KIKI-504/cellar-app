@@ -473,9 +473,9 @@ table{width:100%;border-collapse:collapse}`
       const price = item.sale_price ? `£${parseFloat(item.sale_price).toFixed(2)}` : ''
       const noteText = item.tasting_note || item.buyer_note
       const noteParts = []
-      if (noteText) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#1a1008;line-height:1.65;margin-top:8px;">${noteText}</div>`)
+      if (item.wine_producer_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:13px;font-style:italic;color:#3a2a1a;line-height:1.65;margin-top:8px;">${item.wine_producer_note}</div>`)
       if (item.women_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#9b3a4a;line-height:1.65;margin-top:6px;">&#9792; ${item.women_note}</div>`)
-      if (item.wine_producer_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:13px;font-style:italic;color:#3a2a1a;line-height:1.65;margin-top:6px;">${item.wine_producer_note}</div>`)
+      if (noteText) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;color:#1a1008;line-height:1.65;margin-top:6px;"><span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-style:normal;color:#6b4a2a;vertical-align:middle;">JB Tasting Notes: </span><span style="font-style:italic;">${noteText}</span></div>`)
       return `<tr>
         <td style="padding:18px 16px 18px 0;border-bottom:1px solid #e0d8cc;vertical-align:top;">
           <div style="display:flex;align-items:center;gap:8px;">
@@ -757,9 +757,9 @@ function CombinedPullListModal({ buyerName, boxes, allItems, onClose }) {
         const price = item.sale_price ? `£${parseFloat(item.sale_price).toFixed(2)}` : ''
         const noteText = item.tasting_note || item.buyer_note
         const noteParts = []
-        if (noteText) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#1a1008;line-height:1.65;margin-top:8px;">${noteText}</div>`)
+        if (item.wine_producer_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:13px;font-style:italic;color:#3a2a1a;line-height:1.65;margin-top:8px;">${item.wine_producer_note}</div>`)
         if (item.women_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-style:italic;color:#9b3a4a;line-height:1.65;margin-top:6px;">&#9792; ${item.women_note}</div>`)
-        if (item.wine_producer_note) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:13px;font-style:italic;color:#3a2a1a;line-height:1.65;margin-top:6px;">${item.wine_producer_note}</div>`)
+        if (noteText) noteParts.push(`<div style="font-family:'Cormorant Garamond',serif;font-size:14px;color:#1a1008;line-height:1.65;margin-top:6px;"><span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-style:normal;color:#6b4a2a;vertical-align:middle;">JB Tasting Notes: </span><span style="font-style:italic;">${noteText}</span></div>`)
         return `<tr>
           <td style="padding:18px 16px 18px 0;border-bottom:1px solid #e0d8cc;vertical-align:top;">
             <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:500;color:#1a1008;line-height:1.2;">${wp}</div>
