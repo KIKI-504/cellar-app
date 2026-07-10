@@ -519,53 +519,30 @@ function handlePrint() {
   }
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(20,15,10,0.85)', zIndex:300, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
-      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'700px', border:'1px solid var(--border)' }}>
-        <div style={{ background:'var(--ink)', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 20px', flexWrap:'wrap', gap:'8px' }}>
+      <div style={{ background:'var(--cream)', width:'100%', maxWidth:'780px', border:'1px solid var(--border)', display:'flex', flexDirection:'column', maxHeight:'calc(100vh - 40px)' }}>
+        <div style={{ background:'var(--ink)', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 20px', flexWrap:'wrap', gap:'8px', flexShrink:0 }}>
           <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', letterSpacing:'0.15em', color:'rgba(253,250,245,0.5)', textTransform:'uppercase' }}>Pull List Preview</span>
           <div style={{ display:'flex', gap:'8px' }}>
-            <button onClick={handlePrint} disabled={noneTicked} style={{ background:noneTicked?'#555':'var(--wine)', color:'var(--white)', border:'none', padding:'7px 16px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:noneTicked?'not-allowed':'pointer' }}>Print</button>
-            <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'7px 12px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>x Close</button>
+            <button onClick={handlePrint} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'7px 18px', fontFamily:'DM Mono,monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>Print</button>
+            <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.6)', padding:'7px 14px', fontFamily:'DM Mono,monospace', fontSize:'11px', cursor:'pointer' }}>x Close</button>
           </div>
         </div>
-        <div style={{ padding:'12px 20px', background:'rgba(107,30,46,0.04)', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
-          <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
-            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase' }}>Select:</span>
-            <button onClick={toggleAll} style={{ padding:'4px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', border:'1px solid var(--border)', background:allTicked?'var(--ink)':'var(--white)', color:allTicked?'var(--white)':'var(--muted)', cursor:'pointer' }}>{allTicked ? 'All' : 'All'}</button>
-            <button onClick={() => setTicked(new Set())} style={{ padding:'4px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', border:'1px solid var(--border)', background:noneTicked?'var(--ink)':'var(--white)', color:noneTicked?'var(--white)':'var(--muted)', cursor:'pointer' }}>None</button>
-            <button onClick={invertTick} style={{ padding:'4px 10px', fontFamily:'DM Mono,monospace', fontSize:'10px', border:'1px solid var(--border)', background:'var(--white)', color:'var(--muted)', cursor:'pointer' }}>Invert</button>
-          </div>
-          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'8px' }}>
-            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap' }}>Pull List</span>
-            <input type="number" min="1" value={splitNum} onChange={e => setSplitNum(e.target.value)} placeholder="1" style={{ width:'40px', border:'1px solid var(--border)', background:'var(--white)', padding:'4px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center' }} />
-            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)' }}>of</span>
-            <input type="number" min="1" value={splitOf} onChange={e => setSplitOf(e.target.value)} placeholder="2" style={{ width:'40px', border:'1px solid var(--border)', background:'var(--white)', padding:'4px 6px', fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:600, outline:'none', textAlign:'center' }} />
-            {(splitNum || splitOf) && <button onClick={() => { setSplitNum(''); setSplitOf('') }} style={{ background:'none', border:'none', color:'var(--muted)', fontFamily:'DM Mono,monospace', fontSize:'10px', cursor:'pointer', padding:'2px 4px' }}>x</button>}
-          </div>
+        <div style={{ padding:'8px 16px', background:'var(--cream)', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', flexShrink:0 }}>
+          <span style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)' }}>Select:</span>
+          <button onClick={() => setTicked(new Set(items.map(i => i.id)))} style={{ background:ticked.size===items.length?'var(--ink)':'none', color:ticked.size===items.length?'var(--white)':'var(--ink)', border:'1px solid var(--border)', padding:'3px 10px', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>All</button>
+          <button onClick={() => setTicked(new Set())} style={{ background:'none', color:'var(--ink)', border:'1px solid var(--border)', padding:'3px 10px', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>None</button>
+          <button onClick={invertTick} style={{ background:'none', color:'var(--ink)', border:'1px solid var(--border)', padding:'3px 10px', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>Invert</button>
+          <span style={{ marginLeft:'auto', fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)' }}>Pull List</span>
+          <input type="number" min="1" max={splitOf||1} value={splitNum} onChange={e => setSplitNum(e.target.value)} style={{ width:'40px', textAlign:'center', border:'1px solid var(--border)', padding:'3px 4px', fontFamily:'DM Mono,monospace', fontSize:'11px', background:'var(--white)' }} />
+          <span style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', color:'var(--muted)' }}>of</span>
+          <input type="number" min="1" value={splitOf} onChange={e => setSplitOf(e.target.value)} style={{ width:'40px', textAlign:'center', border:'1px solid var(--border)', padding:'3px 4px', fontFamily:'DM Mono,monospace', fontSize:'11px', background:'var(--white)' }} />
         </div>
-        <div style={{ padding:'28px 32px' }}>
-          <div style={{ borderBottom:'1px solid #c8b89a', paddingBottom:'16px', marginBottom:'20px', display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:'8px' }}>
-            <div><div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'22px', fontWeight:300, letterSpacing:'0.05em' }}>{box.name}</div><div style={{ fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'3px' }}>For {box.buyer_name}{box.buyer_email && ` · ${box.buyer_email}`}</div></div>
-            <div style={{ textAlign:'right', fontSize:'11px', fontFamily:'DM Mono,monospace', color:'var(--muted)' }}><div>{isPartial ? `${tickedBottles} of ${totalBottles}` : totalBottles} bottle{totalBottles !== 1 ? 's' : ''}</div><div>{new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div></div>
-          </div>
-          {items.map((item, i) => {
-            const isTickedItem = ticked.has(item.id); const fd = item.wine_description || ''; const ci = fd.indexOf(',')
-            const wp = ci > -1 ? fd.slice(0, ci).trim() : fd; const pp = ci > -1 ? fd.slice(ci + 1).trim() : ''; const badge = sizeBadge(item.wine_bottle_size)
-            return (
-              <div key={item.id} onClick={() => toggleItem(item.id)} style={{ padding:'14px 0', borderBottom: i < items.length-1 ? '1px solid #ede6d6' : 'none', display:'grid', gridTemplateColumns:'auto 1fr auto', gap:'12px', alignItems:'start', cursor:'pointer', opacity: isPartial && !isTickedItem ? 0.4 : 1, transition:'opacity 0.15s' }}>
-                <div style={{ width:'18px', height:'18px', border:`2px solid ${isTickedItem?'var(--ink)':'var(--border)'}`, background:isTickedItem?'var(--ink)':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:'2px', borderRadius:'2px', transition:'all 0.1s' }}>{isTickedItem && <span style={{ color:'var(--white)', fontSize:'12px', lineHeight:1, fontWeight:700 }}>✓</span>}</div>
-                <div>
-                  <div style={{ display:'flex', alignItems:'baseline', gap:'8px', flexWrap:'wrap' }}><span style={{ display:'inline-block', width:'8px', height:'8px', borderRadius:'50%', background:colourDot(item.wine_colour), flexShrink:0 }}></span><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'17px', fontWeight:500 }}>{wp}</span>{item.wine_vintage && <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'14px', color:'var(--muted)' }}>{item.wine_vintage}</span>}{badge && <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--wine)' }}>{badge}</span>}</div>
-                  {pp && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--ink)', marginTop:'1px', marginLeft:'16px' }}>{pp}</div>}
-                  {item.wine_region && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'var(--muted)', marginTop:'2px', marginLeft:'16px' }}>{item.wine_region}</div>}
-                  {(item.tasting_note || item.buyer_note) && <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', color:'#3a2a1a', marginTop:'6px', marginLeft:'16px', lineHeight:1.55 }}>{item.tasting_note || item.buyer_note}</div>}
-                  {item.women_note && <div style={{ display:'flex', alignItems:'flex-start', gap:'4px', marginTop:'4px', marginLeft:'16px' }}><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', color:'#9b3a4a' }}>♀</span><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'13px', fontStyle:'italic', color:'#9b3a4a', lineHeight:1.5 }}>{item.women_note}</span></div>}
-                </div>
-                <div style={{ textAlign:'right', minWidth:'72px' }}><div style={{ fontFamily:'DM Mono,monospace', fontSize:'14px', fontWeight:500, color:'var(--wine)' }}>{item.sale_price?`£${parseFloat(item.sale_price).toFixed(2)}`:'—'}</div>{item.quantity > 1 && <div style={{ fontSize:'10px', fontFamily:'DM Mono,monospace', color:'var(--muted)', marginTop:'2px' }}>× {item.quantity}</div>}</div>
-              </div>
-            )
-          })}
-          <div style={{ marginTop:'20px', paddingTop:'14px', borderTop:'2px solid #c8b89a' }}><div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase' }}>{isSplit ? `Pull List ${splitNum} of ${splitOf}` : 'Pull List'}</div></div>
-        </div>
+        <iframe
+          key={[...ticked].join(',') + splitNum + splitOf}
+          srcDoc={buildPrintHtml()}
+          style={{ flex:1, border:'none', minHeight:'600px', background:'#fff' }}
+          title="Pull List Preview"
+        />
       </div>
     </div>
   )
