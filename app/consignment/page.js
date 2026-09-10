@@ -53,6 +53,7 @@ export default function ConsignmentPage() {
 
   const [showAddItem, setShowAddItem] = useState(false)
   const [showStocktake, setShowStocktake] = useState(false)
+  const [hideSoldOut, setHideSoldOut] = useState(true)
   const [showInvoice, setShowInvoice] = useState(false)
   const [showAddConsignee, setShowAddConsignee] = useState(false)
   const [showRecordSales, setShowRecordSales] = useState(false)
@@ -79,6 +80,7 @@ export default function ConsignmentPage() {
   const [salesSaving, setSalesSaving] = useState(false)
 
   const [stocktakeCounts, setStocktakeCounts] = useState({})
+  const [stocktakeUnlisted, setStocktakeUnlisted] = useState(new Set())
   const [stocktakePeriod, setStocktakePeriod] = useState('')
   const [stocktakeDate, setStocktakeDate] = useState(new Date().toISOString().split('T')[0])
   const [stocktakeSaving, setStocktakeSaving] = useState(false)
@@ -346,6 +348,12 @@ function printHtml(html) {
       }).filter(Boolean)
       const { error } = await supabase.from('consignment_sales').insert(rows)
       if (error) throw error
+      for (const e of valid) {
+        const item = activeItems.find(i => i.id === e.itemId)
+        if (!item) continue
+        const remaining = Math.max(0, (item.qty_remaining || 0) - e.qty)
+        await supabase.from('consignment_items').update({ qty_remaining: remaining, status: remaining === 0 ? 'Sold Out' : item.status }).eq('id', item.id)
+      }
       await fetchAll()
       setShowRecordSales(false)
       showStatus('success', `${rows.length} sale${rows.length !== 1 ? 's' : ''} recorded for ${salesPeriod}.`)
@@ -356,12 +364,12 @@ function printHtml(html) {
   function openStocktake() {
     const counts = {}
     activeItems.filter(i => i.status === 'Active').forEach(i => { counts[i.id] = i.qty_remaining })
-    setStocktakeCounts(counts); setStocktakePeriod('')
+    setStocktakeCounts(counts); setStocktakePeriod(''); setStocktakeUnlisted(new Set())
     setStocktakeDate(new Date().toISOString().split('T')[0]); setShowStocktake(true)
   }
 
   function getStocktakeDiffs() {
-    return activeItems.filter(i => i.status === 'Active').map(i => {
+    return activeItems.filter(i => i.status === 'Active' && !stocktakeUnlisted.has(i.id)).map(i => {
       const reported = parseInt(stocktakeCounts[i.id] ?? i.qty_remaining) || 0
       const sold = Math.max(0, i.qty_remaining - reported)
       const lineTotal = sold * parseFloat(i.sale_price || i.dp_price || 0)
@@ -371,18 +379,20 @@ function printHtml(html) {
 
   async function confirmStocktake() {
     const diffs = getStocktakeDiffs()
-    if (diffs.length === 0) { showStatus('error', 'No sales detected — all quantities match.'); return }
+    const unlistedItems = activeItems.filter(i => i.status === 'Active' && stocktakeUnlisted.has(i.id))
+    if (diffs.length === 0 && unlistedItems.length === 0) { showStatus('error', 'No sales detected — all quantities match.'); return }
     if (!stocktakePeriod.trim()) { showStatus('error', 'Please enter a period label e.g. "April 2026"'); return }
     setStocktakeSaving(true)
     try {
-      const { data: stocktake, error: stErr } = await supabase.from('stocktakes').insert({ consignee_id: activeConsignee, stocktake_date: stocktakeDate, period_label: stocktakePeriod }).select().single()
+      const unlistedNote = unlistedItems.length ? 'Not listed by consignee: ' + unlistedItems.map(i => `${i.description}${i.vintage ? ' ' + i.vintage : ''} (we think ${i.qty_remaining})`).join('; ') : null
+      const { data: stocktake, error: stErr } = await supabase.from('stocktakes').insert({ consignee_id: activeConsignee, stocktake_date: stocktakeDate, period_label: stocktakePeriod, notes: unlistedNote }).select().single()
       if (stErr) throw stErr
+      for (const i of unlistedItems) { await supabase.from('consignment_items').update({ stocktake_flag: `Not listed · ${stocktakePeriod}` }).eq('id', i.id) }
       const saleRows = diffs.map(d => ({ consignee_id: activeConsignee, consignment_item_id: d.item.id, description: d.item.description, vintage: d.item.vintage || null, qty_sold: d.sold, price_per_bottle: parseFloat(d.item.sale_price || d.item.dp_price || 0), period: stocktakePeriod, date_reported: stocktakeDate, invoiced: false, invoice_paid: false, stocktake_id: stocktake.id }))
-      const { error: sErr } = await supabase.from('consignment_sales').insert(saleRows)
-      if (sErr) throw sErr
-      for (const d of diffs) { await supabase.from('consignment_items').update({ qty_remaining: d.reported, status: d.reported === 0 ? 'Sold Out' : 'Active' }).eq('id', d.item.id) }
+      if (saleRows.length) { const { error: sErr } = await supabase.from('consignment_sales').insert(saleRows); if (sErr) throw sErr }
+      for (const d of diffs) { await supabase.from('consignment_items').update({ qty_remaining: d.reported, status: d.reported === 0 ? 'Sold Out' : 'Active', stocktake_flag: null }).eq('id', d.item.id) }
       await fetchAll(); setShowStocktake(false)
-      showStatus('success', `Stocktake recorded — ${diffs.length} wine${diffs.length !== 1 ? 's' : ''} sold this period.`)
+      showStatus('success', `Stocktake recorded — ${diffs.length} wine${diffs.length !== 1 ? 's' : ''} sold this period${unlistedItems.length ? `, ${unlistedItems.length} flagged as not listed` : ''}.`)
     } catch (err) { showStatus('error', 'Stocktake failed: ' + err.message) }
     setStocktakeSaving(false)
   }
@@ -542,7 +552,15 @@ function printHtml(html) {
                 <div style={{ marginBottom: '28px' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>Wines at {activeC.name}</div>
-                    {activeItems.filter(i => i.status === 'Active').length > 0 && (<div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)' }}>click fields to edit · ☑ check to print</div>)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)' }}>
+                      {activeItems.filter(i => i.status === 'Active').length > 0 && <span>click fields to edit · ☑ check to print</span>}
+                      {activeItems.some(i => i.status !== 'Active') && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                          <input type="checkbox" checked={hideSoldOut} onChange={e => setHideSoldOut(e.target.checked)} style={{ width: '13px', height: '13px', accentColor: 'var(--wine)', cursor: 'pointer' }} />
+                          hide sold out ({activeItems.filter(i => i.status !== 'Active').length})
+                        </label>
+                      )}
+                    </div>
                   </div>
                   <div style={{ background: 'var(--white)', border: '1px solid var(--border)', overflowX: 'auto' }}>
                     {activeItems.length === 0 ? (
@@ -560,7 +578,7 @@ function printHtml(html) {
                           </tr>
                         </thead>
                         <tbody>
-                          {activeItems.map(item => {
+                          {activeItems.filter(i => !hideSoldOut || i.status === 'Active').map(item => {
                             const isStale = item.status === 'Active' && item.qty_remaining === 0
                             const isChecked = selectedIds.has(item.id)
                             const isActive = item.status === 'Active'
@@ -575,6 +593,7 @@ function printHtml(html) {
                                     <div style={{ minWidth: 0 }}>
                                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500, lineHeight: 1.3 }}>{item.description}</div>
                                       {item.source_id && <div style={{ fontSize: '9px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>{item.source_id}</div>}
+                                      {item.stocktake_flag && <div style={{ fontSize: '9px', color: '#b8860b', fontFamily: 'DM Mono, monospace', marginTop: '2px', letterSpacing: '0.05em' }}>⚑ {item.stocktake_flag} <button onClick={() => updateItem(item.id, 'stocktake_flag', null)} title="Clear flag" style={{ background: 'none', border: 'none', color: '#b8860b', cursor: 'pointer', fontSize: '9px', padding: '0 2px' }}>✕</button></div>}
                                       <input
                                         defaultValue={item.notes || ''}
                                         placeholder="add note…"
@@ -930,28 +949,33 @@ function printHtml(html) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>
                       <tr style={{ background: 'rgba(26,16,8,0.06)' }}>
-                        {['Wine', 'We think', 'They have', 'Sold / value'].map((h, i) => (
-                          <th key={h} style={{ padding: '8px 12px', textAlign: i > 0 ? (i === 3 ? 'right' : 'center') : 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>{h}</th>
+                        {['Wine', 'We think', 'They have', 'Not listed', 'Sold / value'].map((h, i) => (
+                          <th key={h} style={{ padding: '8px 12px', textAlign: i > 0 ? (i === 4 ? 'right' : 'center') : 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {activeItems.filter(i => i.status === 'Active').map(item => {
-                        const reported = parseInt(stocktakeCounts[item.id] ?? item.qty_remaining) || 0
-                        const sold = Math.max(0, item.qty_remaining - reported)
+                        const unlisted = stocktakeUnlisted.has(item.id)
+                        const reported = unlisted ? item.qty_remaining : (parseInt(stocktakeCounts[item.id] ?? item.qty_remaining) || 0)
+                        const sold = unlisted ? 0 : Math.max(0, item.qty_remaining - reported)
                         const lineVal = sold * parseFloat(item.sale_price || item.dp_price || 0)
                         return (
-                          <tr key={item.id} style={{ borderBottom: '1px solid #ede6d6', background: sold > 0 ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
+                          <tr key={item.id} style={{ borderBottom: '1px solid #ede6d6', background: unlisted ? 'rgba(212,173,69,0.10)' : sold > 0 ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
                             <td style={{ padding: '10px 12px' }}>
                               <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', fontWeight: 500 }}>{item.description}</div>
                               <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>{item.vintage}{(item.sale_price || item.dp_price) ? ` · ${fmt(item.sale_price || item.dp_price)}/btl` : ''}</div>
+                              {item.stocktake_flag && <div style={{ fontSize: '9px', color: '#b8860b', fontFamily: 'DM Mono, monospace', marginTop: '2px', letterSpacing: '0.05em' }}>⚑ {item.stocktake_flag}</div>}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: 'DM Mono, monospace', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>{item.qty_remaining}</td>
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              <input type="number" min="0" max={item.qty_remaining} value={stocktakeCounts[item.id] ?? item.qty_remaining} onChange={e => setStocktakeCounts(prev => ({ ...prev, [item.id]: parseInt(e.target.value) || 0 }))} onFocus={e => e.target.select()} style={{ width: '60px', border: '2px solid rgba(107,30,46,0.25)', background: 'rgba(107,30,46,0.03)', padding: '5px 8px', fontFamily: 'DM Mono, monospace', fontSize: '15px', fontWeight: 700, textAlign: 'center', outline: 'none', color: 'var(--wine)' }} />
+                              <input type="number" min="0" max={item.qty_remaining} disabled={unlisted} value={unlisted ? '' : (stocktakeCounts[item.id] ?? item.qty_remaining)} placeholder={unlisted ? '—' : ''} onChange={e => setStocktakeCounts(prev => ({ ...prev, [item.id]: parseInt(e.target.value) || 0 }))} onFocus={e => e.target.select()} style={{ width: '60px', border: '2px solid rgba(107,30,46,0.25)', background: unlisted ? 'rgba(0,0,0,0.04)' : 'rgba(107,30,46,0.03)', padding: '5px 8px', fontFamily: 'DM Mono, monospace', fontSize: '15px', fontWeight: 700, textAlign: 'center', outline: 'none', color: 'var(--wine)', opacity: unlisted ? 0.4 : 1 }} />
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              <input type="checkbox" checked={unlisted} onChange={() => setStocktakeUnlisted(prev => { const n = new Set(prev); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n })} title="They did not mention this wine at all" style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#b8860b' }} />
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                              {sold > 0 ? (<div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, color: '#2d6a4f' }}>{sold} sold</div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#2d6a4f' }}>£{lineVal.toFixed(2)}</div></div>) : <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>—</span>}
+                              {unlisted ? (<span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#b8860b', letterSpacing: '0.05em' }}>NOT LISTED · QUERY</span>) : sold > 0 ? (<div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 600, color: '#2d6a4f' }}>{sold} sold</div><div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#2d6a4f' }}>£{lineVal.toFixed(2)}</div></div>) : <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)' }}>—</span>}
                             </td>
                           </tr>
                         )
@@ -964,8 +988,16 @@ function printHtml(html) {
                 const diffs = getStocktakeDiffs()
                 const total = diffs.reduce((s, d) => s + d.lineTotal, 0)
                 const totalSold = diffs.reduce((s, d) => s + d.sold, 0)
-                if (diffs.length === 0) return (<div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.04)', border: '1px solid var(--border)', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: '16px' }}>No changes detected — all quantities match.</div>)
+                const unlistedList = activeItems.filter(i => i.status === 'Active' && stocktakeUnlisted.has(i.id))
+                const unlistedBlock = unlistedList.length > 0 ? (
+                  <div style={{ padding: '12px 16px', background: 'rgba(212,173,69,0.10)', border: '1px solid rgba(212,173,69,0.5)', marginBottom: '12px' }}>
+                    <div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', color: '#b8860b', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '6px' }}>Not on their list — {unlistedList.reduce((s, i) => s + (i.qty_remaining || 0), 0)} bottle{unlistedList.reduce((s, i) => s + (i.qty_remaining || 0), 0) !== 1 ? 's' : ''} to query, not billed</div>
+                    {unlistedList.map(i => (<div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontFamily: 'DM Mono, monospace', marginBottom: '3px' }}><span>{i.description} {i.vintage || ''}</span><span style={{ color: '#b8860b' }}>we think {i.qty_remaining}</span></div>))}
+                  </div>
+                ) : null
+                if (diffs.length === 0) return (<div>{unlistedBlock}<div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.04)', border: '1px solid var(--border)', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: 'var(--muted)', marginBottom: '16px' }}>No changes detected — all quantities match.</div></div>)
                 return (
+                  <div>{unlistedBlock}
                   <div style={{ padding: '14px 16px', background: 'rgba(45,106,79,0.07)', border: '1px solid rgba(45,106,79,0.3)', marginBottom: '16px' }}>
                     <div style={{ fontSize: '10px', fontFamily: 'DM Mono, monospace', color: '#2d6a4f', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '8px' }}>Reconciliation — {stocktakePeriod || '(enter period above)'}</div>
                     {diffs.map(d => (<div key={d.item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px', fontSize: '12px', fontFamily: 'DM Mono, monospace' }}><span style={{ color: 'var(--ink)' }}>{d.item.description} {d.item.vintage || ''}</span><span style={{ color: '#2d6a4f', fontWeight: 600 }}>{d.sold} sold · £{d.lineTotal.toFixed(2)}</span></div>))}
@@ -974,11 +1006,12 @@ function printHtml(html) {
                       <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '16px', fontWeight: 700, color: '#2d6a4f' }}>£{total.toFixed(2)}</span>
                     </div>
                   </div>
+                  </div>
                 )
               })()}
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button onClick={() => setShowStocktake(false)} style={{ background: 'none', border: '1px solid var(--border)', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>
-                <button onClick={confirmStocktake} disabled={stocktakeSaving || getStocktakeDiffs().length === 0} style={{ background: getStocktakeDiffs().length > 0 ? 'var(--wine)' : '#ccc', color: 'var(--white)', border: 'none', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: getStocktakeDiffs().length > 0 ? 'pointer' : 'not-allowed' }}>
+                <button onClick={confirmStocktake} disabled={stocktakeSaving || (getStocktakeDiffs().length === 0 && stocktakeUnlisted.size === 0)} style={{ background: (getStocktakeDiffs().length > 0 || stocktakeUnlisted.size > 0) ? 'var(--wine)' : '#ccc', color: 'var(--white)', border: 'none', padding: '10px 20px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: (getStocktakeDiffs().length > 0 || stocktakeUnlisted.size > 0) ? 'pointer' : 'not-allowed' }}>
                   {stocktakeSaving ? 'Saving…' : '✓ Confirm Stocktake'}
                 </button>
               </div>
