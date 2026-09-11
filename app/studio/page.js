@@ -235,6 +235,42 @@ export default function StudioPage() {
     if (!error) { setStudioWines(prev => prev.map(s => s.wine_id === wineId ? { ...s, wines: { ...s.wines, ws_lowest_per_bottle: wsValue, ws_price_date: today } } : s)); flashSave() }
   }
 
+  function exportCSV() {
+    const today = new Date().toISOString().split('T')[0]
+    const esc = v => { const t = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t }
+    const header = ['Wine', 'Vintage', 'Colour', 'Region', 'Country', 'Size', 'Qty on system', 'Qty counted', 'Status', 'DP', 'Sale price', 'WS DP', 'On Bottles on Hand', 'Last checked', 'Date added', 'Studio notes', 'Studio ID']
+    const rows = filtered.map(s => {
+      const ws = s.wines?.ws_lowest_per_bottle ? parseFloat(s.wines.ws_lowest_per_bottle) : null
+      const dp = s.dp_price ? parseFloat(s.dp_price).toFixed(2) : s.wines?.purchase_price_per_bottle ? ((parseFloat(s.wines.purchase_price_per_bottle) + dutyForSize(s.bottle_size)) * 1.2).toFixed(2) : ''
+      return [
+        s.wines?.description || s.unlinked_description || '',
+        s.wines?.vintage || s.unlinked_vintage || '',
+        s.wines?.colour || s.colour || '',
+        s.wines?.region || '',
+        s.wines?.country || '',
+        formatBottleSize(s.bottle_size),
+        s.quantity ?? 0,
+        '',
+        s.status || '',
+        dp,
+        s.sale_price ? parseFloat(s.sale_price).toFixed(2) : '',
+        ws ? ((ws + dutyForSize(s.bottle_size)) * 1.2).toFixed(2) : '',
+        s.include_in_local ? 'Yes' : '',
+        s.checked_on || '',
+        s.date_moved || '',
+        s.notes || '',
+        s.id,
+      ].map(esc).join(',')
+    })
+    const csv = '\ufeff' + [header.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `studio-inventory-${today}.csv`; a.style.display = 'none'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   function flashSave() { setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1500) }
 
   async function deleteStudio(id) {
@@ -531,6 +567,7 @@ export default function StudioPage() {
             <button onClick={openScanModal} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'9px 16px', fontFamily:'DM Mono, monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>📷 Scan Bottle</button>
             <button onClick={openAddModal} style={{ background:'none', border:'1px solid var(--ink)', color:'var(--ink)', padding:'9px 16px', fontFamily:'DM Mono, monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>✎ Add Wine</button>
             <button onClick={() => router.push('/boxes')} style={{ background:'none', border:'1px solid #2d6a4f', color:'#2d6a4f', padding:'9px 16px', fontFamily:'DM Mono, monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>📦 Box Builder</button>
+            <button onClick={exportCSV} title={`Export the ${filtered.length} rows currently shown as CSV`} style={{ background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'9px 16px', fontFamily:'DM Mono, monospace', fontSize:'11px', letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer' }}>⇩ Export CSV ({filtered.length})</button>
           </div>
         </div>
 
