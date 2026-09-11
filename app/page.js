@@ -31,7 +31,7 @@ export default function LoginPage() {
     sessionStorage.setItem('role', role)
     if (role === 'buyer') sessionStorage.setItem('pin', pin)
 
-    if (role === 'admin') router.push('/admin')
+       if (role === 'admin') router.push('/studio')
     else if (role === 'buyer') router.push('/buyer')
     else if (role === 'local') router.push('/local')
 
