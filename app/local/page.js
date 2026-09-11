@@ -44,6 +44,8 @@ export default function LocalPage() {
   const [wishlist, setWishlist] = useState({})
   const [search, setSearch] = useState('')
   const [filterColour, setFilterColour] = useState('')
+  const [filterCountry, setFilterCountry] = useState('')
+  const [filterRegion, setFilterRegion] = useState('')
   const [sortCol, setSortCol] = useState('colour')
   const [sortDir, setSortDir] = useState('asc')
   const [tooltip, setTooltip] = useState(null)
@@ -58,7 +60,7 @@ export default function LocalPage() {
 
   // Fetch count for login screen
   useEffect(() => {
-    supabase.from('studio').select('id', { count: 'exact', head: true }).eq('include_in_local', true).eq('status', 'Available')
+    supabase.from('studio').select('id', { count: 'exact', head: true }).eq('include_in_local', true).eq('status', 'Available').gt('quantity', 0)
       .then(({ count }) => setAvailableCount(count || 0))
   }, [])
 
@@ -79,7 +81,7 @@ export default function LocalPage() {
     setLoading(true); setStage('browse')
     const { data } = await supabase.from('studio')
       .select('*, wines(id, description, vintage, colour, region, country, buyer_note, producer_note, women_note, sommelier_note, ws_lowest_per_bottle, ws_price_date, bottle_volume)')
-      .eq('include_in_local', true).eq('status', 'Available').order('created_at', { ascending: false })
+      .eq('include_in_local', true).eq('status', 'Available').gt('quantity', 0).order('created_at', { ascending: false })
     setWines(data || []); setLoading(false)
   }
 
@@ -138,6 +140,8 @@ export default function LocalPage() {
   const filtered = wines
     .filter(s => {
       if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
+      if (filterCountry && getWineCountry(s) !== filterCountry) return false
+      if (filterRegion && getWineRegion(s) !== filterRegion) return false
       if (search) { const q = search.toLowerCase(); return [getWineName(s), getWineVintage(s), getWineRegion(s), getWineCountry(s)].join(' ').toLowerCase().includes(q) }
       return true
     })
@@ -169,8 +173,16 @@ export default function LocalPage() {
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
 
+  const countryOptions = [...new Set(wines.map(getWineCountry).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const regionOptions = [...new Set(wines.filter(s => !filterCountry || getWineCountry(s) === filterCountry).map(getWineRegion).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const anyFilter = !!(search || filterColour || filterCountry || filterRegion)
+  function clearFilters() { setSearch(''); setFilterColour(''); setFilterCountry(''); setFilterRegion('') }
+  function onCountryChange(v) { setFilterCountry(v); setFilterRegion('') }
+
   const wishlistCount = Object.keys(wishlist).length
   const GRID_DESKTOP = '3fr 80px 80px 52px 48px 72px 56px 100px 40px'
+  const SELECT_DESKTOP = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(253,250,245,0.7)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', cursor: 'pointer', borderRadius: '2px', maxWidth: '150px' }
+  const SELECT_MOBILE = { border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', flex: 1, minWidth: 0 }
 
   function colHeader(field, label, align = 'left') {
     const active = sortCol === field
@@ -303,10 +315,19 @@ export default function LocalPage() {
           {!isMobile && (
             <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: '200px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', borderRadius: '2px' }} />
-              <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(253,250,245,0.7)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', cursor: 'pointer', borderRadius: '2px' }}>
+              <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={SELECT_DESKTOP}>
                 <option value="">All colours</option>
                 <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
               </select>
+              <select value={filterCountry} onChange={e => onCountryChange(e.target.value)} style={SELECT_DESKTOP}>
+                <option value="">All countries</option>
+                {countryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={SELECT_DESKTOP}>
+                <option value="">All regions</option>
+                {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.6)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap' }}>Clear</button>}
             </div>
           )}
         </div>
@@ -318,10 +339,21 @@ export default function LocalPage() {
         {isMobile && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, region, country…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', boxSizing: 'border-box' }} />
-            <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', width: '100%' }}>
-              <option value="">All Colours</option>
-              <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
-            </select>
+            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+              <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={SELECT_MOBILE}>
+                <option value="">All Colours</option>
+                <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
+              </select>
+              <select value={filterCountry} onChange={e => onCountryChange(e.target.value)} style={SELECT_MOBILE}>
+                <option value="">All Countries</option>
+                {countryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={SELECT_MOBILE}>
+                <option value="">All Regions</option>
+                {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em' }}>✕ clear filters</button>}
           </div>
         )}
 
@@ -352,7 +384,7 @@ export default function LocalPage() {
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: 'var(--muted)' }}>Loading…</div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: 'var(--muted)' }}>No wines available right now.</div>
+          <div style={{ textAlign: 'center', padding: '60px', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: 'var(--muted)' }}>{anyFilter ? 'No wines match those filters.' : 'No wines available right now.'}</div>
         ) : isMobile ? (
 
           // ── MOBILE ────────────────────────────────────────────────────────
