@@ -194,11 +194,11 @@ export default function LocalPage() {
   function onCountryChange(v) { setFilterCountry(v); setFilterRegion('') }
 
   const wishlistCount = Object.keys(wishlist).length
+  const SERIF = 'Cormorant Garamond, serif'
   const GRID_DESKTOP = '3fr 120px 90px 70px 60px 48px 100px 56px'
   const GOLD = '#b8934a'
   const FIELD = { border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--ink)', padding: '9px 12px', fontFamily: SERIF, fontSize: '15px', outline: 'none', borderRadius: '2px', cursor: 'pointer', minWidth: '0' }
   const FIELD_LABEL = { fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: '5px' }
-  const SERIF = 'Cormorant Garamond, serif'
   const INFO = { fontFamily: SERIF, fontSize: '15px', lineHeight: 1.35, color: 'var(--muted)' }
   const INFO_INK = { ...INFO, color: 'var(--ink)' }
   const SELECT_MOBILE = { border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: SERIF, fontSize: '16px', outline: 'none', flex: 1, minWidth: 0, borderRadius: '2px' }
