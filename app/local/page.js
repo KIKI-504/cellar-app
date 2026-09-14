@@ -43,6 +43,7 @@ export default function LocalPage() {
   const [filterCountry, setFilterCountry] = useState('')
   const [filterRegion, setFilterRegion] = useState('')
   const [filterVintage, setFilterVintage] = useState('')
+  const [openNotes, setOpenNotes] = useState({})
   const [sortCol, setSortCol] = useState('colour')
   const [sortDir, setSortDir] = useState('asc')
   const [tooltip, setTooltip] = useState(null)
@@ -195,11 +196,11 @@ export default function LocalPage() {
 
   const wishlistCount = Object.keys(wishlist).length
   const SERIF = 'Cormorant Garamond, serif'
-  const GRID_DESKTOP = '3fr 120px 90px 70px 60px 48px 100px 56px'
+  const GRID_DESKTOP = '3fr 120px 90px 70px 60px 48px 100px 48px'
   const GOLD = '#b8934a'
-  const FIELD = { border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--ink)', padding: '9px 12px', fontFamily: SERIF, fontSize: '15px', outline: 'none', borderRadius: '2px', cursor: 'pointer', minWidth: '0' }
+  const FIELD = { border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--ink)', padding: '7px 10px', fontFamily: SERIF, fontSize: '15px', outline: 'none', borderRadius: '2px', cursor: 'pointer', minWidth: '0' }
   const FIELD_LABEL = { fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: '5px' }
-  const INFO = { fontFamily: SERIF, fontSize: '15px', lineHeight: 1.35, color: 'var(--muted)' }
+  const INFO = { fontFamily: SERIF, fontSize: '16px', lineHeight: 1.35, color: 'var(--muted)' }
   const INFO_INK = { ...INFO, color: 'var(--ink)' }
   const SELECT_MOBILE = { border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: SERIF, fontSize: '16px', outline: 'none', flex: 1, minWidth: 0, borderRadius: '2px' }
 
@@ -307,57 +308,43 @@ export default function LocalPage() {
       </div>
 
       {/* Greeting */}
-      <div style={{ padding: isMobile ? '22px 16px 14px' : '32px 28px 22px' }}>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Private buyer access</div>
-        <div style={{ fontFamily: SERIF, fontSize: isMobile ? '34px' : '46px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1, letterSpacing: '-0.01em' }}>Cheers, {displayName}.</div>
-        <div style={{ fontFamily: SERIF, fontSize: isMobile ? '16px' : '19px', fontStyle: 'italic', color: 'var(--muted)', marginTop: '8px' }}>
+      <div style={{ padding: isMobile ? '16px 16px 10px' : '18px 28px 10px', display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap' }}>
+        <div style={{ fontFamily: SERIF, fontSize: isMobile ? '26px' : '30px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1, letterSpacing: '-0.01em' }}>Cheers, {displayName}.</div>
+        <div style={{ fontFamily: SERIF, fontSize: isMobile ? '15px' : '16px', fontStyle: 'italic', color: 'var(--muted)' }}>
           {buyer?.editorial || 'Same day collection or delivery. Prices include duty, VAT and delivery.'}
         </div>
       </div>
 
       {/* Desktop filters */}
       {!isMobile && (
-        <div style={{ margin: '0 28px 6px', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '3px', padding: '14px 16px', display: 'flex', gap: '14px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 260px' }}>
-            <div style={FIELD_LABEL}>Search</div>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Wines, producers or regions" style={{ ...FIELD, width: '100%', boxSizing: 'border-box', cursor: 'text' }} />
-          </div>
-          <div>
-            <div style={FIELD_LABEL}>Colour</div>
-            <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={FIELD}>
-              <option value="">All colours</option>
-              <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
-            </select>
-          </div>
-          <div>
-            <div style={FIELD_LABEL}>Country</div>
-            <select value={filterCountry} onChange={e => onCountryChange(e.target.value)} style={FIELD}>
-              <option value="">All countries</option>
-              {countryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={FIELD_LABEL}>Region</div>
-            <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={FIELD}>
-              <option value="">All regions</option>
-              {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={FIELD_LABEL}>Vintage</div>
-            <select value={filterVintage} onChange={e => setFilterVintage(e.target.value)} style={FIELD}>
-              <option value="">All vintages</option>
-              {vintageOptions.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={FIELD_LABEL}>Sort by</div>
+        <div style={{ margin: '0 28px 10px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, producers or regions" style={{ ...FIELD, flex: '1 1 260px', cursor: 'text' }} />
+          <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={FIELD}>
+            <option value="">All colours</option>
+            <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
+          </select>
+          <select value={filterCountry} onChange={e => onCountryChange(e.target.value)} style={FIELD}>
+            <option value="">All countries</option>
+            {countryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={FIELD}>
+            <option value="">All regions</option>
+            {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select value={filterVintage} onChange={e => setFilterVintage(e.target.value)} style={FIELD}>
+            <option value="">All vintages</option>
+            {vintageOptions.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+          {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: '6px 4px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Clear</button>}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ ...INFO, whiteSpace: 'nowrap' }}>{filtered.length} wine{filtered.length !== 1 ? 's' : ''}</span>
+            <span style={{ width: '1px', height: '18px', background: 'var(--border)' }}></span>
+            <span style={{ ...INFO, whiteSpace: 'nowrap' }}>Sort by</span>
             <select value={`${sortCol}:${sortDir}`} onChange={e => onSortSelect(e.target.value)} style={FIELD}>
               {SORT_SELECT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               {!SORT_SELECT.some(([v]) => v === `${sortCol}:${sortDir}`) && <option value={`${sortCol}:${sortDir}`}>Custom</option>}
             </select>
           </div>
-          {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: '9px 4px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Clear</button>}
         </div>
       )}
 
@@ -409,9 +396,11 @@ export default function LocalPage() {
           </div>
         )}
 
-        <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.04em', padding: isMobile ? '0' : '10px 28px 0' }}>
-          {filtered.length} wine{filtered.length !== 1 ? 's' : ''}{!isMobile && <span style={{ opacity: 0.6 }}>  |  click a column heading to sort</span>}
-        </div>
+        {isMobile && (
+          <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.04em' }}>
+            {filtered.length} wine{filtered.length !== 1 ? 's' : ''}
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: 'var(--muted)' }}>Loading…</div>
@@ -434,7 +423,7 @@ export default function LocalPage() {
               const region = getWineRegion(s)
               const country = getWineCountry(s)
               const metaParts = [region, country, getWineVintage(s), sizeLabel].filter(Boolean)
-              const colourTag = colour ? `${colour} wine`.replace('Sparkling wine', 'Sparkling').replace('Sweet wine', 'Sweet') : 'Wine'
+              const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : colour?.toLowerCase().includes('spark') ? '#a8c4d4' : '#aaa'
               const nameParts = splitName(s)
               const hasNote = !!(buyerNote || producerNote || sommelierNote)
               const noteVisible = hasNote && (showAllNotes || expandedNotes.has(s.id))
@@ -445,12 +434,12 @@ export default function LocalPage() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1, minWidth: 0 }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
-                          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: GOLD, background: 'rgba(184,147,74,0.10)', padding: '3px 7px', borderRadius: '2px' }}>{colourTag}</span>
-                          {womenNote && (<span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }} style={{ fontFamily: SERIF, fontSize: '16px', cursor: 'pointer', color: '#9b3a4a', lineHeight: 1 }}>♀</span>)}
+                        <div style={{ fontFamily: SERIF, fontSize: '19px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: 600 }}>
+                          <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, marginRight: '8px', verticalAlign: 'middle', position: 'relative', top: '-2px' }}></span>
+                          {womenNote && (<span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }} style={{ cursor: 'pointer', color: '#9b3a4a', marginRight: '6px', fontWeight: 400 }}>♀</span>)}
+                          {nameParts.wine}{isMag ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', fontWeight: 700, marginLeft: '6px', letterSpacing: '0.06em' }}>MAG</span> : null}
                         </div>
-                        <div style={{ fontFamily: SERIF, fontSize: '19px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: 600 }}>{nameParts.wine}{isMag ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', fontWeight: 700, marginLeft: '6px', letterSpacing: '0.06em' }}>MAG</span> : null}</div>
-                        {nameParts.producer && <div style={{ ...INFO_INK, fontSize: '16px' }}>{nameParts.producer}</div>}
+                        {nameParts.producer && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', paddingLeft: '15px', marginTop: '3px' }}>{nameParts.producer}</div>}
                       </div>
                     </div>
                     <button onClick={() => toggleWishlist(s.id, 1)} aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'} style={{ background: inWishlist ? 'var(--wine)' : GOLD, border: 'none', color: 'var(--white)', borderRadius: '50%', fontSize: '26px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{inWishlist ? '−' : '+'}</button>
@@ -498,8 +487,8 @@ export default function LocalPage() {
         ) : (
 
           // ── DESKTOP ───────────────────────────────────────────────────────
-          <div style={{ margin: '0 28px', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--cream)', padding: '11px 20px', position: 'sticky', top: '56px', zIndex: 50, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ margin: '0 28px 90px', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '3px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--cream)', padding: '8px 16px', position: 'sticky', top: '56px', zIndex: 50, borderBottom: '1px solid var(--border)' }}>
               {colHeader('name', 'Wine')}
               {colHeader('region', 'Region')}
               {colHeader('country', 'Country')}
@@ -521,26 +510,31 @@ export default function LocalPage() {
               const sommelierNote = getSommelierNote(s)
               const region = getWineRegion(s)
               const country = getWineCountry(s)
-              const colourTag = colour ? `${colour} wine`.replace('Sparkling wine', 'Sparkling').replace('Sweet wine', 'Sweet') : 'Wine'
+              const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : colour?.toLowerCase().includes('spark') ? '#a8c4d4' : '#aaa'
               const nameParts = splitName(s)
+              const isOpen = !!openNotes[s.id]
               return (
                 <div key={s.id} style={{ background: 'var(--white)', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '18px 20px', alignItems: 'baseline', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '11px 16px 12px', alignItems: 'baseline', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
                     {/* Wine name + notes */}
-                    <div style={{ paddingRight: '28px', borderRight: '1px solid var(--border)', marginRight: '20px' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: GOLD, background: 'rgba(184,147,74,0.10)', padding: '3px 7px', borderRadius: '2px' }}>{colourTag}</span>
+                    <div style={{ paddingRight: '24px' }}>
+                      <div style={{ fontFamily: SERIF, fontSize: '18px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: 600 }}>
+                        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, marginRight: '8px', verticalAlign: 'middle', position: 'relative', top: '-2px' }}></span>
                         {womenNote && (
                           <span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }}
-                            style={{ cursor: 'pointer', color: '#9b3a4a', fontFamily: SERIF, fontSize: '15px', lineHeight: 1 }} title="Women in wine">♀</span>
+                            style={{ cursor: 'pointer', color: '#9b3a4a', marginRight: '6px', fontWeight: 400 }} title="Women in wine">♀</span>
                         )}
-                      </div>
-                      <div style={{ fontFamily: SERIF, fontSize: '19px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: 600 }}>
                         {nameParts.wine}{isMag ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', fontWeight: 700, marginLeft: '6px', letterSpacing: '0.06em', verticalAlign: 'middle' }}>MAG</span> : null}
                       </div>
-                      {nameParts.producer && <div style={{ ...INFO_INK, fontSize: '16px', marginTop: '2px' }}>{nameParts.producer}</div>}
-                      {(sommelierNote || buyerNote) && <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--ink)', lineHeight: 1.5, marginTop: '8px', maxWidth: '68ch' }}><Hook note={sommelierNote} />{buyerNote}</div>}
-                      {producerNote && <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--muted)', lineHeight: 1.5, marginTop: '4px', maxWidth: '68ch' }}>{producerNote}</div>}
+                      {nameParts.producer && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', paddingLeft: '15px', marginTop: '3px' }}>{nameParts.producer}</div>}
+                      {sommelierNote && <div style={{ paddingLeft: '15px', marginTop: '5px' }}><Hook note={sommelierNote} /></div>}
+                      {(buyerNote || producerNote) && (
+                        <div onClick={() => setOpenNotes(prev => ({ ...prev, [s.id]: !prev[s.id] }))} title={isOpen ? 'Show less' : 'Show more'}
+                          style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--ink)', lineHeight: 1.45, paddingLeft: '15px', marginTop: '4px', maxWidth: '72ch', cursor: 'pointer',
+                            display: isOpen ? 'block' : '-webkit-box', WebkitLineClamp: isOpen ? 'unset' : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {buyerNote}{buyerNote && producerNote ? ' ' : ''}{producerNote && <span style={{ color: 'var(--muted)' }}>{producerNote}</span>}
+                        </div>
+                      )}
                     </div>
                     {/* Region */}
                     <div style={{ ...INFO, paddingRight: '8px' }}>{region || '—'}</div>
@@ -569,7 +563,7 @@ export default function LocalPage() {
                     </div>
                     {/* + button */}
                     <div style={{ textAlign: 'right', alignSelf: 'start' }}>
-                      <button onClick={() => toggleWishlist(s.id, 1)} aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'} style={{ background: inWishlist ? 'var(--wine)' : GOLD, border: 'none', color: 'var(--white)', borderRadius: '50%', fontSize: '24px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '40px', height: '40px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{inWishlist ? '−' : '+'}</button>
+                      <button onClick={() => toggleWishlist(s.id, 1)} aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'} style={{ background: inWishlist ? 'var(--wine)' : 'var(--white)', border: inWishlist ? '1.5px solid var(--wine)' : '1.5px solid var(--ink)', color: inWishlist ? 'var(--white)' : 'var(--ink)', borderRadius: '3px', fontSize: '22px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '34px', height: '34px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{inWishlist ? '−' : '+'}</button>
                     </div>
                   </div>
                 </div>
