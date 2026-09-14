@@ -36,6 +36,7 @@ export default function LocalPage() {
   const [buyer, setBuyer] = useState(null) // { name, display_name, editorial }
   const [wines, setWines] = useState([])
   const [availableCount, setAvailableCount] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(null)
   const [loading, setLoading] = useState(false)
   const [wishlist, setWishlist] = useState({})
   const [search, setSearch] = useState('')
@@ -58,8 +59,12 @@ export default function LocalPage() {
 
   // Fetch count for login screen
   useEffect(() => {
-    supabase.from('studio').select('id', { count: 'exact', head: true }).eq('include_in_local', true).eq('status', 'Available').gt('quantity', 0)
-      .then(({ count }) => setAvailableCount(count || 0))
+    supabase.from('studio').select('checked_on, date_moved, created_at', { count: 'exact' }).eq('include_in_local', true).eq('status', 'Available').gt('quantity', 0)
+      .then(({ data, count }) => {
+        setAvailableCount(count || 0)
+        const dates = (data || []).flatMap(r => [r.checked_on, r.date_moved, r.created_at]).filter(Boolean).map(d => new Date(d)).filter(d => !isNaN(d))
+        setLastUpdated(dates.length ? new Date(Math.max(...dates)) : new Date())
+      })
   }, [])
 
   function toggleNoteExpanded(id) {
@@ -235,25 +240,20 @@ export default function LocalPage() {
     await loadWines(typedName.trim())
   }
 
-  const currentMonth = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+  const updatedLabel = (lastUpdated || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
   // ── PIN screen ────────────────────────────────────────────────────────────
   const GATE_WRAP = { minHeight: '100dvh', background: 'var(--cream)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }
-  const GATE_INPUT = { width: '100%', background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '16px', fontFamily: SERIF, fontSize: '20px', outline: 'none', textAlign: 'center', letterSpacing: '0.2em', boxSizing: 'border-box', marginBottom: '10px', borderRadius: '0' }
-  const GATE_BUTTON = { width: '100%', background: 'var(--ink)', color: 'var(--cream)', border: 'none', padding: '16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 500 }
+  const GATE_INPUT = { width: '100%', background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--ink)', padding: '13px', fontFamily: SERIF, fontSize: '17px', outline: 'none', textAlign: 'center', letterSpacing: '0.2em', boxSizing: 'border-box', marginBottom: '10px', borderRadius: '0' }
+  const GATE_BUTTON = { width: '100%', background: 'var(--ink)', color: 'var(--cream)', border: 'none', padding: '13px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 500 }
 
   if (stage === 'pin') return (
     <div style={GATE_WRAP}>
       <div style={{ textAlign: 'center', width: '100%', maxWidth: '360px' }}>
-        <div style={{ fontFamily: SERIF, fontSize: '54px', fontWeight: 400, color: 'var(--ink)', letterSpacing: '-0.01em', lineHeight: 1, marginBottom: '14px' }}>Bottles on Hand</div>
-        <div style={{ fontFamily: SERIF, fontSize: '17px', fontStyle: 'italic', color: 'var(--muted)', marginBottom: '40px' }}>Private buyer access</div>
-
-        {availableCount !== null && (
-          <div style={{ fontFamily: SERIF, fontSize: '19px', color: 'var(--ink)', lineHeight: 1.3, marginBottom: '32px' }}>
-            {availableCount} wine{availableCount !== 1 ? 's' : ''} in the studio right now
-            <div style={{ fontSize: '14px', color: 'var(--muted)', fontStyle: 'italic', marginTop: '2px' }}>updated {currentMonth}</div>
-          </div>
-        )}
+        <div style={{ fontFamily: SERIF, fontSize: '34px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '0.01em', lineHeight: 1, marginBottom: '14px' }}>Bottles on Hand</div>
+        <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--muted)', lineHeight: 1.5, marginBottom: '36px', minHeight: '23px' }}>
+          Private Buyer Access.{availableCount !== null && <> {availableCount} Wine{availableCount !== 1 ? 's' : ''}. Updated {updatedLabel}.</>}
+        </div>
 
         <input
           type="password" value={pinInput}
@@ -272,8 +272,8 @@ export default function LocalPage() {
   if (stage === 'name') return (
     <div style={GATE_WRAP}>
       <div style={{ textAlign: 'center', width: '100%', maxWidth: '360px' }}>
-        <div style={{ fontFamily: SERIF, fontSize: '54px', fontWeight: 400, color: 'var(--ink)', letterSpacing: '-0.01em', lineHeight: 1, marginBottom: '14px' }}>Welcome</div>
-        <div style={{ fontFamily: SERIF, fontSize: '17px', fontStyle: 'italic', color: 'var(--muted)', marginBottom: '40px' }}>What should we call you?</div>
+        <div style={{ fontFamily: SERIF, fontSize: '34px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '0.01em', lineHeight: 1, marginBottom: '14px' }}>Welcome</div>
+        <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--muted)', marginBottom: '36px' }}>What should we call you?</div>
         <input
           type="text" value={typedName}
           onChange={e => setTypedName(e.target.value)}
