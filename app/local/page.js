@@ -42,6 +42,7 @@ export default function LocalPage() {
   const [filterColour, setFilterColour] = useState('')
   const [filterCountry, setFilterCountry] = useState('')
   const [filterRegion, setFilterRegion] = useState('')
+  const [filterVintage, setFilterVintage] = useState('')
   const [sortCol, setSortCol] = useState('colour')
   const [sortDir, setSortDir] = useState('asc')
   const [tooltip, setTooltip] = useState(null)
@@ -87,6 +88,15 @@ export default function LocalPage() {
   function setWishlistQty(id, qty) { setWishlist(prev => ({ ...prev, [id]: qty })) }
 
   function getWineName(s) { return s.wines?.description || s.unlinked_description || 'Unknown wine' }
+  // Split "Wine, Cuvée, Producer, Region" into a wine line and a producer line. Trailing region/country segments are dropped.
+  function splitName(s) {
+    const full = getWineName(s)
+    const region = (getWineRegion(s) || '').toLowerCase(); const country = (getWineCountry(s) || '').toLowerCase()
+    let parts = full.split(',').map(t => t.trim()).filter(Boolean)
+    while (parts.length > 1 && [region, country].includes(parts[parts.length - 1].toLowerCase())) parts.pop()
+    if (parts.length < 2) return { wine: full, producer: '' }
+    return { wine: parts.slice(0, -1).join(', '), producer: parts[parts.length - 1] }
+  }
   function getWineVintage(s) { return s.wines?.vintage || s.unlinked_vintage || '' }
   function getWineRegion(s) { return s.wines?.region || '' }
   function getWineCountry(s) { return s.wines?.country || '' }
@@ -104,7 +114,7 @@ export default function LocalPage() {
 
   function SortArrow({ field }) {
     if (sortCol !== field) return <span style={{ opacity: 0.35, fontSize: '10px', marginLeft: '3px' }}>↕</span>
-    return <span style={{ fontSize: '10px', marginLeft: '3px', color: '#d4ad45' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+    return <span style={{ fontSize: '10px', marginLeft: '3px', color: GOLD }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
   function sendWishlist() {
@@ -138,6 +148,7 @@ export default function LocalPage() {
       if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
       if (filterCountry && getWineCountry(s) !== filterCountry) return false
       if (filterRegion && getWineRegion(s) !== filterRegion) return false
+      if (filterVintage && String(getWineVintage(s)) !== filterVintage) return false
       if (search) { const q = search.toLowerCase(); return [getWineName(s), getWineVintage(s), getWineRegion(s), getWineCountry(s)].join(' ').toLowerCase().includes(q) }
       return true
     })
@@ -170,17 +181,27 @@ export default function LocalPage() {
 
   const countryOptions = [...new Set(wines.map(getWineCountry).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   const regionOptions = [...new Set(wines.filter(s => !filterCountry || getWineCountry(s) === filterCountry).map(getWineRegion).filter(Boolean))].sort((a, b) => a.localeCompare(b))
-  const anyFilter = !!(search || filterColour || filterCountry || filterRegion)
-  function clearFilters() { setSearch(''); setFilterColour(''); setFilterCountry(''); setFilterRegion('') }
+  const vintageOptions = [...new Set(wines.map(getWineVintage).filter(Boolean).map(String))].sort((a, b) => b.localeCompare(a))
+  const anyFilter = !!(search || filterColour || filterCountry || filterRegion || filterVintage)
+  function clearFilters() { setSearch(''); setFilterColour(''); setFilterCountry(''); setFilterRegion(''); setFilterVintage('') }
+  const SORT_SELECT = [
+    ['colour:asc', 'Colour'], ['name:asc', 'Name (A to Z)'], ['name:desc', 'Name (Z to A)'],
+    ['price:asc', 'Price (low to high)'], ['price:desc', 'Price (high to low)'],
+    ['vintage:asc', 'Vintage (oldest first)'], ['vintage:desc', 'Vintage (newest first)'],
+    ['region:asc', 'Region'], ['format:desc', 'Size (largest first)'],
+  ]
+  function onSortSelect(v) { const [c, d] = v.split(':'); setSortCol(c); setSortDir(d) }
   function onCountryChange(v) { setFilterCountry(v); setFilterRegion('') }
 
   const wishlistCount = Object.keys(wishlist).length
-  const GRID_DESKTOP = '3fr 120px 90px 64px 56px 48px 96px 40px'
+  const GRID_DESKTOP = '3fr 120px 90px 70px 60px 48px 100px 56px'
+  const GOLD = '#b8934a'
+  const FIELD = { border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--ink)', padding: '9px 12px', fontFamily: SERIF, fontSize: '15px', outline: 'none', borderRadius: '2px', cursor: 'pointer', minWidth: '0' }
+  const FIELD_LABEL = { fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: '5px' }
   const SERIF = 'Cormorant Garamond, serif'
   const INFO = { fontFamily: SERIF, fontSize: '15px', lineHeight: 1.35, color: 'var(--muted)' }
   const INFO_INK = { ...INFO, color: 'var(--ink)' }
-  const SELECT_DESKTOP = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(253,250,245,0.7)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', cursor: 'pointer', borderRadius: '2px', maxWidth: '150px' }
-  const SELECT_MOBILE = { border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', flex: 1, minWidth: 0 }
+  const SELECT_MOBILE = { border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: SERIF, fontSize: '16px', outline: 'none', flex: 1, minWidth: 0, borderRadius: '2px' }
 
   function colHeader(field, label, align = 'left') {
     const active = sortCol === field
@@ -191,7 +212,7 @@ export default function LocalPage() {
         justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
         fontFamily: 'DM Mono, monospace', fontSize: '11px',
         letterSpacing: '0.1em', textTransform: 'uppercase',
-        color: active ? '#d4ad45' : 'rgba(253,250,245,0.65)',
+        color: active ? 'var(--ink)' : 'var(--muted)',
         fontWeight: active ? 600 : 400, whiteSpace: 'nowrap',
       }}>
         {label}<SortArrow field={field} />
@@ -280,51 +301,72 @@ export default function LocalPage() {
       )}
 
       {/* Nav */}
-      <div style={{ background: 'var(--ink)', padding: '0 20px', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '20px', fontWeight: 300, color: '#d4ad45', letterSpacing: '0.1em' }}>Bottles on Hand</div>
-        <button onClick={() => { setStage('pin'); setPinInput(''); setBuyer(null); setTypedName(''); setWines([]); setWishlist({}) }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '8px 12px' }}>Sign Out</button>
+      <div style={{ background: 'var(--white)', padding: '0 28px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontFamily: SERIF, fontSize: '22px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '0.01em' }}>Bottles on Hand</div>
+        <button onClick={() => { setStage('pin'); setPinInput(''); setBuyer(null); setTypedName(''); setWines([]); setWishlist({}) }} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '8px 12px', borderRadius: '2px' }}>Sign Out</button>
       </div>
 
-      {/* Hero — compact */}
-      <div style={{ background: 'var(--ink)', color: 'var(--white)', padding: isMobile ? '16px 20px 20px' : '20px 28px 22px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth: '900px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '20px' : '24px', fontWeight: 400, color: '#d4ad45', letterSpacing: '0.01em', lineHeight: 1 }}>Cheers, {displayName}.</span>
-              {buyer?.editorial && <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', color: 'rgba(253,250,245,0.6)', fontStyle: 'italic' }}>{buyer.editorial}</span>}
-            </div>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(253,250,245,0.35)', marginTop: '6px', letterSpacing: '0.08em' }}>
-              Same day collection or delivery · + to wishlist · <span style={{ color: 'rgba(201,96,122,0.7)' }}>♀</span> women in wine · Prices include duty, VAT & delivery
-            </div>
-          </div>
-          {/* Search inline in header on desktop */}
-          {!isMobile && (
-            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: '200px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--white)', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none', borderRadius: '2px' }} />
-              <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={SELECT_DESKTOP}>
-                <option value="">All colours</option>
-                <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
-              </select>
-              <select value={filterCountry} onChange={e => onCountryChange(e.target.value)} style={SELECT_DESKTOP}>
-                <option value="">All countries</option>
-                {countryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={SELECT_DESKTOP}>
-                <option value="">All regions</option>
-                {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.6)', padding: '8px 10px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap' }}>Clear</button>}
-            </div>
-          )}
+      {/* Greeting */}
+      <div style={{ padding: isMobile ? '22px 16px 14px' : '32px 28px 22px' }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Private buyer access</div>
+        <div style={{ fontFamily: SERIF, fontSize: isMobile ? '34px' : '46px', fontWeight: 500, color: 'var(--ink)', lineHeight: 1, letterSpacing: '-0.01em' }}>Cheers, {displayName}.</div>
+        <div style={{ fontFamily: SERIF, fontSize: isMobile ? '16px' : '19px', fontStyle: 'italic', color: 'var(--muted)', marginTop: '8px' }}>
+          {buyer?.editorial || 'Same day collection or delivery. Prices include duty, VAT and delivery.'}
         </div>
       </div>
+
+      {/* Desktop filters */}
+      {!isMobile && (
+        <div style={{ margin: '0 28px 6px', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '3px', padding: '14px 16px', display: 'flex', gap: '14px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 260px' }}>
+            <div style={FIELD_LABEL}>Search</div>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Wines, producers or regions" style={{ ...FIELD, width: '100%', boxSizing: 'border-box', cursor: 'text' }} />
+          </div>
+          <div>
+            <div style={FIELD_LABEL}>Colour</div>
+            <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={FIELD}>
+              <option value="">All colours</option>
+              <option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option><option value="Sparkling">Sparkling</option><option value="Sweet">Sweet</option>
+            </select>
+          </div>
+          <div>
+            <div style={FIELD_LABEL}>Country</div>
+            <select value={filterCountry} onChange={e => onCountryChange(e.target.value)} style={FIELD}>
+              <option value="">All countries</option>
+              {countryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={FIELD_LABEL}>Region</div>
+            <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={FIELD}>
+              <option value="">All regions</option>
+              {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={FIELD_LABEL}>Vintage</div>
+            <select value={filterVintage} onChange={e => setFilterVintage(e.target.value)} style={FIELD}>
+              <option value="">All vintages</option>
+              {vintageOptions.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={FIELD_LABEL}>Sort by</div>
+            <select value={`${sortCol}:${sortDir}`} onChange={e => onSortSelect(e.target.value)} style={FIELD}>
+              {SORT_SELECT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              {!SORT_SELECT.some(([v]) => v === `${sortCol}:${sortDir}`) && <option value={`${sortCol}:${sortDir}`}>Custom</option>}
+            </select>
+          </div>
+          {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: '9px 4px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Clear</button>}
+        </div>
+      )}
 
       <div style={{ padding: isMobile ? '14px' : '0' }}>
 
         {/* Mobile search */}
         {isMobile && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search wines, region, country…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: 'DM Mono, monospace', fontSize: '16px', outline: 'none', boxSizing: 'border-box' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Wines, producers or regions" style={{ flex: 1, minWidth: 0, border: '1px solid var(--border)', background: 'var(--white)', padding: '10px 12px', fontFamily: SERIF, fontSize: '16px', outline: 'none', boxSizing: 'border-box', borderRadius: '2px' }} />
             <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
               <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={SELECT_MOBILE}>
                 <option value="">All Colours</option>
@@ -338,6 +380,10 @@ export default function LocalPage() {
                 <option value="">All Regions</option>
                 {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
+              <select value={filterVintage} onChange={e => setFilterVintage(e.target.value)} style={SELECT_MOBILE}>
+                <option value="">All Vintages</option>
+                {vintageOptions.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
             </div>
             {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em' }}>✕ clear filters</button>}
           </div>
@@ -345,12 +391,12 @@ export default function LocalPage() {
 
         {/* Mobile sort pills */}
         {isMobile && (
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '14px', marginLeft: '-16px', marginRight: '-16px', paddingLeft: '16px', paddingRight: '16px' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '14px', marginLeft: '-16px', marginRight: '-16px', paddingLeft: '0', paddingRight: '16px' }}>
             <div style={{ display: 'flex', gap: '6px', width: 'max-content', paddingBottom: '4px' }}>
               {SORT_OPTIONS.map(([col, label]) => {
                 const active = sortCol === col
                 return (
-                  <button key={col} onClick={() => cycleSort(col)} style={{ background: active ? 'var(--ink)' : 'var(--white)', color: active ? '#d4ad45' : 'var(--muted)', border: '1px solid var(--border)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', letterSpacing: '0.06em', whiteSpace: 'nowrap', minHeight: '36px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <button key={col} onClick={() => cycleSort(col)} style={{ background: active ? 'var(--ink)' : 'var(--white)', color: active ? 'var(--cream)' : 'var(--muted)', border: '1px solid var(--border)', padding: '8px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', cursor: 'pointer', letterSpacing: '0.06em', whiteSpace: 'nowrap', minHeight: '36px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                     {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </button>
                 )
@@ -363,8 +409,8 @@ export default function LocalPage() {
           </div>
         )}
 
-        <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.04em', padding: isMobile ? '0' : '10px 16px 0' }}>
-          {filtered.length} wine{filtered.length !== 1 ? 's' : ''}{!isMobile && <span style={{ opacity: 0.6 }}>, click a heading to sort</span>}
+        <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px', fontFamily: 'DM Mono, monospace', letterSpacing: '0.04em', padding: isMobile ? '0' : '10px 28px 0' }}>
+          {filtered.length} wine{filtered.length !== 1 ? 's' : ''}{!isMobile && <span style={{ opacity: 0.6 }}>  |  click a column heading to sort</span>}
         </div>
 
         {loading ? (
@@ -378,7 +424,6 @@ export default function LocalPage() {
             {filtered.map(s => {
               const inWishlist = !!wishlist[s.id]
               const colour = getWineColour(s)
-              const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : colour?.toLowerCase().includes('spark') ? '#a8c4d4' : '#aaa'
               const price = getPrice(s)
               const isMag = isMagnum(s.bottle_size || s.wines?.bottle_volume || '')
               const sizeLabel = isMag ? '150cl' : s.bottle_size === '37.5' ? '37.5cl' : s.bottle_size === '300' ? '300cl' : '75cl'
@@ -389,6 +434,8 @@ export default function LocalPage() {
               const region = getWineRegion(s)
               const country = getWineCountry(s)
               const metaParts = [region, country, getWineVintage(s), sizeLabel].filter(Boolean)
+              const colourTag = colour ? `${colour} wine`.replace('Sparkling wine', 'Sparkling').replace('Sweet wine', 'Sweet') : 'Wine'
+              const nameParts = splitName(s)
               const hasNote = !!(buyerNote || producerNote || sommelierNote)
               const noteVisible = hasNote && (showAllNotes || expandedNotes.has(s.id))
               const noteHinted = hasNote && !showAllNotes && !expandedNotes.has(s.id)
@@ -397,31 +444,36 @@ export default function LocalPage() {
                 <div key={s.id} style={{ background: 'var(--white)', borderLeft: inWishlist ? '4px solid var(--wine)' : '4px solid transparent', padding: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '7px' }}></span>
-                      {womenNote && (<span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }} style={{ fontSize: '16px', cursor: 'pointer', flexShrink: 0, color: '#9b3a4a', lineHeight: 1, marginTop: '4px' }}>♀</span>)}
-                      <span style={{ fontFamily: SERIF, fontSize: '19px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: 500 }}>{getWineName(s)}{isMag ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', fontWeight: 700, marginLeft: '6px', letterSpacing: '0.06em' }}>MAG</span> : null}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
+                          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: GOLD, background: 'rgba(184,147,74,0.10)', padding: '3px 7px', borderRadius: '2px' }}>{colourTag}</span>
+                          {womenNote && (<span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }} style={{ fontFamily: SERIF, fontSize: '16px', cursor: 'pointer', color: '#9b3a4a', lineHeight: 1 }}>♀</span>)}
+                        </div>
+                        <div style={{ fontFamily: SERIF, fontSize: '19px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: 600 }}>{nameParts.wine}{isMag ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', fontWeight: 700, marginLeft: '6px', letterSpacing: '0.06em' }}>MAG</span> : null}</div>
+                        {nameParts.producer && <div style={{ ...INFO_INK, fontSize: '16px' }}>{nameParts.producer}</div>}
+                      </div>
                     </div>
-                    <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: inWishlist ? 'var(--wine)' : 'var(--white)', border: inWishlist ? '2px solid var(--wine)' : '2px solid var(--border)', color: inWishlist ? 'var(--white)' : 'var(--ink)', borderRadius: '4px', fontSize: '26px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '46px', height: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{inWishlist ? '−' : '+'}</button>
+                    <button onClick={() => toggleWishlist(s.id, 1)} aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'} style={{ background: inWishlist ? 'var(--wine)' : GOLD, border: 'none', color: 'var(--white)', borderRadius: '50%', fontSize: '26px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{inWishlist ? '−' : '+'}</button>
                   </div>
 
 
-                  <div style={{ ...INFO, fontSize: '16px', marginBottom: '8px', paddingLeft: '16px' }}>{metaParts.join(', ')}</div>
+                  <div style={{ ...INFO, fontSize: '16px', marginBottom: '8px', paddingLeft: '0' }}>{metaParts.join(', ')}</div>
 
                   {noteVisible && (
-                    <div style={{ paddingLeft: '16px', marginBottom: '10px' }}>
+                    <div style={{ paddingLeft: '0', marginBottom: '10px' }}>
                       {(sommelierNote || buyerNote) && <div style={{ fontFamily: SERIF, fontSize: '16px', color: 'var(--ink)', lineHeight: 1.55, marginBottom: producerNote ? '8px' : 0 }}><Hook note={sommelierNote} />{buyerNote}</div>}
                       {producerNote && <div style={{ fontFamily: SERIF, fontSize: '16px', color: 'var(--muted)', lineHeight: 1.55 }}>{producerNote}</div>}
                       {!showAllNotes && (<button onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }} style={{ marginTop: '6px', background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em' }}>▲ hide</button>)}
                     </div>
                   )}
                   {noteHinted && (
-                    <div style={{ paddingLeft: '16px', marginBottom: '10px' }}>
+                    <div style={{ paddingLeft: '0', marginBottom: '10px' }}>
                       {sommelierNote && <div style={{ marginBottom: '6px' }}><Hook note={sommelierNote} /></div>}
                       <button onClick={e => { e.stopPropagation(); toggleNoteExpanded(s.id) }} style={{ background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em', opacity: 0.7 }}>▼ notes</button>
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px', paddingLeft: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px', paddingLeft: '0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div>
                         <div style={{ fontFamily: SERIF, fontSize: '21px', fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
@@ -446,8 +498,8 @@ export default function LocalPage() {
         ) : (
 
           // ── DESKTOP ───────────────────────────────────────────────────────
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--border)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--ink)', padding: '9px 16px', position: 'sticky', top: '52px', zIndex: 50, borderBottom: '1px solid rgba(212,173,69,0.2)' }}>
+          <div style={{ margin: '0 28px', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, background: 'var(--cream)', padding: '11px 20px', position: 'sticky', top: '56px', zIndex: 50, borderBottom: '1px solid var(--border)' }}>
               {colHeader('name', 'Wine')}
               {colHeader('region', 'Region')}
               {colHeader('country', 'Country')}
@@ -460,7 +512,6 @@ export default function LocalPage() {
             {filtered.map(s => {
               const inWishlist = !!wishlist[s.id]
               const colour = getWineColour(s)
-              const dotColor = colour?.toLowerCase().includes('red') ? '#8b2535' : colour?.toLowerCase().includes('white') ? '#c4a84f' : colour?.toLowerCase().includes('ros') ? '#d4748a' : colour?.toLowerCase().includes('spark') ? '#a8c4d4' : '#aaa'
               const price = getPrice(s)
               const isMag = isMagnum(s.bottle_size || s.wines?.bottle_volume || '')
               const sizeLabel = isMag ? '150cl' : s.bottle_size === '37.5' ? '37.5cl' : s.bottle_size === '300' ? '300cl' : '75cl'
@@ -470,21 +521,26 @@ export default function LocalPage() {
               const sommelierNote = getSommelierNote(s)
               const region = getWineRegion(s)
               const country = getWineCountry(s)
+              const colourTag = colour ? `${colour} wine`.replace('Sparkling wine', 'Sparkling').replace('Sweet wine', 'Sweet') : 'Wine'
+              const nameParts = splitName(s)
               return (
-                <div key={s.id} style={{ background: 'var(--white)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '12px 16px', alignItems: 'baseline', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
+                <div key={s.id} style={{ background: 'var(--white)', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: GRID_DESKTOP, padding: '18px 20px', alignItems: 'baseline', borderLeft: inWishlist ? '3px solid var(--wine)' : '3px solid transparent' }}>
                     {/* Wine name + notes */}
-                    <div style={{ paddingRight: '24px' }}>
-                      <div style={{ fontFamily: SERIF, fontSize: '17px', lineHeight: 1.35, color: 'var(--ink)', fontWeight: 500 }}>
-                        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: dotColor, marginRight: '7px', verticalAlign: 'middle', position: 'relative', top: '-1px' }}></span>
+                    <div style={{ paddingRight: '28px', borderRight: '1px solid var(--border)', marginRight: '20px' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: GOLD, background: 'rgba(184,147,74,0.10)', padding: '3px 7px', borderRadius: '2px' }}>{colourTag}</span>
                         {womenNote && (
                           <span onClick={e => { e.stopPropagation(); setTooltip(prev => prev?.id === s.id ? null : { id: s.id, text: womenNote, x: e.clientX, y: e.clientY }) }}
-                            style={{ cursor: 'pointer', color: '#9b3a4a', marginRight: '5px' }}>♀</span>
+                            style={{ cursor: 'pointer', color: '#9b3a4a', fontFamily: SERIF, fontSize: '15px', lineHeight: 1 }} title="Women in wine">♀</span>
                         )}
-                        {getWineName(s)}{isMag ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', fontWeight: 700, marginLeft: '6px', letterSpacing: '0.06em', verticalAlign: 'middle' }}>MAG</span> : null}
                       </div>
-                      {(sommelierNote || buyerNote) && <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--ink)', lineHeight: 1.5, paddingLeft: '14px', marginTop: '5px', maxWidth: '68ch' }}><Hook note={sommelierNote} />{buyerNote}</div>}
-                      {producerNote && <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--muted)', lineHeight: 1.5, paddingLeft: '14px', marginTop: '4px', maxWidth: '68ch' }}>{producerNote}</div>}
+                      <div style={{ fontFamily: SERIF, fontSize: '19px', lineHeight: 1.25, color: 'var(--ink)', fontWeight: 600 }}>
+                        {nameParts.wine}{isMag ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--wine)', fontWeight: 700, marginLeft: '6px', letterSpacing: '0.06em', verticalAlign: 'middle' }}>MAG</span> : null}
+                      </div>
+                      {nameParts.producer && <div style={{ ...INFO_INK, fontSize: '16px', marginTop: '2px' }}>{nameParts.producer}</div>}
+                      {(sommelierNote || buyerNote) && <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--ink)', lineHeight: 1.5, marginTop: '8px', maxWidth: '68ch' }}><Hook note={sommelierNote} />{buyerNote}</div>}
+                      {producerNote && <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--muted)', lineHeight: 1.5, marginTop: '4px', maxWidth: '68ch' }}>{producerNote}</div>}
                     </div>
                     {/* Region */}
                     <div style={{ ...INFO, paddingRight: '8px' }}>{region || '—'}</div>
@@ -513,7 +569,7 @@ export default function LocalPage() {
                     </div>
                     {/* + button */}
                     <div style={{ textAlign: 'right', alignSelf: 'start' }}>
-                      <button onClick={() => toggleWishlist(s.id, 1)} style={{ background: inWishlist ? 'var(--wine)' : 'var(--white)', border: inWishlist ? '2px solid var(--wine)' : '2px solid var(--border)', color: inWishlist ? 'var(--white)' : 'var(--ink)', borderRadius: '4px', fontSize: '22px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{inWishlist ? '−' : '+'}</button>
+                      <button onClick={() => toggleWishlist(s.id, 1)} aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'} style={{ background: inWishlist ? 'var(--wine)' : GOLD, border: 'none', color: 'var(--white)', borderRadius: '50%', fontSize: '24px', fontWeight: 300, lineHeight: 1, cursor: 'pointer', width: '40px', height: '40px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{inWishlist ? '−' : '+'}</button>
                     </div>
                   </div>
                 </div>
@@ -525,16 +581,16 @@ export default function LocalPage() {
 
       {/* Wishlist bar */}
       {wishlistCount > 0 && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--ink)', padding: '14px 24px', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100, boxShadow: '0 -4px 20px rgba(0,0,0,0.3)' }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--white)', padding: '14px 28px', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100, borderTop: '1px solid var(--border)', boxShadow: '0 -6px 24px rgba(0,0,0,0.08)' }}>
           <div>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', color: 'var(--white)', lineHeight: 1 }}>
+            <div style={{ fontFamily: SERIF, fontSize: '19px', color: 'var(--ink)', lineHeight: 1 }}>
               {wishlistCount} wine{wishlistCount > 1 ? 's' : ''} · {Object.values(wishlist).reduce((a, b) => a + b, 0)} bottle{Object.values(wishlist).reduce((a, b) => a + b, 0) !== 1 ? 's' : ''}
             </div>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'rgba(212,173,69,0.7)', marginTop: '3px', letterSpacing: '0.06em' }}>
+            <div style={{ fontFamily: SERIF, fontSize: '15px', color: 'var(--muted)', marginTop: '3px' }}>
               £{Object.entries(wishlist).reduce((sum, [id, qty]) => { const s = wines.find(w => w.id === id); const p = s ? getPrice(s) : null; return sum + (p ? p * qty : 0) }, 0).toFixed(2)} total
             </div>
           </div>
-          <button onClick={sendWishlist} style={{ background: '#d4ad45', color: '#1a1008', border: 'none', padding: '13px 22px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700, minHeight: '48px' }}>Send Wishlist →</button>
+          <button onClick={sendWishlist} style={{ background: 'var(--ink)', color: 'var(--cream)', border: 'none', padding: '13px 22px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 500, minHeight: '48px' }}>Send wishlist</button>
         </div>
       )}
     </div>
