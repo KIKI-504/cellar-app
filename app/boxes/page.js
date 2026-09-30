@@ -1434,7 +1434,16 @@ export default function BoxPage() {
       {showMultiBottle  && <MultiBottleModal onAddAll={addMultipleToBox} onClose={() => setShowMultiBottle(false)} />}
       {showPullList     && activeBox && <PullListView box={activeBox} items={activeItems} onClose={() => setShowPullList(false)} />}
       {showCombinedPullList && <CombinedPullListModal buyerName={showCombinedPullList.buyerName} boxes={showCombinedPullList.boxes} allItems={showCombinedPullList.allItems} onClose={() => setShowCombinedPullList(null)} />}
-      {showClients      && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} onViewInvoice={async (invId) => { await fetchInvoice(invId); setShowInvoice(true) }} />}
+      {showClients      && <ClientsModal contacts={contacts} onClose={() => setShowClients(false)} onRefresh={fetchContacts} onViewInvoice={async (invId) => {
+        // The invoice modal needs an active box. From the client history there is none, so load the first box on this invoice.
+        const { data: junction } = await supabase.from('invoice_boxes').select('box_id').eq('invoice_id', invId).limit(1).maybeSingle()
+        let box = junction ? boxes.find(b => b.id === junction.box_id) : null
+        if (!box && junction) { const { data } = await supabase.from('boxes').select('*').eq('id', junction.box_id).maybeSingle(); box = data || null }
+        if (!box) { showStatus('error', 'Could not find the box for this invoice'); return }
+        setActiveBox(box)
+        await fetchInvoice(invId)
+        setShowInvoice(true)
+      }} />}
       {showCreateInvoice && activeBox && <CreateInvoiceModal box={activeBox} allBoxes={boxes} onConfirm={createInvoice} onClose={() => setShowCreateInvoice(false)} />}
       {showInvoice      && activeBox && activeInvoice && <InvoiceModal box={activeBox} items={activeItems} invoice={activeInvoice} onClose={() => setShowInvoice(false)} onMarkPaid={markInvoicePaid} onRefresh={async () => { await fetchBoxesAndInvoices(); await fetchInvoice(activeInvoice.id) }} />}
       {priceCheckDiffs && activeBox && <PriceCheckModal diffs={priceCheckDiffs} boxName={activeBox.name} onConfirm={pricesToUpdate => doConfirmBox(pricesToUpdate)} onCancel={() => setPriceCheckDiffs(null)} />}

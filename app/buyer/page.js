@@ -158,13 +158,21 @@ function printPriceList(wineList, displayName) {
 
 // ─── Header (defined OUTSIDE BuyerPage) ─────────────────────────────────────
 
-function Header({ displayName, wineCount, onPrint, isAdmin, adminTab, setAdminTab, setPreviewBuyer, setPreviewPin, setPreviewError, isMobile }) {
+function Header({ displayName, wineCount, onPrint, isAdmin, adminTab, setAdminTab, setPreviewBuyer, setPreviewPin, setPreviewError, isMobile, router }) {
   const dashIdx = (displayName || '').lastIndexOf(' - ')
   const titleMain = dashIdx > -1 ? displayName.slice(0, dashIdx) : displayName
   const titleDate = dashIdx > -1 ? displayName.slice(dashIdx + 3) : ''
   return (
     <header style={{ background: C.ink, color: C.white, padding: isMobile ? '20px 16px 24px' : '24px 40px 28px' }}>
       <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        {isAdmin && router && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none', paddingBottom: '2px' }}>
+            {[['Studio','/studio'],['Bonded Storage','/admin'],['Box Builder','/boxes'],['Buyer View','/buyer'],['Bottles On Hand','/local'],['Consignment','/consignment']].map(([label, path]) => (
+              <button key={path} onClick={() => router.push(path)} style={{ background: path === '/buyer' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/buyer' ? C.gold : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 10px', borderRadius: '2px', whiteSpace: 'nowrap', flexShrink: 0 }}>{label}</button>
+            ))}
+            <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ marginLeft: 'auto', background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px', flexShrink: 0 }}>Sign Out</button>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
           <div>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '22px' : '24px', fontWeight: 400, color: C.white, lineHeight: 1 }}>Belle Année</div>
@@ -768,7 +776,7 @@ export default function BuyerPage() {
     })
     return (
       <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: '40px' }}>
-        <Header displayName={displayName} wineCount={previewBuyer ? rawList.length : null} onPrint={() => printPriceList(displayList, displayName)} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
+        <Header router={router} displayName={displayName} wineCount={previewBuyer ? rawList.length : null} onPrint={() => printPriceList(displayList, displayName)} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
         {!previewBuyer ? (
           <div style={{ maxWidth: '480px', margin: '60px auto', padding: '0 24px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', color: C.text, marginBottom: '6px' }}>Preview as buyer</div>
@@ -859,7 +867,7 @@ export default function BuyerPage() {
 
     return (
       <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: '40px' }}>
-        <Header displayName="Master Roster" wineCount={masterWines.length} onPrint={() => printPriceList(masterWines, 'Master Roster')} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
+        <Header router={router} displayName="Master Roster" wineCount={masterWines.length} onPrint={() => printPriceList(masterWines, 'Master Roster')} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
         <div style={{ maxWidth: '1400px', margin: '0 auto', padding: `24px ${SIDE} 0` }}>
           {/* Summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : `repeat(${buyerAccess.length + 1}, 1fr)`, gap: '12px', marginBottom: '24px' }}>
@@ -1063,7 +1071,7 @@ export default function BuyerPage() {
   const selectedCount = Object.keys(selected).length
   return (
     <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: selectedCount > 0 ? (isMobile ? '100px' : '88px') : '48px' }}>
-      <Header displayName={buyerDisplayName} wineCount={wines.length} onPrint={() => printPriceList(filtered, buyerDisplayName)} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
+      <Header router={router} displayName={buyerDisplayName} wineCount={wines.length} onPrint={() => printPriceList(filtered, buyerDisplayName)} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
       <TermsAccordion termsOpen={termsOpen} setTermsOpen={setTermsOpen} isMobile={isMobile} SIDE={SIDE} />
       <FiltersBar wineList={wines} search={search} setSearch={setSearch} filterColour={filterColour} setFilterColour={setFilterColour} filterRegion={filterRegion} setFilterRegion={setFilterRegion} filterWomen={filterWomen} setFilterWomen={setFilterWomen} sortCol={sortCol} setSortCol={setSortCol} setSortDir={setSortDir} filteredCount={filtered.length} isMobile={isMobile} SIDE={SIDE} />
       <div style={{ maxWidth: '1400px', margin: '16px auto', padding: `0 ${SIDE}` }}>
