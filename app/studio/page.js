@@ -87,6 +87,36 @@ function EditableCell({ value, onSave, type = 'text', step, min, placeholder, st
   )
 }
 
+// Controlled note box: local state while focused, syncs from props otherwise; saves on blur.
+// Shows a "Draft" action when empty that asks /api/draft-note to write a first version in house style.
+function DraftableNote({ value, onSave, onDraft, placeholder, rows = 3, style, accent }) {
+  const [local, setLocal] = React.useState(value ?? '')
+  const [focused, setFocused] = React.useState(false)
+  const [busy, setBusy] = React.useState(false)
+  const [err, setErr] = React.useState(null)
+  const ref = React.useRef(null)
+  React.useEffect(() => { if (!focused && !busy) setLocal(value ?? '') }, [value, focused, busy])
+  async function draft() {
+    setBusy(true); setErr(null)
+    try { await onDraft() } catch (e) { setErr(e.message || 'Draft failed') } finally { setBusy(false) }
+  }
+  const empty = !local.trim()
+  return (
+    <div style={{ position: 'relative' }}>
+      <textarea ref={ref} value={local} placeholder={busy ? 'Drafting…' : placeholder} rows={rows} disabled={busy}
+        onChange={e => setLocal(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={e => { setFocused(false); if (e.target.value !== (value ?? '')) onSave(e.target.value) }}
+        style={{ ...style, opacity: busy ? 0.55 : 1 }} />
+      {empty && !busy && onDraft && (
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={draft} title="Write a first draft in house style"
+          style={{ position: 'absolute', right: '8px', bottom: '10px', background: 'var(--white)', border: '1px solid ' + (accent || 'var(--border)'), color: accent || 'var(--muted)', padding: '3px 8px', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>✦ Draft</button>
+      )}
+      {err && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#b94040', marginTop: '4px' }}>{err}</div>}
+    </div>
+  )
+}
+
 function printLabel(s) {
   const name = s.wines?.description || s.unlinked_description || ''
   const vintage = s.wines?.vintage || s.unlinked_vintage || ''
@@ -272,6 +302,34 @@ export default function StudioPage() {
   }
 
   function flashSave() { setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1500) }
+
+  const [draftingAll, setDraftingAll] = useState(null) // studio id while "draft all three" runs
+
+  // Ask the API to write the requested fields for this studio row's wine, then save what comes back.
+  async function draftNotes(s, fields) {
+    if (!s.wine_id) throw new Error('Link this wine first')
+    const w = s.wines || {}
+    const existing = { buyer_note: w.buyer_note || '', producer_note: w.producer_note || '', women_note: w.women_note || '' }
+    const wanted = fields.filter(f => !existing[f].trim())
+    if (!wanted.length) return
+    const res = await fetch('/api/draft-note', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wine: { description: w.description, vintage: w.vintage, colour: w.colour || s.colour, region: w.region, country: w.country, bottle_size: s.bottle_size || w.bottle_volume }, fields: wanted, existing }),
+    })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || 'Draft failed')
+    const n = json.notes || {}
+    if (n.buyer_note) await updateWineNote(s.wine_id, n.buyer_note)
+    if (n.producer_note) await updateProducerNote(s.wine_id, n.producer_note)
+    if (n.women_note) await updateWine(s.id, s.wine_id, 'women_note', n.women_note)
+  }
+
+  async function draftAll(s) {
+    setDraftingAll(s.id)
+    try { await draftNotes(s, ['buyer_note', 'producer_note', 'women_note']) }
+    catch (e) { alert(e.message) }
+    finally { setDraftingAll(null) }
+  }
 
   async function deleteStudio(id) {
     if (!confirm('Remove this entry from studio inventory?')) return
@@ -722,18 +780,25 @@ export default function StudioPage() {
                     {isExpanded && (
                       <tr style={{ background: 'var(--cream)' }}>
                         <td colSpan={15} style={{ padding: '16px 20px 16px 36px', borderBottom: '1px solid var(--border)' }}>
+                          {hasWineId && !(buyerNote && s.wines?.producer_note && womenNote) && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                              <button type="button" onClick={() => draftAll(s)} disabled={draftingAll === s.id} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', padding: '4px 10px', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: draftingAll === s.id ? 'wait' : 'pointer' }}>
+                                {draftingAll === s.id ? 'Drafting all three…' : '✦ Draft all empty notes'}
+                              </button>
+                            </div>
+                          )}
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                             <div>
                               <label style={labelStyle}>Wine Note <span style={{ color: '#2d6a4f', fontWeight: 400 }}>vintage-specific · shown on Buyer View, Bottles on Hand, Pull List</span></label>
-                              <textarea defaultValue={buyerNote} placeholder="Tasting notes, vintage character..." onBlur={e => { if (e.target.value !== buyerNote) updateWineNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} />
+                              <DraftableNote value={buyerNote} onSave={v => updateWineNote(s.wine_id, v)} onDraft={hasWineId ? () => draftNotes(s, ['buyer_note']) : null} placeholder="Tasting notes, vintage character..." style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5 }} accent="#2d6a4f" />
                             </div>
                             <div>
                               <label style={labelStyle}>Producer Note <span style={{ color: 'var(--muted)', fontWeight: 400 }}>carries across vintages · shown on Buyer View, Bottles on Hand, Pull List</span></label>
-                              {hasWineId ? (<textarea defaultValue={s.wines?.producer_note || ''} placeholder="Estate background, farming approach..." onBlur={e => { if (e.target.value !== (s.wines?.producer_note || '')) updateProducerNote(s.wine_id, e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'DM Mono, monospace', fontSize: '11px', lineHeight: 1.55 }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
+                              {hasWineId ? (<DraftableNote value={s.wines?.producer_note || ''} onSave={v => updateProducerNote(s.wine_id, v)} onDraft={() => draftNotes(s, ['producer_note'])} placeholder="Estate background, farming approach..." style={{ ...inputStyle, resize: 'vertical', fontFamily: 'DM Mono, monospace', fontSize: '11px', lineHeight: 1.55 }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
                             </div>
                             <div>
                               <label style={{ ...labelStyle, color: '#9b3a4a' }}>♀ Women in Wine <span style={{ color: 'var(--muted)', fontWeight: 400 }}>shown on Buyer View, Bottles on Hand, Pull List</span></label>
-                              {hasWineId ? (<textarea defaultValue={womenNote} placeholder="Women winemaker or producer story..." onBlur={e => { if (e.target.value !== womenNote) updateWine(s.id, s.wine_id, 'women_note', e.target.value) }} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }} />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
+                              {hasWineId ? (<DraftableNote value={womenNote} onSave={v => updateWine(s.id, s.wine_id, 'women_note', v)} onDraft={() => draftNotes(s, ['women_note'])} placeholder="Women winemaker or producer story..." style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', lineHeight: 1.5, borderColor: 'rgba(155,58,74,0.4)', background: 'rgba(155,58,74,0.02)' }} accent="#9b3a4a" />) : (<div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', padding: '8px 0' }}>Not available for unlinked wines</div>)}
                             </div>
                             <div>
                               <label style={{ ...labelStyle, color: '#8b6914' }}>★ Sommelier Hook <span style={{ color: 'var(--muted)', fontWeight: 400 }}>gold badge on Bottles on Hand · consignment delivery note · max 10 words</span></label>
