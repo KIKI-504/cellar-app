@@ -145,6 +145,7 @@ export default function StudioPage() {
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('Available')
   const [filterColour, setFilterColour] = useState('')
+  const [filterSize, setFilterSize] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [search, setSearch] = useState('')
@@ -559,6 +560,7 @@ export default function StudioPage() {
     .filter(s => {
       if (filterStatus && s.status !== filterStatus) return false
       if (filterColour) { const c = (s.wines?.colour || s.colour || '').toLowerCase(); if (!c.includes(filterColour.toLowerCase())) return false }
+      if (filterSize && formatBottleSize(s.bottle_size) !== filterSize) return false
       if (filterDateFrom && s.date_moved < filterDateFrom) return false
       if (filterDateTo && s.date_moved > filterDateTo) return false
       if (search) { const q = search.toLowerCase(); return [s.wines?.description, s.wines?.vintage, s.wines?.region, s.unlinked_description].join(' ').toLowerCase().includes(q) }
@@ -612,7 +614,7 @@ export default function StudioPage() {
             <button key={path} onClick={() => router.push(path)} style={{ background: path==='/studio'?'rgba(107,30,46,0.6)':'none', color: path==='/studio'?'#d4ad45':'rgba(253,250,245,0.5)', border:'none', fontFamily:'DM Mono, monospace', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', cursor:'pointer', padding:'6px 10px', borderRadius:'2px', whiteSpace:'nowrap', flexShrink:0 }}>{label}</button>
           ))}
         </div>
-        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono, monospace', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer', padding:'4px 10px', flexShrink:0 }}>Sign Out</button>
+        <button onClick={async () => { sessionStorage.clear(); await fetch('/api/auth', { method: 'DELETE' }); router.push('/') }} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono, monospace', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer', padding:'4px 10px', flexShrink:0 }}>Sign Out</button>
       </div>
 
       <div style={{ padding: '76px 28px 24px' }}>
@@ -650,6 +652,13 @@ export default function StudioPage() {
             <option value="">All Colours</option>
             {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          <select value={filterSize} onChange={e => setFilterSize(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'8px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }}>
+            <option value="">All Sizes</option>
+            <option value="37.5cl">Half (37.5cl)</option>
+            <option value="75cl">Bottle (75cl)</option>
+            <option value="150cl">Magnum (150cl)</option>
+            <option value="300cl">Double Magnum (300cl)</option>
+          </select>
         </div>
 
         <div style={{ display:'flex', gap:'10px', marginBottom:'16px', flexWrap:'wrap', alignItems:'center' }}>
@@ -666,6 +675,9 @@ export default function StudioPage() {
           </button>
           <button onClick={() => cycleSort('checked')} style={{ background:sortField==='checked'?'var(--wine)':'none', color:sortField==='checked'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
             Unchecked first {sortField === 'checked' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+          </button>
+          <button onClick={() => cycleSort('bottle_size')} style={{ background:sortField==='bottle_size'?'var(--wine)':'none', color:sortField==='bottle_size'?'#fff':'var(--muted)', border:'1px solid var(--border)', padding:'5px 10px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em' }}>
+            Sort by Size {sortField === 'bottle_size' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </button>
           {rosterSelectedCount > 0 && (
             <button onClick={openRosterModal} style={{ background:'var(--wine)', color:'var(--white)', border:'none', padding:'5px 14px', fontFamily:'DM Mono, monospace', fontSize:'10px', cursor:'pointer', letterSpacing:'0.08em', marginLeft:'auto' }}>

@@ -465,7 +465,7 @@ function printHtml(html) {
             <button key={path} onClick={() => router.push(path)} style={{ background: path === '/consignment' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/consignment' ? '#d4ad45' : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 10px', borderRadius: '2px', flexShrink: 0, whiteSpace: 'nowrap' }}>{label}</button>
           ))}
         </div>
-        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '9px', cursor: 'pointer', padding: '4px 8px', flexShrink: 0, marginLeft: '6px' }}>Out</button>
+        <button onClick={async () => { sessionStorage.clear(); await fetch('/api/auth', { method: 'DELETE' }); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '9px', cursor: 'pointer', padding: '4px 8px', flexShrink: 0, marginLeft: '6px' }}>Out</button>
       </div>
 
       {statusMsg && (

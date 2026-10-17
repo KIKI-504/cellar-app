@@ -170,7 +170,7 @@ function Header({ displayName, wineCount, onPrint, isAdmin, adminTab, setAdminTa
             {[['Studio','/studio'],['Bonded Storage','/admin'],['Box Builder','/boxes'],['Buyer View','/buyer'],['Bottles On Hand','/local'],['Consignment','/consignment']].map(([label, path]) => (
               <button key={path} onClick={() => router.push(path)} style={{ background: path === '/buyer' ? 'rgba(107,30,46,0.6)' : 'none', color: path === '/buyer' ? C.gold : 'rgba(253,250,245,0.5)', border: 'none', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', padding: '6px 10px', borderRadius: '2px', whiteSpace: 'nowrap', flexShrink: 0 }}>{label}</button>
             ))}
-            <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ marginLeft: 'auto', background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px', flexShrink: 0 }}>Sign Out</button>
+            <button onClick={async () => { sessionStorage.clear(); await fetch('/api/auth', { method: 'DELETE' }); router.push('/') }} style={{ marginLeft: 'auto', background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px', flexShrink: 0 }}>Sign Out</button>
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>

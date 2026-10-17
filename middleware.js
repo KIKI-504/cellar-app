@@ -1,8 +1,21 @@
 import { NextResponse } from 'next/server'
 
+const HOME_FOR_ROLE = {
+  admin: '/studio',
+  local: '/local',
+  buyer: '/buyer',
+}
+
 export function middleware(request) {
   const { pathname } = request.nextUrl
   const role = request.cookies.get('cellar_role')?.value
+
+  // Already signed in → skip the PIN screen and land on the role's home page.
+  if (pathname === '/') {
+    const home = role && HOME_FOR_ROLE[role]
+    if (home) return NextResponse.redirect(new URL(home, request.url))
+    return NextResponse.next()
+  }
 
   const rules = [
     { prefix: '/admin', allowed: ['admin'] },
@@ -27,6 +40,7 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
+    '/',
     '/admin/:path*',
     '/studio/:path*',
     '/boxes/:path*',

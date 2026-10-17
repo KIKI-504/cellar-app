@@ -1145,7 +1145,7 @@ export default function BoxPage() {
             </button>
           ))}
         </div>
-        <button onClick={() => { sessionStorage.clear(); router.push('/') }} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono,monospace', fontSize:'9px', cursor:'pointer', padding:'4px 8px', flexShrink:0, marginLeft:'6px' }}>Out</button>
+        <button onClick={async () => { sessionStorage.clear(); await fetch('/api/auth', { method: 'DELETE' }); router.push('/') }} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono,monospace', fontSize:'9px', cursor:'pointer', padding:'4px 8px', flexShrink:0, marginLeft:'6px' }}>Out</button>
       </div>
 
       {statusMsg && (
