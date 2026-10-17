@@ -107,7 +107,7 @@ export default function LocalPage() {
   function getWineRegion(s) { return s.wines?.region || '' }
   function getWineCountry(s) { return s.wines?.country || '' }
   function getWineColour(s) { return s.wines?.colour || s.colour || '' }
-  function getWomenNote(s) { return s.wines?.women_note || '' }
+  function getWomenNote(s) { return s.wines?.women_note || s.women_note || '' }
   function getSommelierNote(s) { return s.wines?.sommelier_note || '' }
   function getBuyerNote(s) { return s.wines?.buyer_note || '' }
   function getProducerNote(s) { return s.wines?.producer_note || '' }
@@ -194,7 +194,8 @@ export default function LocalPage() {
     ['colour:asc', 'Colour'], ['name:asc', 'Name (A to Z)'], ['name:desc', 'Name (Z to A)'],
     ['price:asc', 'Price (low to high)'], ['price:desc', 'Price (high to low)'],
     ['vintage:asc', 'Vintage (oldest first)'], ['vintage:desc', 'Vintage (newest first)'],
-    ['region:asc', 'Region'], ['format:desc', 'Size (largest first)'],
+    ['region:asc', 'Region'], ['country:asc', 'Country'], ['format:desc', 'Size (largest first)'],
+    ['quantity:desc', 'Quantity (most first)'],
   ]
   function onSortSelect(v) { const [c, d] = v.split(':'); setSortCol(c); setSortDir(d) }
   function onCountryChange(v) { setFilterCountry(v); setFilterRegion('') }
