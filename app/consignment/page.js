@@ -136,7 +136,6 @@ export default function ConsignmentPage() {
     const p = parseFloat(i.sale_price || i.dp_price || 0)
     return sum + (i.qty_remaining || 0) * p
   }, 0)
-  const staleItems = activeItems.filter(i => i.status === 'Active' && i.qty_remaining === 0)
 
   const invoiceGroups = invoicedSales.reduce((acc, s) => {
     const ref = s.invoice_ref || 'Unknown'
@@ -301,8 +300,11 @@ function printHtml(html) {
   }
 
   async function updateItem(id, field, value) {
-    const { error } = await supabase.from('consignment_items').update({ [field]: value }).eq('id', id)
-    if (!error) setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+    // Availability is derived from quantity: 0 remaining = Sold Out, anything else = Active.
+    const patch = { [field]: value }
+    if (field === 'qty_remaining') patch.status = (parseInt(value) || 0) === 0 ? 'Sold Out' : 'Active'
+    const { error } = await supabase.from('consignment_items').update(patch).eq('id', id)
+    if (!error) setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
   }
 
   async function deleteItem(id) {
@@ -460,6 +462,32 @@ function printHtml(html) {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
+      <style>{`
+        .cs-layout { display: grid; grid-template-columns: 180px 1fr; gap: 20px; align-items: start; }
+        .cs-table th.cs-sticky, .cs-table td.cs-sticky { position: sticky; z-index: 2; background: inherit; }
+        .cs-table th.cs-sticky { background: var(--ink); }
+        .cs-table th.cs-sticky:first-child, .cs-table td.cs-sticky:first-child { width: 44px !important; min-width: 44px; max-width: 44px; box-sizing: border-box; padding-left: 0 !important; padding-right: 0 !important; }
+        .cs-table td.cs-sticky-wine { box-shadow: 4px 0 6px -4px rgba(0,0,0,0.18); }
+        @media (max-width: 760px) {
+          .cs-page { padding: 64px 12px 32px !important; }
+          .cs-layout { display: block; }
+          .cs-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; -webkit-overflow-scrolling: touch; }
+          .cs-list-item { flex: 0 0 auto; margin-bottom: 0 !important; padding: 8px 12px !important; border-left: none !important; border: 1px solid var(--border) !important; }
+          .cs-list-item.is-active { border-color: var(--wine) !important; background: var(--white) !important; }
+          .cs-list-item .cs-prefix { display: none; }
+          .cs-card { padding: 14px 14px !important; }
+          .cs-card-head { display: block !important; }
+          .cs-stats { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 8px !important; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+          .cs-stats > div { text-align: left !important; }
+          .cs-stats > div > div:first-child { font-size: 18px !important; }
+          .cs-contact { word-break: break-word; }
+          .cs-actions > button { flex: 1 1 calc(50% - 8px); text-align: center; }
+          .cs-table-head { flex-direction: column; align-items: flex-start !important; gap: 6px; }
+          .cs-table-hint { display: none; }
+          .cs-table th, .cs-table td { padding: 6px 8px !important; }
+          .cs-table input[type="date"] { font-size: 10px !important; padding: 2px 4px !important; }
+        }
+      `}</style>
       <div style={{ background: 'var(--ink)', color: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: '52px', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 100, boxSizing: 'border-box' }}>
         <button onClick={() => router.push('/studio')} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 300, letterSpacing: '0.1em', color: '#d4ad45', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Cellar</button>
         <div style={{ display: 'flex', gap: '2px', overflowX: 'auto', flexShrink: 1 }}>
@@ -476,7 +504,7 @@ function printHtml(html) {
         </div>
       )}
 
-      <div style={{ padding: '76px 20px 40px' }}>
+      <div className="cs-page" style={{ padding: '76px 20px 40px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Consignment</div>
           <button onClick={() => setShowAddConsignee(true)} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--ink)', padding: '8px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add Restaurant</button>
@@ -485,15 +513,15 @@ function printHtml(html) {
         {consignees.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>No consignment clients yet — add a restaurant above.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '20px', alignItems: 'start' }}>
-            <div>
+          <div className="cs-layout">
+            <div className="cs-list">
               {consignees.map(c => {
                 const owed = sales.filter(s => s.consignee_id === c.id && !s.invoiced).reduce((sum, s) => sum + parseFloat(s.total_value || 0), 0)
                 const isActive = activeConsignee === c.id
                 return (
-                  <div key={c.id} onClick={() => { setActiveConsignee(c.id); setSelectedIds(new Set()) }} style={{ padding: '12px 14px', marginBottom: '6px', background: isActive ? 'var(--white)' : 'transparent', border: isActive ? '1px solid var(--border)' : '1px solid transparent', cursor: 'pointer', borderLeft: isActive ? '3px solid var(--wine)' : '3px solid transparent', borderRadius: '2px' }}>
+                  <div key={c.id} className={`cs-list-item${isActive ? ' is-active' : ''}`} onClick={() => { setActiveConsignee(c.id); setSelectedIds(new Set()) }} style={{ padding: '12px 14px', marginBottom: '6px', background: isActive ? 'var(--white)' : 'transparent', border: isActive ? '1px solid var(--border)' : '1px solid transparent', cursor: 'pointer', borderLeft: isActive ? '3px solid var(--wine)' : '3px solid transparent', borderRadius: '2px' }}>
                     <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', fontWeight: 500, whiteSpace: 'nowrap' }}>{c.name}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>{c.invoice_prefix}</div>
+                    <div className="cs-prefix" style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '2px' }}>{c.invoice_prefix}</div>
                     {owed > 0 && <div style={{ marginTop: '5px', display: 'inline-block', background: 'rgba(192,57,43,0.1)', color: '#c0392b', fontSize: '10px', fontFamily: 'DM Mono, monospace', fontWeight: 600, padding: '2px 7px', borderRadius: '10px' }}>£{owed.toFixed(2)} due</div>}
                   </div>
                 )
@@ -502,14 +530,14 @@ function printHtml(html) {
 
             {activeC && (
               <div style={{ minWidth: 0 }}>
-                <div style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '16px 20px', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-                    <div>
+                <div className="cs-card" style={{ background: 'var(--white)', border: '1px solid var(--border)', padding: '16px 20px', marginBottom: '14px' }}>
+                  <div className="cs-card-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                    <div className="cs-contact">
                       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '22px', fontWeight: 500 }}>{activeC.name}</div>
                       <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '3px', fontFamily: 'DM Mono, monospace' }}>{activeC.contact_name}{activeC.email ? ` · ${activeC.email}` : ''}{activeC.accounts_email ? ` · ${activeC.accounts_email}` : ''}</div>
                       {activeC.address && <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>{activeC.address}</div>}
                     </div>
-                    <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                    <div className="cs-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: '22px', fontWeight: 600, fontFamily: 'DM Mono, monospace', color: 'var(--ink)' }}>{totalHeld}</div>
                         <div style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>bottles held</div>
@@ -526,10 +554,9 @@ function printHtml(html) {
                       )}
                     </div>
                   </div>
-                  {staleItems.length > 0 && (<div style={{ marginTop: '12px', padding: '8px 12px', background: 'rgba(212,173,69,0.1)', border: '1px solid rgba(212,173,69,0.4)', fontSize: '11px', fontFamily: 'DM Mono, monospace', color: '#7a5e10' }}>⚠ {staleItems.length} wine{staleItems.length !== 1 ? 's' : ''} at qty 0 but still Active — update status below.</div>)}
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="cs-actions" style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button onClick={() => setShowAddItem(true)} style={{ background: 'var(--wine)', color: 'var(--white)', border: 'none', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>+ Consign Wine</button>
                   <button onClick={openRecordSales} style={{ background: 'none', border: '1px solid var(--wine)', color: 'var(--wine)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>✎ Record Sales</button>
                   <button onClick={openStocktake} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>📋 Stocktake</button>
@@ -552,10 +579,10 @@ function printHtml(html) {
 
                 {/* ── Wines held table ── */}
                 <div style={{ marginBottom: '28px' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>Wines at {activeC.name}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)' }}>
-                      {activeItems.filter(i => i.status === 'Active').length > 0 && <span>click fields to edit · ☑ check to print</span>}
+                  <div className="cs-table-head" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>Wines at {activeC.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '10px', fontFamily: 'DM Mono, monospace', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                      {activeItems.filter(i => i.status === 'Active').length > 0 && <span className="cs-table-hint">click fields to edit · ☑ check to print</span>}
                       {activeItems.some(i => i.status !== 'Active') && (
                         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                           <input type="checkbox" checked={hideSoldOut} onChange={e => setHideSoldOut(e.target.checked)} style={{ width: '13px', height: '13px', accentColor: 'var(--wine)', cursor: 'pointer' }} />
@@ -568,28 +595,27 @@ function printHtml(html) {
                     {activeItems.length === 0 ? (
                       <div style={{ padding: '28px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No wines consigned yet.</div>
                     ) : (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '780px' }}>
+                      <table className="cs-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '780px' }}>
                         <thead>
                           <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                            <th style={{ padding: '8px 12px', width: '36px' }}>
+                            <th className="cs-sticky" style={{ padding: '8px 12px', width: '36px', left: 0 }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#d4ad45' }} />
                             </th>
                             {['Wine', 'Vintage', 'Size', 'Date delivered', 'Delivered', 'Remaining', 'Sale £/btl', 'Value out', 'Status', ''].map(h => (
-                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: 'var(--white)' }}>{h}</th>
+                              <th key={h} className={h === 'Wine' ? 'cs-sticky cs-sticky-wine' : undefined} style={{ ...(h === 'Wine' ? { left: '44px' } : {}), padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: 'var(--white)' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {activeItems.filter(i => !hideSoldOut || i.status === 'Active').map(item => {
-                            const isStale = item.status === 'Active' && item.qty_remaining === 0
                             const isChecked = selectedIds.has(item.id)
                             const isActive = item.status === 'Active'
                             return (
-                              <tr key={item.id} style={{ borderBottom: '1px solid #ede6d6', opacity: item.status !== 'Active' ? 0.5 : 1, background: isChecked ? 'rgba(107,30,46,0.04)' : isStale ? 'rgba(212,173,69,0.06)' : 'transparent' }}>
-                                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              <tr key={item.id} style={{ borderBottom: '1px solid #ede6d6', opacity: item.status !== 'Active' ? 0.5 : 1, background: isChecked ? '#f8f0ef' : 'var(--white)' }}>
+                                <td className="cs-sticky" style={{ padding: '10px 12px', textAlign: 'center', left: 0 }}>
                                   {isActive && <input type="checkbox" checked={isChecked} onChange={() => toggleSelect(item.id)} style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: 'var(--wine)' }} />}
                                 </td>
-                                <td style={{ padding: '10px 12px', minWidth: '160px' }}>
+                                <td className="cs-sticky cs-sticky-wine" style={{ padding: '10px 12px', minWidth: '160px', maxWidth: '200px', left: '44px' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: colourDot(item.colour), flexShrink: 0 }}></span>
                                     <div style={{ minWidth: 0 }}>
@@ -638,9 +664,9 @@ function printHtml(html) {
                                   {(item.sale_price || item.dp_price) ? fmt((item.qty_remaining || 0) * parseFloat(item.sale_price || item.dp_price)) : '—'}
                                 </td>
                                 <td style={{ padding: '10px 12px' }}>
-                                  <select value={item.status} onChange={e => updateItem(item.id, 'status', e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--cream)', padding: '3px 6px', fontFamily: 'DM Mono, monospace', fontSize: '10px', outline: 'none', color: item.status === 'Active' ? '#2d6a4f' : '#c0392b' }}>
-                                    {['Active', 'Sold Out', 'Returned', 'Corked'].map(s => <option key={s} value={s}>{s}</option>)}
-                                  </select>
+                                  {isActive
+                                    ? <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#2d6a4f' }}>Active</span>
+                                    : <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#c0392b', border: '1px solid rgba(192,57,43,0.35)', padding: '2px 6px', whiteSpace: 'nowrap' }}>Sold out</span>}
                                 </td>
                                 <td style={{ padding: '10px 8px' }}>
                                   <button onClick={() => deleteItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '14px', padding: '2px 4px' }}>✕</button>
