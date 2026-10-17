@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import WineDetailPanel from '../../lib/WineDetailPanel'
 
 const INVOICE_FROM = {
   name: 'Jessica Bride',
@@ -54,6 +55,7 @@ export default function ConsignmentPage() {
   const [showAddItem, setShowAddItem] = useState(false)
   const [showStocktake, setShowStocktake] = useState(false)
   const [hideSoldOut, setHideSoldOut] = useState(true)
+  const [detailWineId, setDetailWineId] = useState(null)
   const [showInvoice, setShowInvoice] = useState(false)
   const [showAddConsignee, setShowAddConsignee] = useState(false)
   const [showRecordSales, setShowRecordSales] = useState(false)
@@ -591,7 +593,7 @@ function printHtml(html) {
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: colourDot(item.colour), flexShrink: 0 }}></span>
                                     <div style={{ minWidth: 0 }}>
-                                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500, lineHeight: 1.3 }}>{item.description}</div>
+                                      <div onClick={() => item.wine_id && setDetailWineId(item.wine_id)} title={item.wine_id ? 'Quick reference' : undefined} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500, lineHeight: 1.3, cursor: item.wine_id ? 'pointer' : 'default' }}>{item.description}</div>
                                       {item.source_id && <div style={{ fontSize: '9px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>{item.source_id}</div>}
                                       {item.stocktake_flag && <div style={{ fontSize: '9px', color: '#b8860b', fontFamily: 'DM Mono, monospace', marginTop: '2px', letterSpacing: '0.05em' }}>⚑ {item.stocktake_flag} <button onClick={() => updateItem(item.id, 'stocktake_flag', null)} title="Clear flag" style={{ background: 'none', border: 'none', color: '#b8860b', cursor: 'pointer', fontSize: '9px', padding: '0 2px' }}>✕</button></div>}
                                       <input
@@ -1138,6 +1140,7 @@ function printHtml(html) {
           </div>
         </div>
       )}
+      {detailWineId && <WineDetailPanel wineId={detailWineId} onClose={() => setDetailWineId(null)} />}
     </div>
   )
 }

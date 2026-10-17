@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import WineDetailPanel from '../../lib/WineDetailPanel'
 
 const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Sweet']
 
@@ -146,6 +147,7 @@ export default function StudioPage() {
   const [filterStatus, setFilterStatus] = useState('Available')
   const [filterColour, setFilterColour] = useState('')
   const [filterSize, setFilterSize] = useState('')
+  const [detail, setDetail] = useState(null)
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [search, setSearch] = useState('')
@@ -753,7 +755,7 @@ export default function StudioPage() {
                             {isEditing ? (s.wines ? <EditableCell value={s.wines.description||''} onSave={v => updateWine(s.id,s.wines.id,'description',v)} placeholder="Wine name..." width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} /> : <EditableCell value={s.unlinked_description||''} onSave={v => updateStudio(s.id,'unlinked_description',v)} placeholder="Wine name..." width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} />) : (
                               <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', color:'var(--ink)', lineHeight:1.3, fontWeight:isMagnum(s.bottle_size)?700:400 }}>
                                 {womenNote && <span title={womenNote} style={{ marginRight:'4px', fontSize:'12px', cursor:'help' }}>♀</span>}
-                                {name}
+                                <span onClick={() => setDetail({ wine: s.wines || null, studio: s })} title="Quick reference" style={{ cursor:'pointer', borderBottom:'1px dotted rgba(0,0,0,0.25)' }}>{name}</span>
                                 {onRoster && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', color:'#2d6a4f', border:'1px solid rgba(45,106,79,0.3)', padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>on roster</span>}
                                 {alert && <span title={alert.tooltip} style={{ marginLeft:'4px', fontSize:'11px' }}>{alert.icon}</span>}
                                 {buyerNote && <span style={{ marginLeft:'4px', fontSize:'10px', color:'var(--muted)' }}>✎</span>}
@@ -1053,6 +1055,7 @@ export default function StudioPage() {
           </div>
         </div>
       )}
+      {detail && <WineDetailPanel wine={detail.wine} studio={detail.studio} onClose={() => setDetail(null)} />}
     </div>
   )
 }

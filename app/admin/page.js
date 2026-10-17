@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import WineDetailPanel from '../../lib/WineDetailPanel'
 
 function searchTokens(s) { return (s || '').toLowerCase().split(/[\s,]+/).filter(Boolean) }
 function matchesSearch(w, s) {
@@ -26,6 +27,7 @@ export default function AdminPage() {
   const [page, setPage] = useState(0)
   const [showValues, setShowValues] = useState(false)
   const [expandedNote, setExpandedNote] = useState(null)
+  const [detailWine, setDetailWine] = useState(null)
   const [expandedPrice, setExpandedPrice] = useState(null)
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState('')
@@ -908,7 +910,7 @@ export default function AdminPage() {
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                         {w.women_note && <span title={w.women_note} style={{ fontSize: '12px', flexShrink: 0, cursor: 'help' }}>♀</span>}
                         <div>
-                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3, fontWeight: isMagnum(w) ? 700 : 400 }}>{w.description}</div>
+                          <div onClick={e => { e.stopPropagation(); setDetailWine(w) }} title="Quick reference" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3, fontWeight: isMagnum(w) ? 700 : 400, cursor: 'pointer' }}>{w.description}</div>
                           <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w.region}{w.country ? ` · ${w.country}` : ''}</div>
                         </div>
                       </div>
@@ -1267,6 +1269,7 @@ export default function AdminPage() {
       {showMergeModal && (
         <MergeDuplicatesModal wines={wines} onClose={() => setShowMergeModal(false)} onMerged={async () => { await fetchWines() }} />
       )}
+      {detailWine && <WineDetailPanel wine={detailWine} onClose={() => setDetailWine(null)} />}
     </div>
   )
 }
