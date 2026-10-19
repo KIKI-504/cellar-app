@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { getRole } from '../../lib/session'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -562,12 +563,13 @@ export default function BuyerPage() {
   }, [])
 
   useEffect(() => {
-    const role = sessionStorage.getItem('role')
-    const pin = sessionStorage.getItem('pin')
-    if (role !== 'buyer' && role !== 'admin') { router.push('/'); return }
-    setIsAdmin(role === 'admin')
-    if (role === 'admin') fetchMasterAdmin()
-    else resolveBuyerAndFetch(pin)
+    getRole().then(role => {
+      const pin = sessionStorage.getItem('pin')
+      if (role !== 'buyer' && role !== 'admin') { router.push('/'); return }
+      setIsAdmin(role === 'admin')
+      if (role === 'admin') fetchMasterAdmin()
+      else resolveBuyerAndFetch(pin)
+    })
   }, [])
 
   // ── Admin: fetch master + assignments ─────────────────────────────────────

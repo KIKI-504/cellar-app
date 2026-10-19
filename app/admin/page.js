@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { getRole } from '../../lib/session'
 import WineDetailPanel from '../../lib/WineDetailPanel'
 
 function searchTokens(s) { return (s || '').toLowerCase().split(/[\s,]+/).filter(Boolean) }
@@ -56,9 +57,10 @@ export default function AdminPage() {
   const PAGE_SIZE = 50
 
   useEffect(() => {
-    const role = sessionStorage.getItem('role')
-    if (role !== 'admin') router.push('/')
-    else { fetchWines(); fetchReleaseOrders(); fetchBuyerAccess() }
+    getRole().then(role => {
+      if (role !== 'admin') router.push('/')
+      else { fetchWines(); fetchReleaseOrders(); fetchBuyerAccess() }
+    })
   }, [])
 
   async function fetchWines() {

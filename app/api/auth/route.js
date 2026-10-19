@@ -60,6 +60,11 @@ export async function POST(request) {
   return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
 }
 
+export async function GET(request) {
+  const role = request.cookies.get('cellar_role')?.value || null
+  return NextResponse.json({ role })
+}
+
 export async function DELETE() {
   const response = NextResponse.json({ ok: true })
   response.cookies.delete('cellar_role')

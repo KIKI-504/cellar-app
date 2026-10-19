@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { getRole } from '../../lib/session'
 
 function abbreviateName(description) {
   const parts = description.split(',').map(p => p.trim())
@@ -56,9 +57,10 @@ export default function LabelPage() {
   const printRef = useRef()
 
   useEffect(() => {
-    const role = sessionStorage.getItem('role')
-    if (role !== 'admin') router.push('/')
-    else fetchStudio()
+    getRole().then(role => {
+      if (role !== 'admin') router.push('/')
+      else fetchStudio()
+    })
   }, [])
 
   async function fetchStudio() {

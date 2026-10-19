@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { getRole } from '../../lib/session'
 import WineDetailPanel from '../../lib/WineDetailPanel'
 
 const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Sweet']
@@ -209,9 +210,10 @@ export default function StudioPage() {
   const [rosterSaving, setRosterSaving] = useState(false)
 
   useEffect(() => {
-    const role = sessionStorage.getItem('role')
-    if (role !== 'admin') router.push('/')
-    else fetchStudio()
+    getRole().then(role => {
+      if (role !== 'admin') router.push('/')
+      else fetchStudio()
+    })
   }, [])
 
   async function fetchStudio() {

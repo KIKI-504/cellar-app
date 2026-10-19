@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { getRole } from '../../lib/session'
 
 const colourDot = (colour) => {
   const c = (colour || '').toLowerCase()
@@ -925,9 +926,10 @@ export default function BoxPage() {
   }, [])
 
   useEffect(() => {
-    const role = sessionStorage.getItem('role')
-    if (role !== 'admin') router.push('/')
-    else { fetchContacts(); fetchBoxesAndInvoices() }
+    getRole().then(role => {
+      if (role !== 'admin') router.push('/')
+      else { fetchContacts(); fetchBoxesAndInvoices() }
+    })
   }, [])
 
   function showStatus(type, text, durationMs = 4000) { setStatusMsg({ type, text }); setTimeout(() => setStatusMsg(null), durationMs) }

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { getRole } from '../../lib/session'
 import WineDetailPanel from '../../lib/WineDetailPanel'
 
 const INVOICE_FROM = {
@@ -100,9 +101,10 @@ export default function ConsignmentPage() {
   const [newSaving, setNewSaving] = useState(false)
 
   useEffect(() => {
-    const role = sessionStorage.getItem('role')
-    if (role !== 'admin') router.push('/')
-    else fetchAll()
+    getRole().then(role => {
+      if (role !== 'admin') router.push('/')
+      else fetchAll()
+    })
   }, [])
 
   function showStatus(type, text, ms = 5000) {
