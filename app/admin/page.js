@@ -646,7 +646,7 @@ export default function AdminPage() {
         <button onClick={async () => { sessionStorage.clear(); await fetch('/api/auth', { method: 'DELETE' }); router.push('/') }} style={{ background: 'none', border: '1px solid rgba(253,250,245,0.2)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', padding: '4px 10px', flexShrink: 0 }}>Sign Out</button>
       </div>
 
-      <div style={{ padding: '76px 28px 24px' }}>
+      <div className="cellar-page" style={{ padding: '76px 28px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '20px' }}>
           <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Bonded Storage</div>
           <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{filtered.length} wines</div>
@@ -864,14 +864,14 @@ export default function AdminPage() {
         )}
 
         {/* Wine table */}
-        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <div className="cellar-table-wrap" style={{ overflowX: 'auto', border: '1px solid var(--border)', background: 'var(--white)' }}>
+          <table className="cellar-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                <th style={{ padding: '10px 8px', width: '36px', textAlign: 'center' }}>
+                <th className="col-check" style={{ padding: '10px 8px', width: '36px', textAlign: 'center' }}>
                   <span style={{ fontSize: '10px', color: '#fdfaf5', fontFamily: 'DM Mono, monospace', letterSpacing: '0.08em', opacity: 0.9 }}>REL</span>
                 </th>
-                <th onClick={() => handleSort('description')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'description' ? '#d4ad45' : 'var(--white)', position: 'sticky', left: 0, background: 'var(--ink)', zIndex: 10, minWidth: '200px' }}>
+                <th className="col-wine" onClick={() => handleSort('description')} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', color: sortCol === 'description' ? '#d4ad45' : 'var(--white)', position: 'sticky', left: 0, background: 'var(--ink)', zIndex: 10, minWidth: '200px' }}>
                   Wine {sortCol === 'description' ? (sortDir === 1 ? '↑' : '↓') : '↕'}
                 </th>
                 {[['vintage','Vin.'],['colour','Colour'],['region','Region'],['bottle_format','Format'],['quantity','Qty']].map(([col, label]) => (
@@ -905,15 +905,15 @@ export default function AdminPage() {
 
                 return (
                   <tr key={w.id} style={{ borderBottom: '1px solid #ede6d6', background: inBasket ? 'rgba(107,30,46,0.05)' : w.include_in_buyer_view ? 'rgba(45,106,79,0.04)' : 'transparent' }}>
-                    <td style={{ padding: '9px 8px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <td className="col-check" style={{ padding: '9px 8px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={inBasket} onChange={() => toggleReleaseBasket(w)} style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--wine)' }} />
                     </td>
-                    <td style={{ padding: '9px 12px', maxWidth: '260px', position: 'sticky', left: 0, background: inBasket ? 'rgba(107,30,46,0.07)' : w.include_in_buyer_view ? '#f0f7f4' : 'var(--white)', zIndex: 5, borderRight: '1px solid #ede6d6' }}>
+                    <td className="col-wine" style={{ padding: '9px 12px', maxWidth: '260px', position: 'sticky', left: 0, background: inBasket ? 'rgba(107,30,46,0.07)' : w.include_in_buyer_view ? '#f0f7f4' : 'var(--white)', zIndex: 5, borderRight: '1px solid #ede6d6' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                         {w.women_note && <span title={w.women_note} style={{ fontSize: '12px', flexShrink: 0, cursor: 'help' }}>♀</span>}
                         <div>
-                          <div onClick={e => { e.stopPropagation(); setDetailWine(w) }} title="Quick reference" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3, fontWeight: isMagnum(w) ? 700 : 400, cursor: 'pointer' }}>{w.description}</div>
-                          <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w.region}{w.country ? ` · ${w.country}` : ''}</div>
+                          <div className="wine-name" onClick={e => { e.stopPropagation(); setDetailWine(w) }} title="Quick reference" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '14px', lineHeight: 1.3, fontWeight: isMagnum(w) ? 700 : 400, cursor: 'pointer' }}>{w.description}</div>
+                          <div className="wine-sub" style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{w.region}{w.country ? ` · ${w.country}` : ''}</div>
                         </div>
                       </div>
                     </td>

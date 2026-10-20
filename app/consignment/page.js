@@ -466,10 +466,6 @@ function printHtml(html) {
     <div style={{ minHeight: '100vh', background: 'var(--cream)', overflowX: 'hidden' }}>
       <style>{`
         .cs-layout { display: grid; grid-template-columns: 180px 1fr; gap: 20px; align-items: start; }
-        .cs-table th.cs-sticky, .cs-table td.cs-sticky { position: sticky; z-index: 2; background: inherit; }
-        .cs-table th.cs-sticky { background: var(--ink); }
-        .cs-table th.cs-sticky:first-child, .cs-table td.cs-sticky:first-child { width: 44px !important; min-width: 44px; max-width: 44px; box-sizing: border-box; padding-left: 0 !important; padding-right: 0 !important; }
-        .cs-table td.cs-sticky-wine { box-shadow: 4px 0 6px -4px rgba(0,0,0,0.18); }
         @media (max-width: 760px) {
           .cs-page { padding: 64px 12px 32px !important; }
           .cs-layout { display: block; }
@@ -486,7 +482,6 @@ function printHtml(html) {
           .cs-actions > button { flex: 1 1 calc(50% - 8px); text-align: center; }
           .cs-table-head { flex-direction: column; align-items: flex-start !important; gap: 6px; }
           .cs-table-hint { display: none; }
-          .cs-table th, .cs-table td { padding: 6px 8px !important; }
           .cs-table input[type="date"] { font-size: 10px !important; padding: 2px 4px !important; }
         }
       `}</style>
@@ -593,18 +588,18 @@ function printHtml(html) {
                       )}
                     </div>
                   </div>
-                  <div style={{ background: 'var(--white)', border: '1px solid var(--border)', overflowX: 'auto' }}>
+                  <div className="cellar-table-wrap" style={{ background: 'var(--white)', border: '1px solid var(--border)', overflowX: 'auto' }}>
                     {activeItems.length === 0 ? (
                       <div style={{ padding: '28px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>No wines consigned yet.</div>
                     ) : (
-                      <table className="cs-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '780px' }}>
+                      <table className="cs-table cellar-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '780px' }}>
                         <thead>
                           <tr style={{ background: 'var(--ink)', color: 'var(--white)' }}>
-                            <th className="cs-sticky" style={{ padding: '8px 12px', width: '36px', left: 0 }}>
+                            <th className="col-check" style={{ padding: '8px 12px', width: '36px' }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#d4ad45' }} />
                             </th>
                             {['Wine', 'Vintage', 'Size', 'Date delivered', 'Delivered', 'Remaining', 'Sale £/btl', 'Value out', 'Status', ''].map(h => (
-                              <th key={h} className={h === 'Wine' ? 'cs-sticky cs-sticky-wine' : undefined} style={{ ...(h === 'Wine' ? { left: '44px' } : {}), padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: 'var(--white)' }}>{h}</th>
+                              <th key={h} className={h === 'Wine' ? 'col-wine' : undefined} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 400, fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: 'var(--white)' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -614,19 +609,19 @@ function printHtml(html) {
                             const isActive = item.status === 'Active'
                             return (
                               <tr key={item.id} style={{ borderBottom: '1px solid #ede6d6', opacity: item.status !== 'Active' ? 0.5 : 1, background: isChecked ? '#f8f0ef' : 'var(--white)' }}>
-                                <td className="cs-sticky" style={{ padding: '10px 12px', textAlign: 'center', left: 0 }}>
+                                <td className="col-check" style={{ padding: '10px 12px', textAlign: 'center' }}>
                                   {isActive && <input type="checkbox" checked={isChecked} onChange={() => toggleSelect(item.id)} style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: 'var(--wine)' }} />}
                                 </td>
-                                <td className="cs-sticky cs-sticky-wine" style={{ padding: '10px 12px', minWidth: '160px', maxWidth: '200px', left: '44px' }}>
+                                <td className="col-wine" style={{ padding: '10px 12px', minWidth: '160px', maxWidth: '200px' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: colourDot(item.colour), flexShrink: 0 }}></span>
                                     <div style={{ minWidth: 0 }}>
-                                      <div onClick={() => item.wine_id && setDetailWineId(item.wine_id)} title={item.wine_id ? 'Quick reference' : undefined} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500, lineHeight: 1.3, cursor: item.wine_id ? 'pointer' : 'default' }}>{item.description}</div>
+                                      <div className="wine-name" onClick={() => item.wine_id && setDetailWineId(item.wine_id)} title={item.wine_id ? 'Quick reference' : undefined} style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', fontWeight: 500, lineHeight: 1.3, cursor: item.wine_id ? 'pointer' : 'default' }}>{item.description}</div>
                                       {item.source_id && <div style={{ fontSize: '9px', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', marginTop: '1px' }}>{item.source_id}</div>}
                                       {item.stocktake_flag && <div style={{ fontSize: '9px', color: '#b8860b', fontFamily: 'DM Mono, monospace', marginTop: '2px', letterSpacing: '0.05em' }}>⚑ {item.stocktake_flag} <button onClick={() => updateItem(item.id, 'stocktake_flag', null)} title="Clear flag" style={{ background: 'none', border: 'none', color: '#b8860b', cursor: 'pointer', fontSize: '9px', padding: '0 2px' }}>✕</button></div>}
                                       <input
                                         defaultValue={item.notes || ''}
-                                        placeholder="add note…"
+                                        className="wine-note-input" placeholder="add note…"
                                         onBlur={e => { if (e.target.value !== (item.notes || '')) updateItem(item.id, 'notes', e.target.value || null) }}
                                         style={{ marginTop: '3px', width: '100%', maxWidth: '180px', border: 'none', borderBottom: '1px solid transparent', background: 'transparent', padding: '1px 0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic', outline: 'none', cursor: 'text' }}
                                         onFocus={e => { e.target.style.borderBottomColor = 'var(--border)' }}

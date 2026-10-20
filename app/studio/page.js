@@ -621,7 +621,7 @@ export default function StudioPage() {
         <button onClick={async () => { sessionStorage.clear(); await fetch('/api/auth', { method: 'DELETE' }); router.push('/') }} style={{ background:'none', border:'1px solid rgba(253,250,245,0.2)', color:'rgba(253,250,245,0.5)', fontFamily:'DM Mono, monospace', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer', padding:'4px 10px', flexShrink:0 }}>Sign Out</button>
       </div>
 
-      <div style={{ padding: '76px 28px 24px' }}>
+      <div className="cellar-page" style={{ padding: '76px 28px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
             <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 300 }}>Studio Inventory</div>
@@ -690,18 +690,18 @@ export default function StudioPage() {
           )}
         </div>
 
-        <div style={{ overflowX: 'auto', paddingBottom: rosterSelectedCount > 0 ? '80px' : '0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <div className="cellar-table-wrap" style={{ overflowX: 'auto', paddingBottom: rosterSelectedCount > 0 ? '80px' : '0' }}>
+          <table className="cellar-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: 'var(--ink)', color: 'rgba(253,250,245,0.5)', fontFamily: 'DM Mono, monospace', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                <th style={{ padding:'10px 10px', textAlign:'center', fontWeight:400, width:'36px' }}>
+                <th className="col-check" style={{ padding:'10px 10px', textAlign:'center', fontWeight:400, width:'36px' }}>
                   <input type="checkbox" onChange={e => {
                     if (e.target.checked) {
                       const sel = {}; filtered.filter(s => s.wine_id && s.status === 'Available').forEach(s => sel[s.id] = true); setRosterSelected(sel)
                     } else { setRosterSelected({}) }
                   }} style={{ cursor:'pointer', width:'14px', height:'14px' }} />
                 </th>
-                <th style={{ padding:'10px 12px', textAlign:'left', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('name')}>Wine {sortIcon('name')}</th>
+                <th className="col-wine" style={{ padding:'10px 12px', textAlign:'left', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('name')}>Wine {sortIcon('name')}</th>
                 <th style={{ padding:'10px 6px', textAlign:'left', cursor:'pointer', fontWeight:400, whiteSpace:'nowrap' }} onClick={() => cycleSort('vintage')}>Vin. {sortIcon('vintage')}</th>
                 <th style={{ padding:'10px 8px', textAlign:'left', cursor:'pointer', fontWeight:400 }} onClick={() => cycleSort('colour')}>Colour {sortIcon('colour')}</th>
                 <th style={{ padding:'10px 8px', textAlign:'left', cursor:'pointer', fontWeight:400, whiteSpace:'nowrap' }} onClick={() => cycleSort('bottle_size')}>Size {sortIcon('bottle_size')}</th>
@@ -742,7 +742,7 @@ export default function StudioPage() {
                 return (
                   <React.Fragment key={s.id}>
                     <tr style={{ background: isRosterSelected ? 'rgba(110,31,46,0.05)' : 'var(--white)', borderBottom:'1px solid var(--border)', opacity: s.status === 'Sold' || s.status === 'Consumed' ? 0.55 : 1 }} onMouseEnter={e => { if (!isRosterSelected) e.currentTarget.style.background='var(--cream)' }} onMouseLeave={e => { if (!isRosterSelected) e.currentTarget.style.background='var(--white)' }}>
-                      <td style={{ padding:'10px 10px', textAlign:'center' }}>
+                      <td className="col-check" style={{ padding:'10px 10px', textAlign:'center' }}>
                         {hasWineId && s.status === 'Available' ? (
                           <input type="checkbox" checked={isRosterSelected} onChange={() => toggleRosterSelect(s.id)}
                             style={{ cursor:'pointer', width:'14px', height:'14px', accentColor:'var(--wine)' }} />
@@ -750,12 +750,12 @@ export default function StudioPage() {
                           <span style={{ display:'inline-block', width:'14px', height:'14px' }} />
                         )}
                       </td>
-                      <td style={{ padding:'10px 12px', maxWidth:'280px' }}>
+                      <td className="col-wine" style={{ padding:'10px 12px', maxWidth:'280px' }}>
                         <div style={{ display:'flex', alignItems:'flex-start', gap:'6px' }}>
                           <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:dot, flexShrink:0, marginTop:'4px', display:'inline-block' }}></span>
                           <div>
                             {isEditing ? (s.wines ? <EditableCell value={s.wines.description||''} onSave={v => updateWine(s.id,s.wines.id,'description',v)} placeholder="Wine name..." width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} /> : <EditableCell value={s.unlinked_description||''} onSave={v => updateStudio(s.id,'unlinked_description',v)} placeholder="Wine name..." width="200px" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', border:'1px solid var(--border)', background:'var(--cream)', padding:'2px 6px', outline:'none' }} />) : (
-                              <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', color:'var(--ink)', lineHeight:1.3, fontWeight:isMagnum(s.bottle_size)?700:400 }}>
+                              <div className="wine-name" style={{ fontFamily:'Cormorant Garamond, serif', fontSize:'15px', color:'var(--ink)', lineHeight:1.3, fontWeight:isMagnum(s.bottle_size)?700:400 }}>
                                 {womenNote && <span title={womenNote} style={{ marginRight:'4px', fontSize:'12px', cursor:'help' }}>♀</span>}
                                 <span onClick={() => setDetail({ wine: s.wines || null, studio: s })} title="Quick reference" style={{ cursor:'pointer', borderBottom:'1px dotted rgba(0,0,0,0.25)' }}>{name}</span>
                                 {onRoster && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', color:'#2d6a4f', border:'1px solid rgba(45,106,79,0.3)', padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>on roster</span>}
@@ -765,7 +765,7 @@ export default function StudioPage() {
                                 {(s.status === 'Sold' || s.status === 'Consumed') && <span style={{ marginLeft:'6px', fontSize:'9px', fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase', color: s.status === 'Sold' ? '#c0392b' : '#7a5e10', border: `1px solid ${s.status === 'Sold' ? 'rgba(192,57,43,0.35)' : 'rgba(122,94,16,0.35)'}`, padding:'1px 5px', borderRadius:'2px', verticalAlign:'middle' }}>{s.status}</span>}
                               </div>
                             )}
-                            <div style={{ fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{region ? region : ''}{s.date_moved ? ` · ${s.date_moved}` : ''}</div>
+                            <div className="wine-sub" style={{ fontSize:'10px', color:'var(--muted)', marginTop:'1px' }}>{region ? region : ''}{s.date_moved ? ` · ${s.date_moved}` : ''}</div>
                           </div>
                         </div>
                       </td>
