@@ -4,6 +4,24 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { getRole } from '../../lib/session'
 import WineDetailPanel from '../../lib/WineDetailPanel'
+import FilterSortBar from '../../lib/FilterSortBar'
+import {
+  EMPTY_FILTERS, WINE_GETTERS, makeAccessors, applyFilters, applySorts, buildOptions,
+  isMagnumForDuty as isMagnum, dutyForWine, dpCost as dpForWine, wsRetailLive,
+} from '../../lib/wine-utils'
+
+// Shared filter/sort accessors for this page, plus the page-specific sort columns.
+const ADMIN_ROW = makeAccessors({
+  ...WINE_GETTERS,
+  ws: w => parseFloat(w.ws_lowest_per_bottle),
+  buyer: w => (w.include_in_buyer_view ? 1 : 0),
+  source: w => w.source || '',
+}, { ws: 'num', buyer: 'num', source: 'text' })
+// Table header column name <-> shared sort key
+const KEY_FOR_COL = { description: 'name', vintage: 'vintage', colour: 'colour', region: 'region', bottle_format: 'size', quantity: 'qty', ws_lowest_per_bottle: 'ws', sale_price: 'price', include_in_buyer_view: 'buyer', source: 'source' }
+const COL_FOR_KEY = Object.fromEntries(Object.entries(KEY_FOR_COL).map(([c, k]) => [k, c]))
+const ADMIN_SORT_KEYS = [['name', 'Wine'], ['vintage', 'Vintage'], ['colour', 'Colour'], ['region', 'Region'], ['country', 'Country'], ['size', 'Size'], ['qty', 'Qty'], ['ws', 'WS price'], ['price', 'Sell price'], ['source', 'Source']]
+function adminSearchText(w) { return [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase() }
 
 function searchTokens(s) { return (s || '').toLowerCase().split(/[\s,]+/).filter(Boolean) }
 function matchesSearch(w, s) {
@@ -18,12 +36,12 @@ export default function AdminPage() {
   const [wines, setWines] = useState([])
   const [filtered, setFiltered] = useState([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+  const [sorts, setSorts] = useState([{ key: 'name', dir: 1 }])
   const [filterSource, setFilterSource] = useState('')
-  const [filterColour, setFilterColour] = useState('')
   const [filterBuyer, setFilterBuyer] = useState('')
-  const [sortCol, setSortCol] = useState('description')
-  const [sortDir, setSortDir] = useState(1)
+  const sortCol = COL_FOR_KEY[sorts[0]?.key] || 'description'
+  const sortDir = sorts[0]?.dir || 1
   const [displayOrder, setDisplayOrder] = useState([])
   const [page, setPage] = useState(0)
   const [showValues, setShowValues] = useState(false)
@@ -119,58 +137,30 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    let result = [...wines]
+    let result = applyFilters(wines, filters, ADMIN_ROW, adminSearchText)
     if (filterSource) result = result.filter(w => w.source === filterSource)
-    if (filterColour) result = result.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
     if (filterBuyer === 'included') result = result.filter(w => w.include_in_buyer_view)
-    if (filterBuyer === 'missing-retail') result = result.filter(w => !w.retail_price)
+    if (filterBuyer === 'missing-retail') result = result.filter(w => !wsRetailLive(w))
     if (filterBuyer === 'competitive') result = result.filter(w => isCompetitive(w))
     if (filterBuyer === 'women') result = result.filter(w => w.women_note)
-    if (search) result = result.filter(w => matchesSearch(w, search))
-    result.sort((a, b) => {
-      let av = a[sortCol] ?? '', bv = b[sortCol] ?? ''
-      const aEmpty = av === '' || av === null || av === undefined
-      const bEmpty = bv === '' || bv === null || bv === undefined
-      if (aEmpty && !bEmpty) return sortDir === 1 ? -1 : 1
-      if (!aEmpty && bEmpty) return sortDir === 1 ? 1 : -1
-      if (aEmpty && bEmpty) return 0
-      const aN = typeof av === 'number' ? av : parseFloat(av)
-      const bN = typeof bv === 'number' ? bv : parseFloat(bv)
-      if (!isNaN(aN) && !isNaN(bN) && typeof av !== 'string' && typeof bv !== 'string') return (aN - bN) * sortDir
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir
-      return String(av).localeCompare(String(bv)) * sortDir
-    })
+    result = applySorts(result, sorts, ADMIN_ROW)
     setFiltered(result)
     setDisplayOrder(result.map(w => w.id))
     setPage(0)
-  }, [wines.length, search, filterSource, filterColour, filterBuyer, sortCol, sortDir])
+  }, [wines.length, filters, filterSource, filterBuyer, sorts])
 
   useEffect(() => {
     if (displayOrder.length === 0) return
     const byId = new Map(wines.map(w => [w.id, w]))
     const reordered = displayOrder.map(id => byId.get(id)).filter(Boolean)
-    let result = reordered
+    let result = applyFilters(reordered, filters, ADMIN_ROW, adminSearchText)
     if (filterSource) result = result.filter(w => w.source === filterSource)
-    if (filterColour) result = result.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
     if (filterBuyer === 'included') result = result.filter(w => w.include_in_buyer_view)
-    if (filterBuyer === 'missing-retail') result = result.filter(w => !w.retail_price)
+    if (filterBuyer === 'missing-retail') result = result.filter(w => !wsRetailLive(w))
     if (filterBuyer === 'competitive') result = result.filter(w => isCompetitive(w))
     if (filterBuyer === 'women') result = result.filter(w => w.women_note)
-    if (search) result = result.filter(w => matchesSearch(w, search))
     setFiltered(result)
   }, [wines])
-
-  function isMagnum(w) {
-    const vol = String(w.bottle_volume || '').replace(/[^0-9]/g, '')
-    const fmt = (w.bottle_format || '').toLowerCase()
-    return vol === '150' || vol === '1500' || fmt.includes('magnum')
-  }
-
-  function dutyForWine(w) { return isMagnum(w) ? 6 : 3 }
-  function dpForWine(w) {
-    if (!w.purchase_price_per_bottle) return null
-    return (parseFloat(w.purchase_price_per_bottle) + dutyForWine(w)) * 1.2
-  }
 
   function isCompetitive(w) {
     if (!w.ws_lowest_per_bottle || !w.purchase_price_per_bottle) return false
@@ -181,7 +171,7 @@ export default function AdminPage() {
 
   async function updateWine(id, field, value) {
     const update = { [field]: value }
-    if (field === 'retail_price') update.retail_price_date = new Date().toISOString().split('T')[0]
+    if (field === 'ws_lowest_per_bottle' && value) update.retail_price_date = new Date().toISOString().split('T')[0]
     const { error } = await supabase.from('wines').update(update).eq('id', id)
     if (!error) setWines(prev => prev.map(w => w.id === id ? { ...w, ...update } : w))
   }
@@ -207,8 +197,11 @@ export default function AdminPage() {
   }
 
   function handleSort(col) {
-    if (sortCol === col) setSortDir(d => d * -1)
-    else { setSortCol(col); setSortDir(1) }
+    const key = KEY_FOR_COL[col]
+    if (!key) return
+    setSorts(prev => prev[0]?.key === key
+      ? [{ key, dir: prev[0].dir * -1 }, ...prev.slice(1)]
+      : [{ key, dir: 1 }, ...prev.slice(1).filter(x => x.key !== key)])
   }
 
   function getDateColour(dateStr) {
@@ -415,7 +408,6 @@ export default function AdminPage() {
     const purchase_price_per_bottle = purchaseCasePrice ? Math.round((purchaseCasePrice / caseSize) * 100) / 100 : null
     const wsCasePrice = parseFloat(row['Wine Searcher Lowest List Price']) || null
     const ws_lowest_per_bottle = wsCasePrice ? Math.round((wsCasePrice / caseSize) * 100) / 100 : null
-    const retail_price = ws_lowest_per_bottle ? Math.round((ws_lowest_per_bottle + 3) * 1.20 * 100) / 100 : null
     const livexCasePrice = parseFloat(row['Livex Market Price']) || null
     const livex_market_price = livexCasePrice ? Math.round((livexCasePrice / caseSize) * 100) / 100 : null
     return {
@@ -425,9 +417,9 @@ export default function AdminPage() {
       bottle_format: row['Bottle Format'] || '', bottle_volume: row['Bottle Volume'] || '',
       quantity: row['Quantity in Bottles'] || '', case_size: row['Case Size'] || '',
       purchase_price_per_bottle, bbx_highest_bid: row['BBX Highest Bid'] || '',
-      ws_lowest_per_bottle, retail_price,
-      retail_price_source: retail_price ? 'Wine Searcher lowest +duty+VAT' : null,
-      retail_price_date: retail_price ? new Date().toISOString().split('T')[0] : null,
+      ws_lowest_per_bottle,
+      retail_price_source: ws_lowest_per_bottle ? 'Wine Searcher lowest +duty+VAT' : null,
+      retail_price_date: ws_lowest_per_bottle ? new Date().toISOString().split('T')[0] : null,
       livex_market_price, include_in_buyer_view: false,
     }
   }
@@ -463,7 +455,6 @@ export default function AdminPage() {
           if (wine.ws_lowest_per_bottle !== undefined) {
             updateData.bbx_highest_bid = wine.bbx_highest_bid
             updateData.ws_lowest_per_bottle = wine.ws_lowest_per_bottle
-            updateData.retail_price = wine.retail_price
             updateData.retail_price_source = wine.retail_price_source
             updateData.retail_price_date = wine.retail_price_date
             updateData.livex_market_price = wine.livex_market_price
@@ -550,7 +541,7 @@ export default function AdminPage() {
         ib || '', dp ? dp.toFixed(2) : '',
         ib ? (ib * 1.10).toFixed(2) : '', ib ? (ib * 1.15).toFixed(2) : '',
         dp ? (dp * 1.10).toFixed(2) : '', dp ? (dp * 1.15).toFixed(2) : '',
-        w.ws_lowest_per_bottle || '', w.retail_price || '',
+        w.ws_lowest_per_bottle || '', wsRetailLive(w) || '',
         w.retail_price_source || '', w.retail_price_date || '',
         w.livex_market_price || '', w.sale_price || '',
         w.include_in_buyer_view ? 'Yes' : 'No', w.women_note || '', w.producer_note || ''
@@ -620,11 +611,11 @@ export default function AdminPage() {
   const flintCount = wines.filter(w => w.source === 'Flint').length
   const inBuyerCount = wines.filter(w => w.include_in_buyer_view).length
   const competitiveCount = wines.filter(w => isCompetitive(w)).length
-  const missingRetailCount = wines.filter(w => !w.retail_price).length
+  const missingRetailCount = wines.filter(w => !wsRetailLive(w)).length
   const womenCount = wines.filter(w => w.women_note).length
   const totalCostValue = wines.reduce((sum, w) => sum + ((parseInt(w.quantity) || 0) * (parseFloat(w.purchase_price_per_bottle) || 0)), 0)
-  const totalRetailValue = wines.reduce((sum, w) => sum + ((parseInt(w.quantity) || 0) * (parseFloat(w.retail_price) || 0)), 0)
-  const winesWithRetail = wines.filter(w => w.retail_price).length
+  const totalRetailValue = wines.reduce((sum, w) => sum + ((parseInt(w.quantity) || 0) * (wsRetailLive(w) || 0)), 0)
+  const winesWithRetail = wines.filter(w => wsRetailLive(w)).length
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -800,26 +791,24 @@ export default function AdminPage() {
         </div>
 
         {/* Filters + imports */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search — e.g. Burgundy 2014 (matches all terms)" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }} />
+        <div style={{ marginBottom: '12px' }}>
+          <FilterSortBar filters={filters} setFilters={setFilters} options={buildOptions(wines, filters, ADMIN_ROW)} sorts={sorts} setSorts={setSorts} sortKeys={ADMIN_SORT_KEYS} count={filtered.length}
+            extras={<>
           <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Sources</option>
             <option value="Berry Brothers">Berry Brothers</option>
             <option value="Flint">Flint</option>
           </select>
-          <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
-            <option value="">All Colours</option>
-            <option value="Red">Red</option>
-            <option value="White">White</option>
-            <option value="Rosé">Rosé</option>
-          </select>
           <select value={filterBuyer} onChange={e => setFilterBuyer(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', padding: '9px 12px', fontFamily: 'DM Mono, monospace', fontSize: '12px', outline: 'none' }}>
             <option value="">All Wines</option>
             <option value="included">In Buyer View</option>
-            <option value="missing-retail">Missing Retail Price</option>
+            <option value="missing-retail">Missing WS Price</option>
             <option value="competitive">Competitive Only</option>
             <option value="women">Women-Led</option>
           </select>
+            </>} />
+        </div>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={exportCSV} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--ink)', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>↓ Export</button>
           <button onClick={() => setShowMergeModal(true)} style={{ background: 'none', border: '1px solid #2d6a4f', color: '#2d6a4f', padding: '9px 16px', fontFamily: 'DM Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}>🔀 Merge</button>
         </div>
@@ -955,7 +944,6 @@ export default function AdminPage() {
                                   onBlur={e => {
                                     const val = e.target.value ? parseFloat(e.target.value) : null
                                     updateWine(w.id, 'ws_lowest_per_bottle', val)
-                                    if (val) updateWine(w.id, 'retail_price', Math.round((val + duty) * 1.2 * 100) / 100)
                                     updateWine(w.id, 'retail_price_source', 'WS avg (ex duty)')
                                   }}
                                   style={{ width: '64px', border: '1px solid var(--border)', background: ws ? 'var(--cream)' : 'rgba(212,173,69,0.08)', padding: '2px 5px', fontFamily: 'DM Mono, monospace', fontSize: '12px', fontWeight: 600, outline: 'none', color: 'var(--ink)' }} />
