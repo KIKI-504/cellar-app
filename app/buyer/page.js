@@ -4,6 +4,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { getRole } from '../../lib/session'
+import { EMPTY_FILTERS, WINE_GETTERS, SIZE_LABELS, makeAccessors, applyFilters, applySorts, buildOptions } from '../../lib/wine-utils'
+
+// Shared filter/sort accessors. Quantity uses the per-buyer allocation when one is set, as before.
+const BUYER_ACC = makeAccessors({
+  ...WINE_GETTERS,
+  qty: w => (w._buyerQty != null ? w._buyerQty : parseInt(w.quantity)) || 0,
+})
+const BUYER_KEY_FOR_COL = { description: 'name', vintage: 'vintage', region: 'region', country: 'country', colour: 'colour', format: 'size', quantity: 'qty', sale_price: 'price' }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -247,8 +255,10 @@ function TermsAccordion({ termsOpen, setTermsOpen, isMobile, SIDE }) {
 
 // ─── FiltersBar (defined OUTSIDE BuyerPage) ──────────────────────────────────
 
-function FiltersBar({ wineList, search, setSearch, filterColour, setFilterColour, filterRegion, setFilterRegion, filterWomen, setFilterWomen, sortCol, setSortCol, setSortDir, filteredCount, isMobile, SIDE }) {
+function FiltersBar({ filters, setFilters, wineList, search, setSearch, filterColour, setFilterColour, filterRegion, setFilterRegion, filterWomen, setFilterWomen, sortCol, setSortCol, setSortDir, filteredCount, isMobile, SIDE }) {
   const regionList = [...new Set(wineList.map(w => w.region).filter(Boolean))].sort()
+  const opts = buildOptions(wineList, filters, BUYER_ACC)
+  const setF = (k, v) => setFilters(p => ({ ...p, [k]: v }))
   const womenCt = wineList.filter(w => w.women_note).length
   return (
     <div style={{ background: C.cream, padding: `16px ${SIDE} 8px` }}>
@@ -269,10 +279,29 @@ function FiltersBar({ wineList, search, setSearch, filterColour, setFilterColour
             <option value="">All Regions</option>
             {regionList.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
+          {opts.country.length > 1 && (
+            <select value={filters.country} onChange={e => setF('country', e.target.value)} style={pillStyle(!!filters.country)}>
+              <option value="">All Countries</option>
+              {opts.country.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          <select value={filters.vintage} onChange={e => setF('vintage', e.target.value)} style={pillStyle(!!filters.vintage)}>
+            <option value="">All Vintages</option>
+            {opts.vintage.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+          {opts.size.length > 1 && (
+            <select value={filters.size} onChange={e => setF('size', e.target.value)} style={pillStyle(!!filters.size)}>
+              <option value="">All Sizes</option>
+              {opts.size.map(v => <option key={v} value={v}>{SIZE_LABELS[v] || v + 'cl'}</option>)}
+            </select>
+          )}
           <select value={sortCol} onChange={e => { setSortCol(e.target.value); setSortDir('asc') }} style={pillStyle(false)}>
             <option value="description">Sort: Name</option>
             <option value="vintage">Sort: Vintage</option>
+            <option value="colour">Sort: Colour</option>
             <option value="region">Sort: Region</option>
+            <option value="country">Sort: Country</option>
+            <option value="format">Sort: Size</option>
             <option value="sale_price">Sort: Price</option>
             <option value="quantity">Sort: Qty</option>
           </select>
@@ -504,8 +533,11 @@ export default function BuyerPage() {
   const [wines, setWines] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filterColour, setFilterColour] = useState('')
-  const [filterRegion, setFilterRegion] = useState('')
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+  const filterColour = filters.colour
+  const filterRegion = filters.region
+  const setFilterColour = v => setFilters(p => ({ ...p, colour: v }))
+  const setFilterRegion = v => setFilters(p => ({ ...p, region: v }))
   const [filterWomen, setFilterWomen] = useState(false)
   const [sortCol, setSortCol] = useState('description')
   const [sortDir, setSortDir] = useState('asc')
@@ -691,25 +723,11 @@ export default function BuyerPage() {
 
   // ── Filter + sort ─────────────────────────────────────────────────────────
 
+  const sortWines = list => applySorts(list, [{ key: BUYER_KEY_FOR_COL[sortCol] || 'name', dir: sortDir === 'asc' ? 1 : -1 }], BUYER_ACC)
   const filtered = (() => {
-    let result = [...wines]
-    if (filterColour) result = result.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
-    if (filterRegion) result = result.filter(w => w.region === filterRegion)
+    let result = applyFilters(wines, { ...filters, search }, BUYER_ACC)
     if (filterWomen) result = result.filter(w => w.women_note)
-    if (search) { const q = search.toLowerCase(); result = result.filter(w => [w.description, w.region, w.country, w.vintage].join(' ').toLowerCase().includes(q)) }
-    result.sort((a, b) => {
-      let av, bv
-      if (sortCol === 'description') { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
-      else if (sortCol === 'vintage') { av = a.vintage || ''; bv = b.vintage || '' }
-      else if (sortCol === 'region') { av = (a.region || '').toLowerCase(); bv = (b.region || '').toLowerCase() }
-      else if (sortCol === 'format') { av = bottleSortKey(a.bottle_volume, a.bottle_format); bv = bottleSortKey(b.bottle_volume, b.bottle_format) }
-      else if (sortCol === 'quantity') { av = (a._buyerQty != null ? a._buyerQty : parseInt(a.quantity)) || 0; bv = (b._buyerQty != null ? b._buyerQty : parseInt(b.quantity)) || 0 }
-      else if (sortCol === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
-      else { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
-      if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
-    return result
+    return sortWines(result)
   })()
 
   // ── Save note ─────────────────────────────────────────────────────────────
@@ -760,22 +778,9 @@ export default function BuyerPage() {
   if (isAdmin && adminTab === 'preview') {
     const rawList = previewBuyer ? previewWines : []
     const displayName = previewBuyer ? (previewBuyer.display_name || previewBuyer.name) : 'Buyer View Preview'
-    let displayList = [...rawList]
-    if (filterColour) displayList = displayList.filter(w => w.colour?.toLowerCase().includes(filterColour.toLowerCase()))
-    if (filterRegion) displayList = displayList.filter(w => w.region === filterRegion)
+    let displayList = applyFilters(rawList, { ...filters, search }, BUYER_ACC)
     if (filterWomen) displayList = displayList.filter(w => w.women_note)
-    if (search) { const q = search.toLowerCase(); displayList = displayList.filter(w => [w.description, w.region, w.country, w.vintage].join(' ').toLowerCase().includes(q)) }
-    displayList.sort((a, b) => {
-      let av, bv
-      if (sortCol === 'description') { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
-      else if (sortCol === 'vintage') { av = a.vintage || ''; bv = b.vintage || '' }
-      else if (sortCol === 'region') { av = (a.region || '').toLowerCase(); bv = (b.region || '').toLowerCase() }
-      else if (sortCol === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
-      else if (sortCol === 'quantity') { av = (a._buyerQty != null ? a._buyerQty : parseInt(a.quantity)) || 0; bv = (b._buyerQty != null ? b._buyerQty : parseInt(b.quantity)) || 0 }
-      else { av = (a.description || '').toLowerCase(); bv = (b.description || '').toLowerCase() }
-      if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
+    displayList = sortWines(displayList)
     return (
       <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: '40px' }}>
         <Header router={router} displayName={displayName} wineCount={previewBuyer ? rawList.length : null} onPrint={() => printPriceList(displayList, displayName)} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
@@ -801,7 +806,7 @@ export default function BuyerPage() {
         ) : (
           <>
             <TermsAccordion termsOpen={termsOpen} setTermsOpen={setTermsOpen} isMobile={isMobile} SIDE={SIDE} />
-            <FiltersBar wineList={rawList} search={search} setSearch={setSearch} filterColour={filterColour} setFilterColour={setFilterColour} filterRegion={filterRegion} setFilterRegion={setFilterRegion} filterWomen={filterWomen} setFilterWomen={setFilterWomen} sortCol={sortCol} setSortCol={setSortCol} setSortDir={setSortDir} filteredCount={displayList.length} isMobile={isMobile} SIDE={SIDE} />
+            <FiltersBar filters={filters} setFilters={setFilters} wineList={rawList} search={search} setSearch={setSearch} filterColour={filterColour} setFilterColour={setFilterColour} filterRegion={filterRegion} setFilterRegion={setFilterRegion} filterWomen={filterWomen} setFilterWomen={setFilterWomen} sortCol={sortCol} setSortCol={setSortCol} setSortDir={setSortDir} filteredCount={displayList.length} isMobile={isMobile} SIDE={SIDE} />
             <div style={{ maxWidth: '1400px', margin: '16px auto', padding: `0 ${SIDE}` }}>
               <div style={{ background: C.white, borderRadius: '14px', border: '1px solid ' + C.line, overflow: 'hidden' }}>
                 {displayList.length === 0 ? (
@@ -1075,7 +1080,7 @@ export default function BuyerPage() {
     <div style={{ minHeight: '100vh', background: C.cream, paddingBottom: selectedCount > 0 ? (isMobile ? '100px' : '88px') : '48px' }}>
       <Header router={router} displayName={buyerDisplayName} wineCount={wines.length} onPrint={() => printPriceList(filtered, buyerDisplayName)} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
       <TermsAccordion termsOpen={termsOpen} setTermsOpen={setTermsOpen} isMobile={isMobile} SIDE={SIDE} />
-      <FiltersBar wineList={wines} search={search} setSearch={setSearch} filterColour={filterColour} setFilterColour={setFilterColour} filterRegion={filterRegion} setFilterRegion={setFilterRegion} filterWomen={filterWomen} setFilterWomen={setFilterWomen} sortCol={sortCol} setSortCol={setSortCol} setSortDir={setSortDir} filteredCount={filtered.length} isMobile={isMobile} SIDE={SIDE} />
+      <FiltersBar filters={filters} setFilters={setFilters} wineList={wines} search={search} setSearch={setSearch} filterColour={filterColour} setFilterColour={setFilterColour} filterRegion={filterRegion} setFilterRegion={setFilterRegion} filterWomen={filterWomen} setFilterWomen={setFilterWomen} sortCol={sortCol} setSortCol={setSortCol} setSortDir={setSortDir} filteredCount={filtered.length} isMobile={isMobile} SIDE={SIDE} />
       <div style={{ maxWidth: '1400px', margin: '16px auto', padding: `0 ${SIDE}` }}>
         {isMobile ? (
           <div>

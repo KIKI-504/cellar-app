@@ -2,6 +2,16 @@
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { EMPTY_FILTERS, STUDIO_GETTERS, SIZE_LABELS, makeAccessors, applyFilters, applySorts, buildOptions } from '../../lib/wine-utils'
+
+// Shared filter/sort accessors, reproducing this page's own name, price and search behaviour exactly.
+const LOCAL_ACC = makeAccessors({
+  ...STUDIO_GETTERS,
+  name: s => s.wines?.description || s.unlinked_description || 'Unknown wine',
+  price: s => { const p = s.sale_price ?? s.dp_price; return (p ? parseFloat(p) : null) || 0 },
+})
+const KEY_FOR_COL = { name: 'name', vintage: 'vintage', colour: 'colour', region: 'region', country: 'country', format: 'size', quantity: 'qty', price: 'price' }
+function localSearchText(s) { return [LOCAL_ACC.get('name', s), LOCAL_ACC.get('vintage', s), LOCAL_ACC.get('region', s), LOCAL_ACC.get('country', s)].join(' ').toLowerCase() }
 
 function isMagnum(size) {
   const s = String(size || '').toLowerCase().replace(/\s/g, '')
@@ -44,6 +54,7 @@ export default function LocalPage() {
   const [filterCountry, setFilterCountry] = useState('')
   const [filterRegion, setFilterRegion] = useState('')
   const [filterVintage, setFilterVintage] = useState('')
+  const [filterSize, setFilterSize] = useState('')
   const [openNotes, setOpenNotes] = useState({})
   const [sortCol, setSortCol] = useState('colour')
   const [sortDir, setSortDir] = useState('asc')
@@ -149,47 +160,20 @@ export default function LocalPage() {
     window.location.href = `mailto:jessica.bride@gmail.com?subject=${subject}&body=${encodeURIComponent(text)}`
   }
 
-  const filtered = wines
-    .filter(s => {
-      if (filterColour && getWineColour(s)?.toLowerCase() !== filterColour.toLowerCase()) return false
-      if (filterCountry && getWineCountry(s) !== filterCountry) return false
-      if (filterRegion && getWineRegion(s) !== filterRegion) return false
-      if (filterVintage && String(getWineVintage(s)) !== filterVintage) return false
-      if (search) { const q = search.toLowerCase(); return [getWineName(s), getWineVintage(s), getWineRegion(s), getWineCountry(s)].join(' ').toLowerCase().includes(q) }
-      return true
-    })
-    .sort((a, b) => {
-      let av, bv
-      if (sortCol === 'name')          { av = getWineName(a).toLowerCase();    bv = getWineName(b).toLowerCase() }
-      else if (sortCol === 'vintage')  { av = getWineVintage(a);               bv = getWineVintage(b) }
-      else if (sortCol === 'colour')   { av = getWineColour(a).toLowerCase();  bv = getWineColour(b).toLowerCase() }
-      else if (sortCol === 'region')   { av = getWineRegion(a).toLowerCase();  bv = getWineRegion(b).toLowerCase() }
-      else if (sortCol === 'country')  { av = getWineCountry(a).toLowerCase(); bv = getWineCountry(b).toLowerCase() }
-      else if (sortCol === 'format')   { av = bottleSortKey(a.bottle_size || a.wines?.bottle_volume); bv = bottleSortKey(b.bottle_size || b.wines?.bottle_volume) }
-      else if (sortCol === 'quantity') { av = a.quantity || 0;                 bv = b.quantity || 0 }
-      else if (sortCol === 'price')    { av = getPrice(a) || 0;                bv = getPrice(b) || 0 }
-      else { av = getWineName(a).toLowerCase(); bv = getWineName(b).toLowerCase() }
-      if (typeof av === 'number') {
-        if (av === bv && sortCol === 'colour') {
-          // secondary sort by vintage when colour is equal
-          const avv = getWineVintage(a); const bvv = getWineVintage(b)
-          return sortDir === 'asc' ? String(avv).localeCompare(String(bvv)) : String(bvv).localeCompare(String(avv))
-        }
-        return sortDir === 'asc' ? av - bv : bv - av
-      }
-      if (av === bv && sortCol === 'colour') {
-        // secondary sort by vintage when colour is equal
-        const avv = getWineVintage(a); const bvv = getWineVintage(b)
-        return sortDir === 'asc' ? String(avv).localeCompare(String(bvv)) : String(bvv).localeCompare(String(avv))
-      }
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
+  const sharedFilters = { ...EMPTY_FILTERS, search, colour: filterColour, country: filterCountry, region: filterRegion, vintage: filterVintage, size: filterSize }
+  // Primary sort from the column chosen; colour keeps its built-in vintage tie-break.
+  const sharedSorts = [
+    { key: KEY_FOR_COL[sortCol] || 'name', dir: sortDir === 'asc' ? 1 : -1 },
+    ...(sortCol === 'colour' ? [{ key: 'vintage', dir: sortDir === 'asc' ? 1 : -1 }] : []),
+  ]
+  const filtered = applySorts(applyFilters(wines, sharedFilters, LOCAL_ACC, localSearchText), sharedSorts, LOCAL_ACC)
+  const sizeOptions = buildOptions(wines, sharedFilters, LOCAL_ACC).size
 
   const countryOptions = [...new Set(wines.map(getWineCountry).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   const regionOptions = [...new Set(wines.filter(s => !filterCountry || getWineCountry(s) === filterCountry).map(getWineRegion).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   const vintageOptions = [...new Set(wines.map(getWineVintage).filter(Boolean).map(String))].sort((a, b) => b.localeCompare(a))
-  const anyFilter = !!(search || filterColour || filterCountry || filterRegion || filterVintage)
-  function clearFilters() { setSearch(''); setFilterColour(''); setFilterCountry(''); setFilterRegion(''); setFilterVintage('') }
+  const anyFilter = !!(search || filterColour || filterCountry || filterRegion || filterVintage || filterSize)
+  function clearFilters() { setSearch(''); setFilterColour(''); setFilterCountry(''); setFilterRegion(''); setFilterVintage(''); setFilterSize('') }
   const SORT_SELECT = [
     ['colour:asc', 'Colour'], ['name:asc', 'Name (A to Z)'], ['name:desc', 'Name (Z to A)'],
     ['price:asc', 'Price (low to high)'], ['price:desc', 'Price (high to low)'],
@@ -336,6 +320,10 @@ export default function LocalPage() {
             <option value="">All vintages</option>
             {vintageOptions.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
+          <select value={filterSize} onChange={e => setFilterSize(e.target.value)} style={FIELD}>
+            <option value="">All sizes</option>
+            {sizeOptions.map(v => <option key={v} value={v}>{SIZE_LABELS[v] || v + 'cl'}</option>)}
+          </select>
           {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: '6px 4px', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Clear</button>}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ ...INFO, whiteSpace: 'nowrap' }}>{filtered.length} wine{filtered.length !== 1 ? 's' : ''}</span>
@@ -371,6 +359,12 @@ export default function LocalPage() {
               <select value={filterVintage} onChange={e => setFilterVintage(e.target.value)} style={SELECT_MOBILE}>
                 <option value="">All Vintages</option>
                 {vintageOptions.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+              <select value={filterSize} onChange={e => setFilterSize(e.target.value)} style={SELECT_MOBILE}>
+                <option value="">All Sizes</option>
+                {sizeOptions.map(v => <option key={v} value={v}>{SIZE_LABELS[v] || v + 'cl'}</option>)}
               </select>
             </div>
             {anyFilter && <button onClick={clearFilters} style={{ background: 'none', border: 'none', padding: '0', fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.06em' }}>✕ clear filters</button>}

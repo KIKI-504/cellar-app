@@ -6,8 +6,26 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { getRole } from '../../lib/session'
 import WineDetailPanel from '../../lib/WineDetailPanel'
+import FilterSortBar from '../../lib/FilterSortBar'
+import { EMPTY_FILTERS, STUDIO_GETTERS, makeAccessors, applyFilters, applySorts, buildOptions } from '../../lib/wine-utils'
 
 const COLOURS = ['Red', 'White', 'Rosé', 'Sparkling', 'Sweet']
+
+// Shared filter/sort accessors for this page, including its page-specific sort columns.
+// These reproduce the old comparisons exactly (zero for missing prices, blank dates lowest).
+const STUDIO_ACC = makeAccessors({
+  ...STUDIO_GETTERS,
+  dp: s => parseFloat(s.dp_price) || 0,
+  ws: s => { const w = s.wines?.ws_lowest_per_bottle ? parseFloat(s.wines.ws_lowest_per_bottle) : 0; return w ? (w + dutyForSize(s.bottle_size)) * 1.2 : 0 },
+  local: s => (s.include_in_local ? 1 : 0),
+  checked: s => s.checked_on || '',
+  wsdate: s => s.wines?.ws_price_date || '',
+  moved: s => s.date_moved || '',
+}, { dp: 'num', ws: 'num', local: 'num', checked: 'raw', wsdate: 'raw', moved: 'raw' })
+const KEY_FOR_FIELD = { quantity: 'qty', name: 'name', vintage: 'vintage', region: 'region', bottle_size: 'size', dp_price: 'dp', sale_price: 'price', ws_price: 'ws', colour: 'colour', local: 'local', checked: 'checked', ws_date: 'wsdate', date_moved: 'moved' }
+const FIELD_FOR_KEY = Object.fromEntries(Object.entries(KEY_FOR_FIELD).map(([f, k]) => [k, f]))
+const STUDIO_SORT_KEYS = [['name', 'Wine'], ['vintage', 'Vintage'], ['colour', 'Colour'], ['region', 'Region'], ['country', 'Country'], ['size', 'Size'], ['qty', 'Qty'], ['dp', 'DP cost'], ['price', 'Sale price'], ['moved', 'Date added']]
+function studioSearchText(s) { return [s.wines?.description, s.unlinked_description, s.wines?.vintage, s.unlinked_vintage, s.wines?.region, s.wines?.country, s.wines?.colour, s.colour].join(' ').toLowerCase() }
 
 const colourDot = (colour) => {
   const c = (colour || '').toLowerCase()
@@ -146,14 +164,13 @@ export default function StudioPage() {
   const [studioWines, setStudioWines] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('Available')
-  const [filterColour, setFilterColour] = useState('')
-  const [filterSize, setFilterSize] = useState('')
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
   const [detail, setDetail] = useState(null)
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
-  const [search, setSearch] = useState('')
-  const [sortField, setSortField] = useState('date_moved')
-  const [sortDir, setSortDir] = useState('desc')
+  const [sorts, setSorts] = useState([{ key: 'moved', dir: -1 }])
+  const sortField = FIELD_FOR_KEY[sorts[0]?.key] || null
+  const sortDir = (sorts[0]?.dir || 1) === 1 ? 'asc' : 'desc'
   const [expandedNote, setExpandedNote] = useState(null)
   const [showDPTotal, setShowDPTotal] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
@@ -343,8 +360,11 @@ export default function StudioPage() {
   }
 
   function cycleSort(field) {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortField(field); setSortDir('asc') }
+    const key = KEY_FOR_FIELD[field]
+    if (!key) return
+    setSorts(prev => prev[0]?.key === key
+      ? [{ key, dir: prev[0].dir * -1 }, ...prev.slice(1)]
+      : [{ key, dir: 1 }, ...prev.slice(1).filter(x => x.key !== key)])
   }
 
   function sortIcon(field) {
@@ -560,34 +580,18 @@ export default function StudioPage() {
   }
 
 
-  const filtered = studioWines
-    .filter(s => {
-      if (filterStatus && s.status !== filterStatus) return false
-      if (filterColour) { const c = (s.wines?.colour || s.colour || '').toLowerCase(); if (!c.includes(filterColour.toLowerCase())) return false }
-      if (filterSize && formatBottleSize(s.bottle_size) !== filterSize) return false
-      if (filterDateFrom && s.date_moved < filterDateFrom) return false
-      if (filterDateTo && s.date_moved > filterDateTo) return false
-      if (search) { const q = search.toLowerCase(); return [s.wines?.description, s.wines?.vintage, s.wines?.region, s.unlinked_description].join(' ').toLowerCase().includes(q) }
-      return true
-    })
-    .sort((a, b) => {
-      let av, bv
-      if (sortField === 'quantity') { av = a.quantity || 0; bv = b.quantity || 0 }
-      else if (sortField === 'name') { av = (a.wines?.description || a.unlinked_description || '').toLowerCase(); bv = (b.wines?.description || b.unlinked_description || '').toLowerCase() }
-      else if (sortField === 'vintage') { av = a.wines?.vintage || a.unlinked_vintage || ''; bv = b.wines?.vintage || b.unlinked_vintage || '' }
-      else if (sortField === 'region') { av = (a.wines?.region || '').toLowerCase(); bv = (b.wines?.region || '').toLowerCase() }
-      else if (sortField === 'bottle_size') { av = bottleSortKey(a.bottle_size); bv = bottleSortKey(b.bottle_size) }
-      else if (sortField === 'dp_price') { av = parseFloat(a.dp_price) || 0; bv = parseFloat(b.dp_price) || 0 }
-      else if (sortField === 'sale_price') { av = parseFloat(a.sale_price) || 0; bv = parseFloat(b.sale_price) || 0 }
-      else if (sortField === 'ws_price') { const aWs = a.wines?.ws_lowest_per_bottle ? parseFloat(a.wines.ws_lowest_per_bottle) : 0; const bWs = b.wines?.ws_lowest_per_bottle ? parseFloat(b.wines.ws_lowest_per_bottle) : 0; av = aWs ? (aWs + dutyForSize(a.bottle_size)) * 1.2 : 0; bv = bWs ? (bWs + dutyForSize(b.bottle_size)) * 1.2 : 0 }
-      else if (sortField === 'colour') { av = (a.wines?.colour || a.colour || '').toLowerCase(); bv = (b.wines?.colour || b.colour || '').toLowerCase() }
-      else if (sortField === 'local') { av = a.include_in_local ? 1 : 0; bv = b.include_in_local ? 1 : 0 }
-      else if (sortField === 'checked') { av = a.checked_on || ''; bv = b.checked_on || '' }
-      else if (sortField === 'ws_date') { av = a.wines?.ws_price_date || ''; bv = b.wines?.ws_price_date || '' }
-      else { av = a.date_moved || ''; bv = b.date_moved || '' }
-      if (typeof av === 'number') { if (av < bv) return sortDir === 'asc' ? -1 : 1; if (av > bv) return sortDir === 'asc' ? 1 : -1; return 0 }
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
+  const filtered = applySorts(
+    applyFilters(
+      studioWines.filter(s => {
+        if (filterStatus && s.status !== filterStatus) return false
+        if (filterDateFrom && s.date_moved < filterDateFrom) return false
+        if (filterDateTo && s.date_moved > filterDateTo) return false
+        return true
+      }),
+      filters, STUDIO_ACC, studioSearchText
+    ),
+    sorts, STUDIO_ACC
+  )
 
   const dpTotal = filtered.reduce((sum, s) => {
     const dp = s.dp_price ? parseFloat(s.dp_price) : s.wines?.purchase_price_per_bottle ? (parseFloat(s.wines.purchase_price_per_bottle) + 3) * 1.2 : 0
@@ -648,21 +652,14 @@ export default function StudioPage() {
         </div>
 
         <div style={{ display:'flex', gap:'10px', marginBottom:'8px', flexWrap:'wrap', alignItems:'center' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search studio..." autoCorrect="off" autoCapitalize="off" spellCheck={false} style={{ flex:1, minWidth:'160px', border:'1px solid var(--border)', background:'var(--white)', padding:'8px 12px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }} />
+          <div style={{ flex:'1 1 100%' }}>
+            <FilterSortBar filters={filters} setFilters={setFilters} options={buildOptions(studioWines, filters, STUDIO_ACC)} sorts={sorts} setSorts={setSorts} sortKeys={STUDIO_SORT_KEYS} count={filtered.length}
+              extras={<>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'8px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }}>
             <option value="">All Status</option><option value="Available">Available</option><option value="Sold">Sold</option><option value="Consumed">Consumed</option>
           </select>
-          <select value={filterColour} onChange={e => setFilterColour(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'8px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }}>
-            <option value="">All Colours</option>
-            {COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={filterSize} onChange={e => setFilterSize(e.target.value)} style={{ border:'1px solid var(--border)', background:'var(--white)', padding:'8px 10px', fontFamily:'DM Mono, monospace', fontSize:'11px', outline:'none' }}>
-            <option value="">All Sizes</option>
-            <option value="37.5cl">Half (37.5cl)</option>
-            <option value="75cl">Bottle (75cl)</option>
-            <option value="150cl">Magnum (150cl)</option>
-            <option value="300cl">Double Magnum (300cl)</option>
-          </select>
+              </>} />
+          </div>
         </div>
 
         <div style={{ display:'flex', gap:'10px', marginBottom:'16px', flexWrap:'wrap', alignItems:'center' }}>
