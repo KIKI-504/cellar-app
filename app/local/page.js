@@ -94,7 +94,7 @@ export default function LocalPage() {
     if (nameOverride) setTypedName(nameOverride)
     setLoading(true); setStage('browse')
     const { data } = await supabase.from('studio')
-      .select('*, wines(id, description, vintage, colour, region, country, buyer_note, producer_note, women_note, sommelier_note, bottle_volume)')
+      .select('*, wines(id, description, vintage, colour, region, country, buyer_note, producer_note, women_note, sommelier_note, bottle_volume, bottle_format, ws_lowest_per_bottle)')
       .eq('include_in_local', true).eq('status', 'Available').gt('quantity', 0).order('created_at', { ascending: false })
     setWines(data || []); setLoading(false)
   }
@@ -123,6 +123,17 @@ export default function LocalPage() {
   function getBuyerNote(s) { return s.wines?.buyer_note || '' }
   function getProducerNote(s) { return s.wines?.producer_note || '' }
   function getPrice(s) { const p = s.sale_price ?? s.dp_price; return p ? parseFloat(p) : null }
+  // Wine Searcher UK average, duty paid: (WS ex-tax + duty) x 1.2. Duty is 3 for 75cl, 6 for a magnum, 12 for a double magnum.
+  // Returns null (so nothing is shown) when there is no WS price, no asking price, or the asking price is not below it.
+  function getWsAvgDP(s) {
+    const ws = parseFloat(s.wines?.ws_lowest_per_bottle)
+    const price = getPrice(s)
+    if (!ws || !price) return null
+    const size = LOCAL_ACC.get('size', s)
+    const duty = size === '300' ? 12 : size === '150' ? 6 : 3
+    const wsDP = Math.round((ws + duty) * 1.2 * 100) / 100
+    return price < wsDP ? wsDP : null
+  }
 
   function cycleSort(field) {
     if (sortCol === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -185,8 +196,10 @@ export default function LocalPage() {
   function onCountryChange(v) { setFilterCountry(v); setFilterRegion('') }
 
   const wishlistCount = Object.keys(wishlist).length
+  const anyWsAvg = wines.some(s => getWsAvgDP(s) != null)
+  const WS_LINE = { fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--muted)', whiteSpace: 'nowrap' }
   const SERIF = 'Cormorant Garamond, serif'
-  const GRID_DESKTOP = '3fr 120px 90px 70px 60px 48px 100px 48px'
+  const GRID_DESKTOP = '3fr 120px 90px 70px 60px 48px 112px 48px'
   const GOLD = '#b8934a'
   const FIELD = { border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--ink)', padding: '7px 10px', fontFamily: SERIF, fontSize: '15px', outline: 'none', borderRadius: '2px', cursor: 'pointer', minWidth: '0' }
   const FIELD_LABEL = { fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: '5px' }
@@ -299,6 +312,11 @@ export default function LocalPage() {
           {buyer?.editorial || 'Same day collection or delivery. Prices include duty, VAT and delivery.'}
         </div>
       </div>
+      {anyWsAvg && (
+        <div style={{ ...WS_LINE, whiteSpace: 'normal', letterSpacing: '0.04em', padding: isMobile ? '0 16px 10px' : '0 28px 10px' }}>
+          WS avg is the Wine Searcher UK average, duty paid, shown for comparison.
+        </div>
+      )}
 
       {/* Desktop filters */}
       {!isMobile && (
@@ -461,6 +479,7 @@ export default function LocalPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div>
                         <div style={{ fontFamily: SERIF, fontSize: '21px', fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
+                        {getWsAvgDP(s) != null && <div style={{ ...WS_LINE, marginTop: '5px' }}>WS avg £{getWsAvgDP(s).toFixed(2)}</div>}
                         {inWishlist && price && <div style={{ fontFamily: SERIF, fontSize: '14px', color: 'var(--wine)', marginTop: '3px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>}
                       </div>
                       {inWishlist ? (
@@ -554,6 +573,7 @@ export default function LocalPage() {
                     {/* Price */}
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ ...INFO_INK, fontWeight: 700 }}>{price ? `£${price.toFixed(2)}` : 'POA'}</div>
+                      {getWsAvgDP(s) != null && <div style={{ ...WS_LINE, marginTop: '2px' }}>WS avg £{getWsAvgDP(s).toFixed(2)}</div>}
                       {inWishlist && price && <div style={{ fontFamily: SERIF, fontSize: '13px', color: 'var(--wine)', marginTop: '1px' }}>×{wishlist[s.id]} = £{(price * wishlist[s.id]).toFixed(2)}</div>}
                     </div>
                     {/* + button */}
