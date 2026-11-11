@@ -95,6 +95,7 @@ DP = (purchase_price_per_bottle + duty) × 1.20
 ```
 - £3 is the duty for 75cl (not a handling fee — it IS the duty)
 - £6 is the duty for 150cl magnums
+- £12 is the duty for 300cl double magnums
 - ×1.20 is VAT at 20%, applied to wine + duty combined
 - This must be applied consistently on EVERY page that shows or calculates DP
 

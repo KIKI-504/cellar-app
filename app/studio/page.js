@@ -65,7 +65,13 @@ function isMagnum(size) {
   return s === '150' || s === '150cl' || s === '1500' || s === '1500ml' || s.includes('magnum')
 }
 
-function dutyForSize(size) { return isMagnum(size) ? 6 : 3 }
+function isDoubleMagnum(size) {
+  const s = String(size || '').toLowerCase().replace(/\s/g, '')
+  return s === '300' || s === '300cl' || s === '3000' || s === '3000ml' || s.includes('double')
+}
+
+// Duty per bottle: £3 for 75cl, £6 for a magnum, £12 for a double magnum
+function dutyForSize(size) { return isDoubleMagnum(size) ? 12 : isMagnum(size) ? 6 : 3 }
 
 function formatBottleSize(size) {
   const s = String(size || '').toLowerCase().replace(/\s/g, '')

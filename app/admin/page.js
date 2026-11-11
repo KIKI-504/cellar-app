@@ -347,7 +347,7 @@ export default function AdminPage() {
     <div style="margin-top:24px;">${sourceSections}</div>
     <div style="margin-top:24px;padding-top:16px;border-top:2px solid #1a1008;display:flex;justify-content:flex-end;">
       <div style="min-width:260px;"><div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#7a6652;">Estimated Duty + VAT Due</span><span style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:500;color:#6b1e2e;">£${grandTotal.toFixed(2)}</span></div>
-      <div style="font-size:9px;color:#c8b89a;margin-top:4px;font-family:'DM Mono',monospace;">DP = (IB + duty) × 1.2 · 75cl duty £3/btl · Magnum duty £6/btl</div></div>
+      <div style="font-size:9px;color:#c8b89a;margin-top:4px;font-family:'DM Mono',monospace;">DP = (IB + duty) × 1.2 · 75cl duty £3/btl · Magnum duty £6/btl · Double magnum duty £12/btl</div></div>
     </div>${notesHtml}
     <div style="margin-top:40px;padding-top:16px;border-top:1px solid #ede6d6;font-size:10px;color:#c8b89a;text-align:center;letter-spacing:0.08em;">BELLE ANNÉE WINES · ${new Date().getFullYear()}</div>
     </body></html>`

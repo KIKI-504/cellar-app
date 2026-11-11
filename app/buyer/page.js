@@ -109,7 +109,7 @@ function printPriceList(wineList, displayName) {
   const rows = wineList.map(w => {
     const size = formatBottleSize(w.bottle_volume, w.bottle_format)
     const isMag = size === '150cl' || size === '300cl'
-    const duty = isMag ? 6 : 3
+    const duty = size === '300cl' ? 12 : isMag ? 6 : 3
     const salePrice = parseFloat(w.sale_price)
     const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
     const wsDp = ws ? (ws + duty) * 1.2 : null
@@ -331,7 +331,7 @@ function WineRow({ w, i, totalCount, isAdmin: adminMode, selected, setSelected, 
   const size = formatBottleSize(w.bottle_volume, w.bottle_format)
   const isMag = size === '150cl' || size === '300cl'
   const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
-  const duty = isMag ? 6 : 3
+  const duty = size === '300cl' ? 12 : isMag ? 6 : 3
   const wsDp = ws ? (ws + duty) * 1.2 : null
   const salePrice = parseFloat(w.sale_price)
   const openType = expanded[w.id]
@@ -967,7 +967,7 @@ export default function BuyerPage() {
                       {(() => {
                         const ws = w.ws_lowest_per_bottle ? parseFloat(w.ws_lowest_per_bottle) : null
                         const size = formatBottleSize(w.bottle_volume, w.bottle_format)
-                        const duty = (size === '150cl' || size === '300cl') ? 6 : 3
+                        const duty = size === '300cl' ? 12 : size === '150cl' ? 6 : 3
                         const wsDp = ws ? (ws + duty) * 1.2 : null
                         if (!wsDp) return <span style={{ color: C.line }}>—</span>
                         const diff = ((salePrice - wsDp) / wsDp * 100)
