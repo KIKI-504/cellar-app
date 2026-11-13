@@ -982,8 +982,8 @@ export default function BuyerPage() {
                         const TAG = { fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.06em', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }
                         return (
                           <div style={{ display: 'flex', gap: '5px', paddingLeft: '14px', marginTop: '5px', flexWrap: 'wrap' }}>
-                            {av.onHand && <span style={{ ...TAG, background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', border: '1px solid rgba(45,106,79,0.3)' }}>On hand · available now ({av.onHandQty})</span>}
-                            {av.inBond && <span style={{ ...TAG, color: C.muted, border: '1px solid ' + C.line }}>{av.supplier} · in bond · {BOND_LEAD_TIME}{av.bondQty === 0 ? ' · no stock' : ''}</span>}
+                            {av.onHand && <span style={{ ...TAG, background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', border: '1px solid rgba(45,106,79,0.3)' }}>On hand · {av.onHandQty} btl · available now</span>}
+                            {av.inBond && <span style={{ ...TAG, color: C.muted, border: '1px solid ' + C.line }}>{av.supplier} · in bond · {av.bondQty === 0 ? 'no stock' : av.bondQty + ' btl · ' + BOND_LEAD_TIME}</span>}
                             {!av.onHand && !av.inBond && <span style={{ ...TAG, color: '#c0392b', border: '1px solid rgba(192,57,43,0.3)' }}>Not on hand · no supplier set</span>}
                           </div>
                         )
