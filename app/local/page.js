@@ -262,6 +262,16 @@ export default function LocalPage() {
         />
         {pinError && <div style={{ fontFamily: SERIF, fontSize: '14px', fontStyle: 'italic', color: '#b94040', marginBottom: '10px' }}>That PIN isn't right. Try again.</div>}
         <button onClick={handlePin} style={GATE_BUTTON}>Enter the cellar</button>
+        {/* Full sign-out: clears the saved sign-in and returns to the main PIN screen (for switching to the admin login) */}
+        <button
+          onClick={async () => {
+            try { sessionStorage.clear() } catch {}
+            try { await fetch('/api/auth', { method: 'DELETE' }) } catch {}
+            window.location.href = '/'
+          }}
+          style={{ display: 'block', margin: '28px auto 0', background: 'none', border: 'none', color: 'var(--muted)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'underline', opacity: 0.7 }}>
+          Staff sign in
+        </button>
       </div>
     </div>
   )
