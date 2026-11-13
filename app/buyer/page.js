@@ -890,6 +890,9 @@ export default function BuyerPage() {
         <Header router={router} displayName="Master Roster" wineCount={masterWines.length} onPrint={() => printPriceList(masterWines, 'Master Roster')} isAdmin={isAdmin} adminTab={adminTab} setAdminTab={setAdminTab} setPreviewBuyer={setPreviewBuyer} setPreviewPin={setPreviewPin} setPreviewError={setPreviewError} isMobile={isMobile} />
         <div style={{ maxWidth: '1400px', margin: '0 auto', padding: `24px ${SIDE} 0` }}>
           {/* Summary cards */}
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: isMobile ? '20px' : '24px', color: C.text, marginBottom: '14px', lineHeight: 1.25 }}>
+            Master Roster - Wines identified and tagged for sale
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : `repeat(${buyerAccess.length + 1}, 1fr)`, gap: '12px', marginBottom: '24px' }}>
             <div style={{ background: C.white, border: '1.5px solid ' + C.wine, borderRadius: '12px', padding: '16px 18px' }}>
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.wine, marginBottom: '4px' }}>Master Roster</div>
