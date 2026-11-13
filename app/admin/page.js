@@ -11,16 +11,23 @@ import {
 } from '../../lib/wine-utils'
 
 // Shared filter/sort accessors for this page, plus the page-specific sort columns.
+// Date the Wine Searcher price was last entered: the later of the two date fields
+// (Bonded Storage writes retail_price_date, Studio writes ws_price_date).
+function wsDate(w) {
+  const a = w.retail_price_date || '', b = w.ws_price_date || ''
+  return a > b ? a : b
+}
 const ADMIN_ROW = makeAccessors({
   ...WINE_GETTERS,
+  wsdate: w => wsDate(w),
   ws: w => parseFloat(w.ws_lowest_per_bottle),
   buyer: w => (w.include_in_buyer_view ? 1 : 0),
   source: w => w.source || '',
-}, { ws: 'num', buyer: 'num', source: 'text' })
+}, { ws: 'num', buyer: 'num', source: 'text', wsdate: 'raw' })
 // Table header column name <-> shared sort key
 const KEY_FOR_COL = { description: 'name', vintage: 'vintage', colour: 'colour', region: 'region', bottle_format: 'size', quantity: 'qty', ws_lowest_per_bottle: 'ws', sale_price: 'price', include_in_buyer_view: 'buyer', source: 'source' }
 const COL_FOR_KEY = Object.fromEntries(Object.entries(KEY_FOR_COL).map(([c, k]) => [k, c]))
-const ADMIN_SORT_KEYS = [['name', 'Wine'], ['vintage', 'Vintage'], ['colour', 'Colour'], ['region', 'Region'], ['country', 'Country'], ['size', 'Size'], ['qty', 'Qty'], ['ws', 'WS price'], ['price', 'Sell price'], ['source', 'Source']]
+const ADMIN_SORT_KEYS = [['name', 'Wine'], ['vintage', 'Vintage'], ['colour', 'Colour'], ['region', 'Region'], ['country', 'Country'], ['size', 'Size'], ['qty', 'Qty'], ['ws', 'WS price'], ['wsdate', 'WS date (oldest first)'], ['price', 'Sell price'], ['source', 'Source']]
 function adminSearchText(w) { return [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase() }
 
 function searchTokens(s) { return (s || '').toLowerCase().split(/[\s,]+/).filter(Boolean) }
@@ -962,7 +969,7 @@ export default function AdminPage() {
                               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '13px', fontWeight: 700, color: wsDP ? (isComp ? '#2d6a4f' : '#c0392b') : 'var(--muted)' }}>{wsDP ? `£${wsDP.toFixed(2)}` : '—'}</div>
                             </div>
                           </div>
-                          {w.retail_price_date && <div style={{ fontSize: '10px', color: getDateColour(w.retail_price_date), fontFamily: 'DM Mono, monospace', marginTop: '4px' }}>{w.retail_price_date}</div>}
+                          {wsDate(w) && <div style={{ fontSize: '10px', color: getDateColour(wsDate(w)), fontFamily: 'DM Mono, monospace', marginTop: '4px' }}>{wsDate(w)}</div>}
                           <div style={{ marginTop: '4px', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setExpandedPrice(isPriceOpen ? null : w.id) }}>
                             <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: isPriceOpen ? 'var(--wine)' : 'var(--muted)', letterSpacing: '0.06em' }}>{isPriceOpen ? '▲ hide ladder' : '▼ IB ladder'}</span>
                           </div>
