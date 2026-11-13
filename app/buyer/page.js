@@ -11,6 +11,22 @@ const BUYER_ACC = makeAccessors({
   ...WINE_GETTERS,
   qty: w => (w._buyerQty != null ? w._buyerQty : parseInt(w.quantity)) || 0,
 })
+// Master Roster: same shared filters and sorting, plus where each wine is coming from.
+const MASTER_ACC = makeAccessors({ ...WINE_GETTERS, source: w => w.source || '' }, { source: 'text' })
+const MASTER_KEY_FOR_COL = { description: 'name', vintage: 'vintage', region: 'region', country: 'country', colour: 'colour', format: 'size', quantity: 'qty', sale_price: 'price', source: 'source' }
+const SUPPLIER_LABEL = { 'Berry Brothers': 'BBR', 'Flint': 'Flint', 'Jeroboams': "Jeroboams" }
+const BOND_LEAD_TIME = '3–4 days'
+// On hand = an Available studio row with bottles. In bond = a supplier wine (BBR, Flint, Jeroboams).
+// A wine can be both. A supplier wine with no bond stock that is on hand shows as on hand only.
+function availability(w) {
+  const onHand = (w._studioQty || 0) > 0
+  const supplier = SUPPLIER_LABEL[w.source] || null
+  const bondQty = parseInt(w.quantity) || 0
+  const inBond = !!supplier && (bondQty > 0 || !onHand)
+  return { onHand, onHandQty: w._studioQty || 0, inBond, supplier, bondQty }
+}
+function masterSearchText(w) { return [w.description, w.region, w.country, w.vintage, w.colour, w.source].join(' ').toLowerCase() }
+
 const BUYER_KEY_FOR_COL = { description: 'name', vintage: 'vintage', region: 'region', country: 'country', colour: 'colour', format: 'size', quantity: 'qty', sale_price: 'price' }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -563,9 +579,8 @@ export default function BuyerPage() {
   const [masterWines, setMasterWines] = useState([])
   const [assignments, setAssignments] = useState({}) // wineId -> { buyerName: { assigned: bool, qty: number|null } }
   const [removingId, setRemovingId] = useState(null)
-  const [masterSearch, setMasterSearch] = useState('')
-  const [masterFilterColour, setMasterFilterColour] = useState('')
-  const [masterFilterRegion, setMasterFilterRegion] = useState('')
+  const [masterFilters, setMasterFilters] = useState({ ...EMPTY_FILTERS })
+  const [masterFilterSource, setMasterFilterSource] = useState('')
   const [masterFilterBuyer, setMasterFilterBuyer] = useState('')
   const [masterSortCol, setMasterSortCol] = useState('description')
   const [masterSortDir, setMasterSortDir] = useState('asc')
@@ -612,9 +627,13 @@ export default function BuyerPage() {
     setBuyerAccess(buyers || [])
     const { data: master } = await supabase
       .from('wines')
-      .select('id, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle')
+      .select('id, source, description, vintage, colour, region, country, bottle_format, bottle_volume, sale_price, include_in_buyer_view, quantity, women_note, producer_note, buyer_note, ws_lowest_per_bottle')
       .eq('include_in_buyer_view', true).not('sale_price', 'is', null).order('description')
-    setMasterWines(master || [])
+    // Bottles physically on hand (read only): Available studio rows, summed per wine
+    const { data: onHandRows } = await supabase.from('studio').select('wine_id, quantity').eq('status', 'Available').gt('quantity', 0).not('wine_id', 'is', null)
+    const onHandMap = {}
+    for (const r of (onHandRows || [])) onHandMap[r.wine_id] = (onHandMap[r.wine_id] || 0) + (parseInt(r.quantity) || 0)
+    setMasterWines((master || []).map(w => ({ ...w, _studioQty: onHandMap[w.id] || 0 })))
     const { data: allAssignments } = await supabase.from('buyer_wine_assignments').select('wine_id, buyer_access_id, quantity')
     const buyerNameMap = Object.fromEntries((buyers || []).map(b => [b.id, b.name]))
     const map = {}
@@ -832,24 +851,18 @@ export default function BuyerPage() {
   // ── Admin: master roster tab ──────────────────────────────────────────────
 
   if (isAdmin) {
-    let mFiltered = [...masterWines]
-    if (masterSearch) { const q = masterSearch.toLowerCase(); mFiltered = mFiltered.filter(w => [w.description, w.region, w.country, w.vintage, w.colour].join(' ').toLowerCase().includes(q)) }
-    if (masterFilterColour) mFiltered = mFiltered.filter(w => w.colour?.toLowerCase().includes(masterFilterColour.toLowerCase()))
-    if (masterFilterRegion) mFiltered = mFiltered.filter(w => w.region === masterFilterRegion)
+    let mFiltered = applyFilters(masterWines, masterFilters, MASTER_ACC, masterSearchText)
     if (masterFilterBuyer === 'unassigned') mFiltered = mFiltered.filter(w => !Object.keys(assignments[w.id] || {}).length)
     else if (masterFilterBuyer) mFiltered = mFiltered.filter(w => assignments[w.id]?.[masterFilterBuyer]?.assigned)
-    mFiltered.sort((a, b) => {
-      const dir = masterSortDir === 'asc' ? 1 : -1
-      if (masterSortCol === 'vintage') return ((a.vintage || '') > (b.vintage || '') ? 1 : -1) * dir
-      if (masterSortCol === 'region') return ((a.region || '') > (b.region || '') ? 1 : -1) * dir
-      if (masterSortCol === 'country') return ((a.country || '') > (b.country || '') ? 1 : -1) * dir
-      if (masterSortCol === 'colour') return ((a.colour || '') > (b.colour || '') ? 1 : -1) * dir
-      if (masterSortCol === 'sale_price') return ((parseFloat(a.sale_price) || 0) - (parseFloat(b.sale_price) || 0)) * dir
-      if (masterSortCol === 'quantity') return ((parseInt(a.quantity) || 0) - (parseInt(b.quantity) || 0)) * dir
-      if (masterSortCol === 'format') return (bottleSortKey(a.bottle_volume, a.bottle_format) - bottleSortKey(b.bottle_volume, b.bottle_format)) * dir
-      return ((a.description || '').toLowerCase() > (b.description || '').toLowerCase() ? 1 : -1) * dir
-    })
-    const mRegions = [...new Set(masterWines.map(w => w.region).filter(Boolean))].sort()
+    if (masterFilterSource === 'onhand') mFiltered = mFiltered.filter(w => availability(w).onHand)
+    else if (masterFilterSource === 'bond') mFiltered = mFiltered.filter(w => availability(w).inBond)
+    else if (masterFilterSource) mFiltered = mFiltered.filter(w => w.source === masterFilterSource)
+    mFiltered = applySorts(mFiltered, [{ key: MASTER_KEY_FOR_COL[masterSortCol] || 'name', dir: masterSortDir === 'asc' ? 1 : -1 }], MASTER_ACC)
+    const mOpts = buildOptions(masterWines, masterFilters, MASTER_ACC)
+    const mSources = [...new Set(masterWines.map(w => w.source).filter(Boolean))].sort()
+    const setMF = (k, v) => setMasterFilters(p => ({ ...p, [k]: v, ...(k === 'country' ? { region: '' } : {}) }))
+    const mAnyFilter = Object.values(masterFilters).some(Boolean) || !!masterFilterBuyer || !!masterFilterSource
+    const M_PILL = { background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', cursor: 'pointer' }
     function mSortBtn(col, label) {
       const active = masterSortCol === col
       return (
@@ -903,24 +916,41 @@ export default function BuyerPage() {
 
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <input value={masterSearch} onChange={e => setMasterSearch(e.target.value)} placeholder="Search..."
-                  style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 14px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', minWidth: '140px' }} />
-                <select value={masterFilterColour} onChange={e => setMasterFilterColour(e.target.value)}
-                  style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', cursor: 'pointer' }}>
-                  <option value="">All Colours</option><option value="Red">Red</option><option value="White">White</option><option value="Rosé">Rosé</option>
+                <input value={masterFilters.search} onChange={e => setMF('search', e.target.value)} placeholder="Search..."
+                  style={{ ...M_PILL, padding: '6px 14px', cursor: 'text', minWidth: '140px' }} />
+                <select value={masterFilters.colour} onChange={e => setMF('colour', e.target.value)} style={M_PILL}>
+                  <option value="">All Colours</option>{mOpts.colour.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
-                <select value={masterFilterRegion} onChange={e => setMasterFilterRegion(e.target.value)}
-                  style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', cursor: 'pointer' }}>
-                  <option value="">All Regions</option>{mRegions.map(r => <option key={r} value={r}>{r}</option>)}
+                <select value={masterFilters.country} onChange={e => setMF('country', e.target.value)} style={M_PILL}>
+                  <option value="">All Countries</option>{mOpts.country.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <select value={masterFilters.region} onChange={e => setMF('region', e.target.value)} style={M_PILL}>
+                  <option value="">All Regions</option>{mOpts.region.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <select value={masterFilters.vintage} onChange={e => setMF('vintage', e.target.value)} style={M_PILL}>
+                  <option value="">All Vintages</option>{mOpts.vintage.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <select value={masterFilters.size} onChange={e => setMF('size', e.target.value)} style={M_PILL}>
+                  <option value="">All Sizes</option>{mOpts.size.map(v => <option key={v} value={v}>{SIZE_LABELS[v] || v + 'cl'}</option>)}
+                </select>
+                <select value={masterFilterSource} onChange={e => setMasterFilterSource(e.target.value)} style={M_PILL}>
+                  <option value="">All Sources</option>
+                  <option value="onhand">On hand (available now)</option>
+                  <option value="bond">In bond ({BOND_LEAD_TIME})</option>
+                  {mSources.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
                 <select value={masterFilterBuyer} onChange={e => setMasterFilterBuyer(e.target.value)}
                   style={{ background: 'rgba(255,253,249,0.07)', border: '1px solid rgba(255,253,249,0.15)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.white, outline: 'none', cursor: 'pointer' }}>
                   <option value="">All Buyers</option>{buyerAccess.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}<option value="unassigned">Unassigned</option>
                 </select>
+                {mAnyFilter && (
+                  <button onClick={() => { setMasterFilters({ ...EMPTY_FILTERS }); setMasterFilterBuyer(''); setMasterFilterSource('') }}
+                    style={{ background: 'none', border: 'none', color: 'rgba(255,253,249,0.55)', fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', cursor: 'pointer', textDecoration: 'underline' }}>Clear filters</button>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '4px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'rgba(255,253,249,0.35)', letterSpacing: '0.08em', marginRight: '4px' }}>SORT:</span>
-                {mSortBtn('description', 'Name')}{mSortBtn('vintage', 'Vintage')}{mSortBtn('region', 'Region')}{mSortBtn('country', 'Country')}{mSortBtn('colour', 'Colour')}{mSortBtn('format', 'Size')}{mSortBtn('sale_price', 'Price')}{mSortBtn('quantity', 'Qty')}
+                {mSortBtn('description', 'Name')}{mSortBtn('vintage', 'Vintage')}{mSortBtn('region', 'Region')}{mSortBtn('country', 'Country')}{mSortBtn('colour', 'Colour')}{mSortBtn('format', 'Size')}{mSortBtn('sale_price', 'Price')}{mSortBtn('quantity', 'Qty')}{mSortBtn('source', 'Source')}
               </div>
             </div>
 
@@ -947,6 +977,17 @@ export default function BuyerPage() {
                         {w.women_note && <span style={{ fontSize: '11px', color: '#9b3a4a' }}>♀</span>}
                       </div>
                       <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: C.muted, paddingLeft: '14px', marginTop: '1px' }}>{w.vintage} · {[w.region, w.country].filter(Boolean).join(' · ')}</div>
+                      {(() => {
+                        const av = availability(w)
+                        const TAG = { fontFamily: 'DM Mono, monospace', fontSize: '10px', letterSpacing: '0.06em', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }
+                        return (
+                          <div style={{ display: 'flex', gap: '5px', paddingLeft: '14px', marginTop: '5px', flexWrap: 'wrap' }}>
+                            {av.onHand && <span style={{ ...TAG, background: 'rgba(45,106,79,0.1)', color: '#2d6a4f', border: '1px solid rgba(45,106,79,0.3)' }}>On hand · available now ({av.onHandQty})</span>}
+                            {av.inBond && <span style={{ ...TAG, color: C.muted, border: '1px solid ' + C.line }}>{av.supplier} · in bond · {BOND_LEAD_TIME}{av.bondQty === 0 ? ' · no stock' : ''}</span>}
+                            {!av.onHand && !av.inBond && <span style={{ ...TAG, color: '#c0392b', border: '1px solid rgba(192,57,43,0.3)' }}>Not on hand · no supplier set</span>}
+                          </div>
+                        )
+                      })()}
                       <div style={{ display: 'flex', gap: '5px', paddingLeft: '14px', marginTop: '6px', flexWrap: 'wrap' }}>
                         {[{ key: noteKey, type: 'wine', label: 'Wine info', color: C.wine }, { key: prodKey, type: 'producer', label: 'Producer info', color: C.wine }, { key: womenKey, type: 'women', label: 'Women in wine', color: '#9b3a4a' }].map(t => (
                           <button key={t.key} onClick={() => setMasterExpandedNote(openNote === t.key ? null : t.key)}
